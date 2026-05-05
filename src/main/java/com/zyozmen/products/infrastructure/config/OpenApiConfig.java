@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.Arrays;
+
 @Configuration
 public class OpenApiConfig {
 
@@ -35,19 +37,38 @@ public class OpenApiConfig {
     @Value("${api.info.license.url}")
     private String licenseUrl;
 
+        @Value("${api.info.resilience.enabled:true}")
+        private boolean resilienceEnabled;
+
+        @Value("${api.info.resilience.methods:Circuit Breaker, Retry}")
+        private String resilienceMethods;
+
     @Bean
     public OpenAPI customOpenAPI() {
+        String resilienceStatus = resilienceEnabled ? "habilitada" : "deshabilitada";
+        String fullDescription = description + "\n\nResiliencia: " + resilienceStatus
+                + ". Métodos: " + resilienceMethods + ".";
+
+        Info info = new Info()
+                .title(title)
+                .description(fullDescription)
+                .version(version)
+                .contact(new Contact()
+                        .name(contactName)
+                        .email(contactEmail)
+                        .url(contactUrl))
+                .license(new License()
+                        .name(licenseName)
+                        .url(licenseUrl));
+
+        info.addExtension("x-resilience-enabled", resilienceEnabled);
+        info.addExtension("x-resilience-methods",
+                Arrays.stream(resilienceMethods.split(","))
+                        .map(String::trim)
+                        .filter(method -> !method.isEmpty())
+                        .toList());
+
         return new OpenAPI()
-                .info(new Info()
-                        .title(title)
-                        .description(description)
-                        .version(version)
-                        .contact(new Contact()
-                                .name(contactName)
-                                .email(contactEmail)
-                                .url(contactUrl))
-                        .license(new License()
-                                .name(licenseName)
-                                .url(licenseUrl)));
+                .info(info);
     }
 }
