@@ -1,4 +1,4 @@
-package com.zyozmen.products.infrastructure.adapter.in.web.dto;
+package com.zyozmen.products.adapter.in.web.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;

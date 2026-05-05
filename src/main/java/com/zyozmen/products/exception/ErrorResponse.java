@@ -1,4 +1,4 @@
-package com.zyozmen.products.infrastructure.exception;
+package com.zyozmen.products.exception;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

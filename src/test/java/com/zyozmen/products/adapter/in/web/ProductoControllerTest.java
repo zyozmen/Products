@@ -1,12 +1,12 @@
-package com.zyozmen.products.infrastructure.adapter.in.web;
+package com.zyozmen.products.adapter.in.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.ProductoUseCase;
-import com.zyozmen.products.infrastructure.adapter.in.web.dto.ProductoRequestDTO;
-import com.zyozmen.products.infrastructure.adapter.in.web.mapper.ProductoWebMapper;
-import com.zyozmen.products.infrastructure.exception.GlobalExceptionHandler;
+import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
+import com.zyozmen.products.adapter.in.web.mapper.ProductoWebMapper;
+import com.zyozmen.products.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

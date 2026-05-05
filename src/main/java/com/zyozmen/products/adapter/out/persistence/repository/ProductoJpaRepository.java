@@ -1,6 +1,6 @@
-package com.zyozmen.products.infrastructure.adapter.out.persistence.repository;
+package com.zyozmen.products.adapter.out.persistence.repository;
 
-import com.zyozmen.products.infrastructure.adapter.out.persistence.entity.ProductoJpaEntity;
+import com.zyozmen.products.adapter.out.persistence.entity.ProductoJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**

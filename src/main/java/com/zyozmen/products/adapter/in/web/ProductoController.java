@@ -1,10 +1,10 @@
-package com.zyozmen.products.infrastructure.adapter.in.web;
+package com.zyozmen.products.adapter.in.web;
 
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.ProductoUseCase;
-import com.zyozmen.products.infrastructure.adapter.in.web.dto.ProductoRequestDTO;
-import com.zyozmen.products.infrastructure.adapter.in.web.dto.ProductoResponseDTO;
-import com.zyozmen.products.infrastructure.adapter.in.web.mapper.ProductoWebMapper;
+import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
+import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
+import com.zyozmen.products.adapter.in.web.mapper.ProductoWebMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

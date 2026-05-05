@@ -1,9 +1,9 @@
-package com.zyozmen.products.infrastructure.adapter.out.persistence;
+package com.zyozmen.products.adapter.out.persistence;
 
 import com.zyozmen.products.domain.exception.ServiceUnavailableException;
 import com.zyozmen.products.domain.model.Producto;
-import com.zyozmen.products.infrastructure.adapter.out.persistence.mapper.ProductoPersistenceMapper;
-import com.zyozmen.products.infrastructure.adapter.out.persistence.repository.ProductoJpaRepository;
+import com.zyozmen.products.adapter.out.persistence.mapper.ProductoPersistenceMapper;
+import com.zyozmen.products.adapter.out.persistence.repository.ProductoJpaRepository;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.junit.jupiter.api.BeforeEach;

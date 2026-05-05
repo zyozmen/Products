@@ -1,7 +1,7 @@
-package com.zyozmen.products.infrastructure.adapter.out.persistence.mapper;
+package com.zyozmen.products.adapter.out.persistence.mapper;
 
 import com.zyozmen.products.domain.model.Producto;
-import com.zyozmen.products.infrastructure.adapter.out.persistence.entity.ProductoJpaEntity;
+import com.zyozmen.products.adapter.out.persistence.entity.ProductoJpaEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

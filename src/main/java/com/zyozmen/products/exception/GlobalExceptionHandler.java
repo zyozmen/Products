@@ -1,4 +1,4 @@
-package com.zyozmen.products.infrastructure.exception;
+package com.zyozmen.products.exception;
 
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.exception.ServiceUnavailableException;

@@ -9,10 +9,8 @@ import java.util.Optional;
  * Puerto de salida (Outbound Port / Repository Port).
  *
  * Interfaz definida en el dominio que describe qué operaciones de
- * persistencia necesita la aplicación. El dominio NO sabe nada de
- * JPA ni de MySQL: solo declara el contrato.
- * La implementación concreta (ProductoRepositoryAdapter) vive en
- * la capa de infraestructura e inyecta Spring Data hacia adentro.
+ * persistencia necesita la aplicación.
+ * 
  */
 public interface ProductoRepositoryPort {
 

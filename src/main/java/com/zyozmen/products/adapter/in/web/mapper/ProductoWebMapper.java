@@ -1,8 +1,8 @@
-package com.zyozmen.products.infrastructure.adapter.in.web.mapper;
+package com.zyozmen.products.adapter.in.web.mapper;
 
 import com.zyozmen.products.domain.model.Producto;
-import com.zyozmen.products.infrastructure.adapter.in.web.dto.ProductoRequestDTO;
-import com.zyozmen.products.infrastructure.adapter.in.web.dto.ProductoResponseDTO;
+import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
+import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
 import org.springframework.stereotype.Component;
 
 /**

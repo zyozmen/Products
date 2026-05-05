@@ -1,4 +1,4 @@
-package com.zyozmen.products.infrastructure.adapter.out.persistence.entity;
+package com.zyozmen.products.adapter.out.persistence.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
