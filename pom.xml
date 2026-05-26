@@ -90,6 +90,20 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Spring Boot Starter GraphQL: soporte para crear APIs GraphQL con Spring Boot 3 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-graphql</artifactId>
+        </dependency>
+
+        <!-- Spring GraphQL Test: utilidades para probar controladores GraphQL -->
+        <dependency>
+            <groupId>org.springframework.graphql</groupId>
+            <artifactId>spring-graphql-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
+
     </dependencies>
 
     <build>

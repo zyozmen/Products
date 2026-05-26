@@ -1,0 +1,23 @@
+type Product {
+  id: ID
+  nombre: String!
+  descripcion: String
+  precio: Float!
+}
+
+input ProductInput {
+  nombre: String!
+  descripcion: String
+  precio: Float!
+}
+
+type Query {
+  listarTodos: [Product!]!
+  obtenerPorId(id: ID!): Product
+}
+
+type Mutation {
+  crear(input: ProductInput!): Product!
+  actualizar(id: ID!, input: ProductInput!): Product!
+  eliminar(id: ID!): Boolean!
+}
