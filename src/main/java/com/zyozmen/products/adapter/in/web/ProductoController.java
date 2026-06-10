@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/productos")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*") // Permitir CORS para todas las fuentes (ajustar según necesidades)
 @Tag(name = "Productos", description = "API para gestión de productos")
 public class ProductoController {
 

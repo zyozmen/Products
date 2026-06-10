@@ -9,7 +9,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  *                     protege la BD de recibir solicitudes mientras no está disponible.
  */
 @Slf4j
-@Component
+@Repository
 @RequiredArgsConstructor
 public class ProductoRepositoryAdapter implements ProductoRepositoryPort {
 
