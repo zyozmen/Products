@@ -13,15 +13,17 @@ public class Producto {
     private String nombre;
     private String descripcion;
     private BigDecimal precio;
+    private Review reviews;
 
     public Producto() {
     }
 
-    public Producto(Long id, String nombre, String descripcion, BigDecimal precio) {
+    public Producto(Long id, String nombre, String descripcion, BigDecimal precio, Review reviews) {
         this.id = id;
         this.nombre = nombre;
         this.descripcion = descripcion;
         this.precio = precio;
+        this.reviews = reviews;
     }
 
     public static Builder builder() {
@@ -60,6 +62,14 @@ public class Producto {
         this.precio = precio;
     }
 
+    public Review getReviews() {
+        return reviews;
+    }
+
+    public void setReviews(Review reviews) {
+        this.reviews = reviews;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -72,12 +82,13 @@ public class Producto {
         return Objects.equals(id, producto.id)
                 && Objects.equals(nombre, producto.nombre)
                 && Objects.equals(descripcion, producto.descripcion)
-                && Objects.equals(precio, producto.precio);
+                && Objects.equals(precio, producto.precio)
+                && Objects.equals(reviews, producto.reviews);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, nombre, descripcion, precio);
+        return Objects.hash(id, nombre, descripcion, precio, reviews);
     }
 
     @Override
@@ -87,6 +98,7 @@ public class Producto {
                 ", nombre='" + nombre + '\'' +
                 ", descripcion='" + descripcion + '\'' +
                 ", precio=" + precio +
+                ", reviews=" + reviews +
                 '}';
     }
 
@@ -96,6 +108,7 @@ public class Producto {
         private String nombre;
         private String descripcion;
         private BigDecimal precio;
+        private Review reviews;
 
         public Builder id(Long id) {
             this.id = id;
@@ -117,8 +130,13 @@ public class Producto {
             return this;
         }
 
+        public Builder reviews(Review reviews) {
+            this.reviews = reviews;
+            return this;
+        }
+
         public Producto build() {
-            return new Producto(id, nombre, descripcion, precio);
+            return new Producto(id, nombre, descripcion, precio, reviews);
         }
     }
 }

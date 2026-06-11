@@ -29,4 +29,7 @@ public class ProductoRequestDTO {
     @DecimalMin(value = "0.01", message = "El precio debe ser mayor a cero")
     @Schema(description = "Precio del producto", example = "1299.99")
     private BigDecimal precio;
+
+    @Schema(description = "Reseña del producto (opcional)")
+    private ReviewDTO reviews;
 }

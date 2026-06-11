@@ -26,4 +26,7 @@ public class ProductoResponseDTO {
 
     @Schema(description = "Precio del producto", example = "1299.99")
     private BigDecimal precio;
+
+    @Schema(description = "Reseña del producto")
+    private ReviewDTO reviews;
 }

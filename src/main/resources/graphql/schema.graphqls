@@ -1,14 +1,30 @@
+type Review {
+  autor: String
+  stars: Float
+  review: String
+  email: String
+}
+
+input ReviewInput {
+  autor: String
+  stars: Float
+  review: String
+  email: String
+}
+
 type Product {
   id: ID
   nombre: String!
   descripcion: String
   precio: Float!
+  reviews: Review
 }
 
 input ProductInput {
   nombre: String!
   descripcion: String
   precio: Float!
+  reviews: ReviewInput
 }
 
 type Query {
