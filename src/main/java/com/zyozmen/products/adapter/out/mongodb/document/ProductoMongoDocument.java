@@ -23,7 +23,7 @@ import java.math.BigDecimal;
  * El campo reviews es un documento embebido con autor, stars ($numberDecimal),
  * review y email, almacenado directamente en el mismo documento de producto.
  */
-@Document(collection = "productos")
+@Document(collection = "Products")
 @Data
 @Builder
 @NoArgsConstructor

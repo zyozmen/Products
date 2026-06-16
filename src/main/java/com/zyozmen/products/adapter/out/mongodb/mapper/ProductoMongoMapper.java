@@ -16,7 +16,7 @@ public class ProductoMongoMapper {
 
     public Producto toDomain(ProductoMongoDocument document) {
         return Producto.builder()
-                .id(document.getSequenceId())
+                .id(Long.parseLong(document.getId()))
                 .nombre(document.getNombre())
                 .descripcion(document.getDescripcion())
                 .precio(document.getPrecio())
@@ -26,7 +26,7 @@ public class ProductoMongoMapper {
 
     public ProductoMongoDocument toDocument(Producto domain) {
         return ProductoMongoDocument.builder()
-                .sequenceId(domain.getId())
+                .id(domain.getId().toString())
                 .nombre(domain.getNombre())
                 .descripcion(domain.getDescripcion())
                 .precio(domain.getPrecio())
@@ -37,7 +37,6 @@ public class ProductoMongoMapper {
     public ProductoMongoDocument toDocument(Producto domain, String existingMongoId) {
         return ProductoMongoDocument.builder()
                 .id(existingMongoId)
-                .sequenceId(domain.getId())
                 .nombre(domain.getNombre())
                 .descripcion(domain.getDescripcion())
                 .precio(domain.getPrecio())
