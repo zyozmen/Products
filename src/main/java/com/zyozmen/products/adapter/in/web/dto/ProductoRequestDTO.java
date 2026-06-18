@@ -1,7 +1,7 @@
 package com.zyozmen.products.adapter.in.web.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -9,7 +9,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
 
 @Data
 @Builder
@@ -18,18 +19,51 @@ import java.math.BigDecimal;
 @Schema(description = "Datos de entrada para crear o actualizar un producto")
 public class ProductoRequestDTO {
 
+    @Schema(description = "Identificador único del producto (ObjectId)", example = "1")
+    private String id;
+
     @NotBlank(message = "El nombre del producto es obligatorio")
-    @Schema(description = "Nombre del producto", example = "Laptop Dell XPS 15")
-    private String nombre;
+    @Schema(description = "Nombre del producto", example = "Wireless Noise-Canceling Headphones")
+    private String name;
 
-    @Schema(description = "Descripción detallada del producto", example = "Procesador Intel Core i7, 16GB RAM")
-    private String descripcion;
+    @NotBlank(message = "El slug del producto es obligatorio")
+    @Schema(description = "Slug único del producto", example = "wireless-noise-canceling-headphones-v2")
+    private String slug;
 
-    @NotNull(message = "El precio del producto es obligatorio")
-    @DecimalMin(value = "0.01", message = "El precio debe ser mayor a cero")
-    @Schema(description = "Precio del producto", example = "1299.99")
-    private BigDecimal precio;
+    @Schema(description = "Descripción detallada del producto", example = "High-fidelity audio with advanced active noise cancellation and 40-hour battery life.")
+    private String description;
 
-    @Schema(description = "Reseña del producto (opcional)")
-    private ReviewDTO reviews;
+    @NotBlank(message = "El SKU del producto es obligatorio")
+    @Schema(description = "SKU del producto", example = "HEAD-WRLS-001")
+    private String sku;
+
+    @NotBlank(message = "El estado del producto es obligatorio")
+    @Schema(description = "Estado del producto", example = "active")
+    private String status;
+
+    @Schema(description = "Listado de categorías asociadas")
+    private List<CategoryDTO> categories;
+
+    @NotNull(message = "La estructura de precio del producto es obligatoria")
+    @Schema(description = "Información de precio")
+    private PriceDTO price;
+
+    @Schema(description = "Métricas de ranking y reseñas")
+    private RankingDTO ranking;
+
+    @JsonProperty("recent_comments")
+    @Schema(description = "Comentarios más recientes del producto")
+    private List<RecentCommentDTO> recentComments;
+
+    @JsonProperty("has_more_comments")
+    @Schema(description = "Indica si hay más comentarios disponibles", example = "true")
+    private Boolean hasMoreComments;
+
+    @JsonProperty("created_at")
+    @Schema(description = "Fecha de creación del producto", example = "2025-11-01T00:00:00Z")
+    private Instant createdAt;
+
+    @JsonProperty("updated_at")
+    @Schema(description = "Fecha de última actualización del producto", example = "2026-06-17T13:00:00Z")
+    private Instant updatedAt;
 }

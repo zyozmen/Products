@@ -1,11 +1,21 @@
 package com.zyozmen.products.adapter.in.web.mapper;
 
+import com.zyozmen.products.adapter.in.web.dto.CategoryDTO;
+import com.zyozmen.products.adapter.in.web.dto.RankingDTO;
+import com.zyozmen.products.adapter.in.web.dto.RatingDistributionDTO;
+import com.zyozmen.products.adapter.in.web.dto.RecentCommentDTO;
 import com.zyozmen.products.domain.model.Producto;
-import com.zyozmen.products.domain.model.Review;
+import com.zyozmen.products.domain.model.RatingDistribution;
+import com.zyozmen.products.domain.model.Ranking;
+import com.zyozmen.products.domain.model.Comment;
+import com.zyozmen.products.domain.model.Category;
+import com.zyozmen.products.domain.model.Price;
+import com.zyozmen.products.adapter.in.web.dto.PriceDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
-import com.zyozmen.products.adapter.in.web.dto.ReviewDTO;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * Mapper del adaptador web. Convierte entre los DTOs HTTP y el modelo de dominio.
@@ -17,40 +27,162 @@ public class ProductoWebMapper {
 
     public Producto toDomain(ProductoRequestDTO dto) {
         return Producto.builder()
-                .nombre(dto.getNombre())
-                .descripcion(dto.getDescripcion())
-                .precio(dto.getPrecio())
-                .reviews(toReviewDomain(dto.getReviews()))
+                .id(dto.getId())
+                .name(dto.getName())
+                .slug(dto.getSlug())
+                .description(dto.getDescription())
+                .sku(dto.getSku())
+                .status(dto.getStatus())
+                .categories(toCategoryDomainList(dto.getCategories()))
+                .price(toPriceDomain(dto.getPrice()))
+                .ranking(toRankingDomain(dto.getRanking()))
+                .recentComments(toCommentDomainList(dto.getRecentComments()))
+                .hasMoreComments(dto.getHasMoreComments())
+                .createdAt(dto.getCreatedAt())
+                .updatedAt(dto.getUpdatedAt())
                 .build();
     }
 
     public ProductoResponseDTO toResponseDTO(Producto producto) {
         return ProductoResponseDTO.builder()
                 .id(producto.getId())
-                .nombre(producto.getNombre())
-                .descripcion(producto.getDescripcion())
-                .precio(producto.getPrecio())
-                .reviews(toReviewDTO(producto.getReviews()))
+                .name(producto.getName())
+                .slug(producto.getSlug())
+                .description(producto.getDescription())
+                .sku(producto.getSku())
+                .status(producto.getStatus())
+                .categories(toCategoryDTOList(producto.getCategories()))
+                .price(toPriceDTO(producto.getPrice()))
+                .ranking(toRankingDTO(producto.getRanking()))
+                .recentComments(toRecentCommentDTOList(producto.getRecentComments()))
+                .createdAt(producto.getCreatedAt())
+                .updatedAt(producto.getUpdatedAt())
                 .build();
     }
 
-    private Review toReviewDomain(ReviewDTO dto) {
+    private Price toPriceDomain(PriceDTO dto) {
         if (dto == null) return null;
-        return Review.builder()
-                .autor(dto.getAutor())
-                .stars(dto.getStars())
-                .review(dto.getReview())
-                .email(dto.getEmail())
+        return Price.builder()
+                .current(dto.getCurrent())
+                .original(dto.getOriginal())
+                .currency(dto.getCurrency())
+                .discountPercentage(dto.getDiscountPercentage())
+                .taxInclusive(dto.getTaxInclusive())
                 .build();
     }
 
-    private ReviewDTO toReviewDTO(Review review) {
-        if (review == null) return null;
-        return ReviewDTO.builder()
-                .autor(review.getAutor())
-                .stars(review.getStars())
-                .review(review.getReview())
-                .email(review.getEmail())
+    private Ranking toRankingDomain(RankingDTO dto) {
+        if (dto == null) return null;
+        return Ranking.builder()
+                .averageRating(dto.getAverageRating())
+                .totalReviews(dto.getTotalReviews())
+                .ratingDistribution(toRatingDistributionDomain(dto.getRatingDistribution()))
+                .build();
+    }
+
+    private RatingDistribution toRatingDistributionDomain(RatingDistributionDTO dto) {
+        if (dto == null) return null;
+        return RatingDistribution.builder()
+                .fiveStar(dto.getFiveStar())
+                .fourStar(dto.getFourStar())
+                .threeStar(dto.getThreeStar())
+                .twoStar(dto.getTwoStar())
+                .oneStar(dto.getOneStar())
+                .build();
+    }
+
+    private PriceDTO toPriceDTO(Price price) {
+        if (price == null) return null;
+        return PriceDTO.builder()
+                .current(price.getCurrent())
+                .original(price.getOriginal())
+                .currency(price.getCurrency())
+                .discountPercentage(price.getDiscountPercentage())
+                .taxInclusive(price.getTaxInclusive())
+                .build();
+    }
+
+    private RankingDTO toRankingDTO(Ranking ranking) {
+        if (ranking == null) return null;
+        return RankingDTO.builder()
+                .averageRating(ranking.getAverageRating())
+                .totalReviews(ranking.getTotalReviews())
+                .ratingDistribution(toRatingDistributionDTO(ranking.getRatingDistribution()))
+                .build();
+    }
+
+    private RatingDistributionDTO toRatingDistributionDTO(RatingDistribution distribution) {
+        if (distribution == null) return null;
+        return RatingDistributionDTO.builder()
+                .fiveStar(distribution.getFiveStar())
+                .fourStar(distribution.getFourStar())
+                .threeStar(distribution.getThreeStar())
+                .twoStar(distribution.getTwoStar())
+                .oneStar(distribution.getOneStar())
+                .build();
+    }
+
+    private List<CategoryDTO> toCategoryDTOList(List<Category> categories) {
+        if (categories == null) return null;
+        return categories.stream().map(this::toCategoryDTO).toList();
+    }
+
+    private List<Category> toCategoryDomainList(List<CategoryDTO> categories) {
+        if (categories == null) return null;
+        return categories.stream().map(this::toCategoryDomain).toList();
+    }
+
+    private Category toCategoryDomain(CategoryDTO dto) {
+        if (dto == null) return null;
+        return Category.builder()
+                .categoryId(dto.getCategoryId())
+                .name(dto.getName())
+                .slug(dto.getSlug())
+                .build();
+    }
+
+    private CategoryDTO toCategoryDTO(Category category) {
+        if (category == null) return null;
+        return CategoryDTO.builder()
+                .categoryId(category.getCategoryId())
+                .name(category.getName())
+                .slug(category.getSlug())
+                .build();
+    }
+
+    private List<RecentCommentDTO> toRecentCommentDTOList(List<Comment> comments) {
+        if (comments == null) return null;
+        return comments.stream().map(this::toRecentCommentDTO).toList();
+    }
+
+    private List<Comment> toCommentDomainList(List<RecentCommentDTO> comments) {
+        if (comments == null) return null;
+        return comments.stream().map(this::toCommentDomain).toList();
+    }
+
+    private Comment toCommentDomain(RecentCommentDTO dto) {
+        if (dto == null) return null;
+        return Comment.builder()
+                .commentId(dto.getCommentId())
+                .userId(dto.getUserId())
+                .username(dto.getUsername())
+                .rating(dto.getRating())
+                .title(dto.getTitle())
+                .body(dto.getBody())
+                .createdAt(dto.getCreatedAt())
+                .build();
+    }
+
+    private RecentCommentDTO toRecentCommentDTO(Comment comment) {
+        if (comment == null) return null;
+        return RecentCommentDTO.builder()
+                .commentId(comment.getCommentId())
+                .userId(comment.getUserId())
+                .username(comment.getUsername())
+                .rating(comment.getRating())
+                .title(comment.getTitle())
+                .body(comment.getBody())
+                .createdAt(comment.getCreatedAt())
                 .build();
     }
 }

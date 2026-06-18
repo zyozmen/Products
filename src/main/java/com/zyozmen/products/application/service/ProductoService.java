@@ -4,7 +4,6 @@ import com.zyozmen.products.adapter.out.mongodb.ProductoMongoAdapter;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.ProductoUseCase;
-import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,9 +52,22 @@ public class ProductoService implements ProductoUseCase {
         Producto existente = productoRepositoryPort.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Producto no encontrado con ID: " + id));
-        existente.setNombre(producto.getNombre());
-        existente.setDescripcion(producto.getDescripcion());
-        existente.setPrecio(producto.getPrecio());
+
+        // Keep path id as source of truth while updating every other field.
+        existente.setId(id);
+        existente.setName(producto.getName());
+        existente.setSlug(producto.getSlug());
+        existente.setDescription(producto.getDescription());
+        existente.setSku(producto.getSku());
+        existente.setStatus(producto.getStatus());
+        existente.setCategories(producto.getCategories());
+        existente.setPrice(producto.getPrice());
+        existente.setRanking(producto.getRanking());
+        existente.setRecentComments(producto.getRecentComments());
+        existente.setHasMoreComments(producto.getHasMoreComments());
+        existente.setCreatedAt(producto.getCreatedAt());
+        existente.setUpdatedAt(producto.getUpdatedAt());
+
         return productoRepositoryPort.save(existente);
     }
 

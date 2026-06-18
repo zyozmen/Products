@@ -1,66 +1,205 @@
 package com.zyozmen.products.adapter.out.mongodb.mapper;
 
+import com.zyozmen.products.adapter.out.mongodb.document.CategoryDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.CommentDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.PriceDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProductoMongoDocument;
-import com.zyozmen.products.adapter.out.mongodb.document.ReviewDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.RankingDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.RatingDistributionDocument;
+import com.zyozmen.products.domain.model.Category;
+import com.zyozmen.products.domain.model.Comment;
+import com.zyozmen.products.domain.model.Price;
 import com.zyozmen.products.domain.model.Producto;
-import com.zyozmen.products.domain.model.Review;
+import com.zyozmen.products.domain.model.Ranking;
+import com.zyozmen.products.domain.model.RatingDistribution;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * Mapper de persistencia MongoDB.
  * Convierte entre el modelo de dominio puro y el documento MongoDB de infraestructura.
- * El campo sequenceId del documento corresponde al id numérico del dominio.
  */
 @Component
 public class ProductoMongoMapper {
 
     public Producto toDomain(ProductoMongoDocument document) {
         return Producto.builder()
-                .id(Long.parseLong(document.getId()))
-                .nombre(document.getNombre())
-                .descripcion(document.getDescripcion())
-                .precio(document.getPrecio())
-                .reviews(toReviewDomain(document.getReviews()))
+                .id(document.getId())
+                .name(document.getName())
+                .slug(document.getSlug())
+                .description(document.getDescription())
+                .sku(document.getSku())
+                .status(document.getStatus())
+                .categories(toCategoryDomainList(document.getCategories()))
+                .price(toPriceDomain(document.getPrice()))
+                .ranking(toRankingDomain(document.getRanking()))
+                .recentComments(toCommentDomainList(document.getRecentComments()))
+                .hasMoreComments(document.getHasMoreComments())
+                .createdAt(document.getCreatedAt())
+                .updatedAt(document.getUpdatedAt())
                 .build();
     }
 
     public ProductoMongoDocument toDocument(Producto domain) {
         return ProductoMongoDocument.builder()
-                .id(domain.getId().toString())
-                .nombre(domain.getNombre())
-                .descripcion(domain.getDescripcion())
-                .precio(domain.getPrecio())
-                .reviews(toReviewDocument(domain.getReviews()))
+                .id(domain.getId())
+                .name(domain.getName())
+                .slug(domain.getSlug())
+                .description(domain.getDescription())
+                .sku(domain.getSku())
+                .status(domain.getStatus())
+                .categories(toCategoryDocumentList(domain.getCategories()))
+                .price(toPriceDocument(domain.getPrice()))
+                .ranking(toRankingDocument(domain.getRanking()))
+                .recentComments(toCommentDocumentList(domain.getRecentComments()))
+                .hasMoreComments(domain.getHasMoreComments())
+                .createdAt(domain.getCreatedAt())
+                .updatedAt(domain.getUpdatedAt())
                 .build();
     }
 
     public ProductoMongoDocument toDocument(Producto domain, String existingMongoId) {
         return ProductoMongoDocument.builder()
                 .id(existingMongoId)
-                .nombre(domain.getNombre())
-                .descripcion(domain.getDescripcion())
-                .precio(domain.getPrecio())
-                .reviews(toReviewDocument(domain.getReviews()))
+                .name(domain.getName())
+                .slug(domain.getSlug())
+                .description(domain.getDescription())
+                .sku(domain.getSku())
+                .status(domain.getStatus())
+                .categories(toCategoryDocumentList(domain.getCategories()))
+                .price(toPriceDocument(domain.getPrice()))
+                .ranking(toRankingDocument(domain.getRanking()))
+                .recentComments(toCommentDocumentList(domain.getRecentComments()))
+                .hasMoreComments(domain.getHasMoreComments())
+                .createdAt(domain.getCreatedAt())
+                .updatedAt(domain.getUpdatedAt())
                 .build();
     }
 
-    private Review toReviewDomain(ReviewDocument doc) {
+    private Price toPriceDomain(PriceDocument doc) {
         if (doc == null) return null;
-        return Review.builder()
-                .autor(doc.getAutor())
-                .stars(doc.getStars())
-                .review(doc.getReview())
-                .email(doc.getEmail())
+        return Price.builder()
+                .current(doc.getCurrent())
+                .original(doc.getOriginal())
+                .currency(doc.getCurrency())
+                .discountPercentage(doc.getDiscountPercentage())
+                .taxInclusive(doc.getTaxInclusive())
                 .build();
     }
 
-    private ReviewDocument toReviewDocument(Review review) {
-        if (review == null) return null;
-        return ReviewDocument.builder()
-                .autor(review.getAutor())
-                .stars(review.getStars())
-                .review(review.getReview())
-                .email(review.getEmail())
+    private PriceDocument toPriceDocument(Price domain) {
+        if (domain == null) return null;
+        return PriceDocument.builder()
+                .current(domain.getCurrent())
+                .original(domain.getOriginal())
+                .currency(domain.getCurrency())
+                .discountPercentage(domain.getDiscountPercentage())
+                .taxInclusive(domain.getTaxInclusive())
+                .build();
+    }
+
+    private Ranking toRankingDomain(RankingDocument doc) {
+        if (doc == null) return null;
+        return Ranking.builder()
+                .averageRating(doc.getAverageRating())
+                .totalReviews(doc.getTotalReviews())
+                .ratingDistribution(toRatingDistributionDomain(doc.getRatingDistribution()))
+                .build();
+    }
+
+    private RankingDocument toRankingDocument(Ranking domain) {
+        if (domain == null) return null;
+        return RankingDocument.builder()
+                .averageRating(domain.getAverageRating())
+                .totalReviews(domain.getTotalReviews())
+                .ratingDistribution(toRatingDistributionDocument(domain.getRatingDistribution()))
+                .build();
+    }
+
+    private RatingDistribution toRatingDistributionDomain(RatingDistributionDocument doc) {
+        if (doc == null) return null;
+        return RatingDistribution.builder()
+                .fiveStar(doc.getFiveStar())
+                .fourStar(doc.getFourStar())
+                .threeStar(doc.getThreeStar())
+                .twoStar(doc.getTwoStar())
+                .oneStar(doc.getOneStar())
+                .build();
+    }
+
+    private RatingDistributionDocument toRatingDistributionDocument(RatingDistribution domain) {
+        if (domain == null) return null;
+        return RatingDistributionDocument.builder()
+                .fiveStar(domain.getFiveStar())
+                .fourStar(domain.getFourStar())
+                .threeStar(domain.getThreeStar())
+                .twoStar(domain.getTwoStar())
+                .oneStar(domain.getOneStar())
+                .build();
+    }
+
+    private List<Category> toCategoryDomainList(List<CategoryDocument> docs) {
+        if (docs == null) return null;
+        return docs.stream().map(this::toCategoryDomain).toList();
+    }
+
+    private List<CategoryDocument> toCategoryDocumentList(List<Category> categories) {
+        if (categories == null) return null;
+        return categories.stream().map(this::toCategoryDocument).toList();
+    }
+
+    private Category toCategoryDomain(CategoryDocument doc) {
+        if (doc == null) return null;
+        return Category.builder()
+                .categoryId(doc.getCategoryId())
+                .name(doc.getName())
+                .slug(doc.getSlug())
+                .build();
+    }
+
+    private CategoryDocument toCategoryDocument(Category category) {
+        if (category == null) return null;
+        return CategoryDocument.builder()
+                .categoryId(category.getCategoryId())
+                .name(category.getName())
+                .slug(category.getSlug())
+                .build();
+    }
+
+    private List<Comment> toCommentDomainList(List<CommentDocument> docs) {
+        if (docs == null) return null;
+        return docs.stream().map(this::toCommentDomain).toList();
+    }
+
+    private List<CommentDocument> toCommentDocumentList(List<Comment> comments) {
+        if (comments == null) return null;
+        return comments.stream().map(this::toCommentDocument).toList();
+    }
+
+    private Comment toCommentDomain(CommentDocument doc) {
+        if (doc == null) return null;
+        return Comment.builder()
+                .commentId(doc.getCommentId())
+                .userId(doc.getUserId())
+                .username(doc.getUsername())
+                .rating(doc.getRating())
+                .title(doc.getTitle())
+                .body(doc.getBody())
+                .createdAt(doc.getCreatedAt())
+                .build();
+    }
+
+    private CommentDocument toCommentDocument(Comment comment) {
+        if (comment == null) return null;
+        return CommentDocument.builder()
+                .commentId(comment.getCommentId())
+                .userId(comment.getUserId())
+                .username(comment.getUsername())
+                .rating(comment.getRating())
+                .title(comment.getTitle())
+                .body(comment.getBody())
+                .createdAt(comment.getCreatedAt())
                 .build();
     }
 }
