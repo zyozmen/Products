@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -56,7 +57,7 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
         }
 
         // Update: preserve existing MongoDB _id to avoid duplicate key error
-        return mongoRepository.findById(producto.getId().toString())
+        return mongoRepository.findById(producto.getId())
                 .map(existing -> mapper.toDomain(
                         mongoRepository.save(mapper.toDocument(producto, existing.getId()))))
                 .orElseGet(() -> mapper.toDomain(mongoRepository.save(mapper.toDocument(producto))));
@@ -70,5 +71,15 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
     @Override
     public void deleteById(Long id) {
         mongoRepository.deleteById(id.toString());
+    }
+
+    @Override
+    public List<Producto> findFeatured() {
+        return mongoRepository.findAll()
+                .stream()
+                .map(mapper::toDomain)
+                .filter(product -> product.getRanking().getAverageRating().compareTo(BigDecimal.valueOf(4L)) > 0)
+                .limit(10)
+                .collect(Collectors.toList());
     }
 }

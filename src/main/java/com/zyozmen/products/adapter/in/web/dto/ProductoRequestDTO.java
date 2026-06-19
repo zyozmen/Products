@@ -9,7 +9,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
 import java.util.List;
 
 @Data
@@ -58,12 +57,4 @@ public class ProductoRequestDTO {
     @JsonProperty("has_more_comments")
     @Schema(description = "Indica si hay más comentarios disponibles", example = "true")
     private Boolean hasMoreComments;
-
-    @JsonProperty("created_at")
-    @Schema(description = "Fecha de creación del producto", example = "2025-11-01T00:00:00Z")
-    private Instant createdAt;
-
-    @JsonProperty("updated_at")
-    @Schema(description = "Fecha de última actualización del producto", example = "2026-06-17T13:00:00Z")
-    private Instant updatedAt;
 }

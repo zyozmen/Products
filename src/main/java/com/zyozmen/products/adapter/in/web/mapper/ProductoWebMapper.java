@@ -38,8 +38,6 @@ public class ProductoWebMapper {
                 .ranking(toRankingDomain(dto.getRanking()))
                 .recentComments(toCommentDomainList(dto.getRecentComments()))
                 .hasMoreComments(dto.getHasMoreComments())
-                .createdAt(dto.getCreatedAt())
-                .updatedAt(dto.getUpdatedAt())
                 .build();
     }
 

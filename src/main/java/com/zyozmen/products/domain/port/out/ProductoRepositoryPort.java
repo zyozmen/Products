@@ -23,4 +23,6 @@ public interface ProductoRepositoryPort {
     boolean existsById(Long id);
 
     void deleteById(Long id);
+
+    List<Producto> findFeatured();
 }

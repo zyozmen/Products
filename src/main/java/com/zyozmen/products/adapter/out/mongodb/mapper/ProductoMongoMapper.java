@@ -13,7 +13,10 @@ import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.model.Ranking;
 import com.zyozmen.products.domain.model.RatingDistribution;
 import org.springframework.stereotype.Component;
+import org.springframework.web.method.support.CompositeUriComponentsContributor;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -22,6 +25,12 @@ import java.util.List;
  */
 @Component
 public class ProductoMongoMapper {
+
+    private final CompositeUriComponentsContributor compositeUriComponentsContributor;
+
+    public ProductoMongoMapper(CompositeUriComponentsContributor compositeUriComponentsContributor) {
+        this.compositeUriComponentsContributor = compositeUriComponentsContributor;
+    }
 
     public Producto toDomain(ProductoMongoDocument document) {
         return Producto.builder()
@@ -54,8 +63,8 @@ public class ProductoMongoMapper {
                 .ranking(toRankingDocument(domain.getRanking()))
                 .recentComments(toCommentDocumentList(domain.getRecentComments()))
                 .hasMoreComments(domain.getHasMoreComments())
-                .createdAt(domain.getCreatedAt())
-                .updatedAt(domain.getUpdatedAt())
+                .createdAt(domain.getCreatedAt()== null ? Instant.now(): domain.getCreatedAt())
+                .updatedAt(domain.getUpdatedAt() == null ? Instant.now(): domain.getUpdatedAt())
                 .build();
     }
 
@@ -100,7 +109,12 @@ public class ProductoMongoMapper {
     }
 
     private Ranking toRankingDomain(RankingDocument doc) {
-        if (doc == null) return null;
+        if (doc == null) return
+                Ranking.builder()
+                        .averageRating(BigDecimal.ZERO)
+                        .totalReviews(0)
+                        .ratingDistribution(toRatingDistributionDomain(null))
+                        .build();
         return Ranking.builder()
                 .averageRating(doc.getAverageRating())
                 .totalReviews(doc.getTotalReviews())
@@ -118,7 +132,15 @@ public class ProductoMongoMapper {
     }
 
     private RatingDistribution toRatingDistributionDomain(RatingDistributionDocument doc) {
-        if (doc == null) return null;
+        if (doc == null)
+
+            return RatingDistribution.builder()
+                    .oneStar(0)
+                    .twoStar(0)
+                    .threeStar(0)
+                    .fourStar(0)
+                    .fiveStar(0)
+                    .build();
         return RatingDistribution.builder()
                 .fiveStar(doc.getFiveStar())
                 .fourStar(doc.getFourStar())

@@ -109,4 +109,15 @@ public class ProductoController {
         productoUseCase.eliminar(id);
         return ResponseEntity.noContent().build();
     }
+
+    @Operation(summary = "Listar todos los productos Destacados")
+    @ApiResponse(responseCode = "200", description = "Lista de productos obtenida exitosamente")
+    @GetMapping("/featured")
+    public ResponseEntity<List<ProductoResponseDTO>> obtenerDestacados() {
+        List<ProductoResponseDTO> response = productoUseCase.listarDestacados()
+                .stream()
+                .map(productoWebMapper::toResponseDTO)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(response);
+    }
 }

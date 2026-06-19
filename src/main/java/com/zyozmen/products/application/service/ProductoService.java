@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -43,6 +44,9 @@ public class ProductoService implements ProductoUseCase {
     @Override
     @Transactional
     public Producto crear(Producto producto) {
+
+        producto.setCreatedAt(Instant.now());
+        producto.setUpdatedAt(Instant.now());
         return productoRepositoryPort.save(producto);
     }
 
@@ -66,7 +70,7 @@ public class ProductoService implements ProductoUseCase {
         existente.setRecentComments(producto.getRecentComments());
         existente.setHasMoreComments(producto.getHasMoreComments());
         existente.setCreatedAt(producto.getCreatedAt());
-        existente.setUpdatedAt(producto.getUpdatedAt());
+        existente.setUpdatedAt(Instant.now());
 
         return productoRepositoryPort.save(existente);
     }
@@ -78,5 +82,10 @@ public class ProductoService implements ProductoUseCase {
             throw new ResourceNotFoundException("Producto no encontrado con ID: " + id);
         }
         productoRepositoryPort.deleteById(id);
+    }
+
+    @Override
+    public List<Producto> listarDestacados() {
+        return productoRepositoryPort.findFeatured();
     }
 }
