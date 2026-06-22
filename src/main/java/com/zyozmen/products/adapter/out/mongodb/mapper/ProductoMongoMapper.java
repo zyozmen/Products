@@ -171,7 +171,7 @@ public class ProductoMongoMapper {
         return categories.stream().map(this::toCategoryDocument).toList();
     }
 
-    private Category toCategoryDomain(CategoryDocument doc) {
+    public Category toCategoryDomain(CategoryDocument doc) {
         if (doc == null) return null;
         return Category.builder()
                 .categoryId(doc.getCategoryId())

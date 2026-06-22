@@ -1,5 +1,6 @@
 package com.zyozmen.products.domain.port.out;
 
+import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
 
 import java.util.List;
@@ -25,4 +26,6 @@ public interface ProductoRepositoryPort {
     void deleteById(Long id);
 
     List<Producto> findFeatured();
+
+    List<Category> findAllCategories();
 }

@@ -2,6 +2,7 @@ package com.zyozmen.products.adapter.in.web;
 
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.ProductoUseCase;
+import com.zyozmen.products.adapter.in.web.dto.CategoryDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
 import com.zyozmen.products.adapter.in.web.mapper.ProductoWebMapper;
@@ -117,6 +118,17 @@ public class ProductoController {
         List<ProductoResponseDTO> response = productoUseCase.listarDestacados()
                 .stream()
                 .map(productoWebMapper::toResponseDTO)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Listar todas las categorías")
+    @ApiResponse(responseCode = "200", description = "Lista de categorías obtenida exitosamente")
+    @GetMapping("/categories")
+    public ResponseEntity<List<CategoryDTO>> obtenerCategorias() {
+        List<CategoryDTO> response = productoUseCase.listarCategorias()
+                .stream()
+                .map(productoWebMapper::toCategoryDTO)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(response);
     }

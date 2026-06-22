@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 public class CategoryDocument {
 
     @Field("category_id")
-    private String categoryId;
+    private Long categoryId;
 
     @Field("name")
     private String name;

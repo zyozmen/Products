@@ -120,7 +120,7 @@ public class ProductoWebMapper {
                 .build();
     }
 
-    private List<CategoryDTO> toCategoryDTOList(List<Category> categories) {
+    public List<CategoryDTO> toCategoryDTOList(List<Category> categories) {
         if (categories == null) return null;
         return categories.stream().map(this::toCategoryDTO).toList();
     }
@@ -139,7 +139,7 @@ public class ProductoWebMapper {
                 .build();
     }
 
-    private CategoryDTO toCategoryDTO(Category category) {
+    public CategoryDTO toCategoryDTO(Category category) {
         if (category == null) return null;
         return CategoryDTO.builder()
                 .categoryId(category.getCategoryId())

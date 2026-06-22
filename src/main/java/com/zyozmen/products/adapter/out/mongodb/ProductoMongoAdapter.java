@@ -1,15 +1,20 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
+import com.mongodb.client.MongoClient;
 import com.zyozmen.products.adapter.out.mongodb.mapper.ProductoMongoMapper;
 import com.zyozmen.products.adapter.out.mongodb.repository.ProductoMongoRepository;
 import com.zyozmen.products.adapter.out.mongodb.sequence.SequenceGeneratorService;
+import com.zyozmen.products.config.MongoConfig;
+import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -34,6 +39,9 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
     private final ProductoMongoRepository mongoRepository;
     private final ProductoMongoMapper mapper;
     private final SequenceGeneratorService sequenceGenerator;
+
+    @Autowired
+    private final MongoConfig mongoConfig;
 
     @Override
     public List<Producto> findAll() {
@@ -82,4 +90,17 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
                 .limit(10)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<Category> findAllCategories() {
+        return mongoRepository.findDistinctCategories()
+                .stream()
+                .map(mapper::toCategoryDomain)
+            .sorted(Comparator.comparing(Category::getCategoryId,
+                Comparator.nullsLast(Comparator.naturalOrder())
+                ))
+                .collect(Collectors.toList());
+    }
+
+    
 }

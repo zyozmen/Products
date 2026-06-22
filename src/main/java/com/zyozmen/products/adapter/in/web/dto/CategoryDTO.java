@@ -16,7 +16,7 @@ public class CategoryDTO {
 
     @JsonProperty("category_id")
     @Schema(description = "Identificador de categoría", example = "1")
-    private String categoryId;
+    private Long categoryId;
 
     @Schema(description = "Nombre de la categoría", example = "Electronics")
     private String name;

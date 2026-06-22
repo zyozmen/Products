@@ -7,14 +7,14 @@ import java.util.Objects;
  */
 public class Category {
 
-	private String categoryId;
+	private Long categoryId;
 	private String name;
 	private String slug;
 
 	public Category() {
 	}
 
-	public Category(String categoryId, String name, String slug) {
+	public Category(Long categoryId, String name, String slug) {
 		this.categoryId = categoryId;
 		this.name = name;
 		this.slug = slug;
@@ -24,11 +24,11 @@ public class Category {
 		return new Builder();
 	}
 
-	public String getCategoryId() {
+	public Long getCategoryId() {
 		return categoryId;
 	}
 
-	public void setCategoryId(String categoryId) {
+	public void setCategoryId(Long categoryId) {
 		this.categoryId = categoryId;
 	}
 
@@ -74,11 +74,11 @@ public class Category {
 
 	public static class Builder {
 
-		private String categoryId;
+		private Long categoryId;
 		private String name;
 		private String slug;
 
-		public Builder categoryId(String categoryId) {
+		public Builder categoryId(Long categoryId) {
 			this.categoryId = categoryId;
 			return this;
 		}

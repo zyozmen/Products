@@ -1,5 +1,6 @@
 package com.zyozmen.products.domain.port.in;
 
+import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
 
 import java.util.List;
@@ -25,6 +26,8 @@ public interface ProductoUseCase {
     void eliminar(Long id);
 
     List<Producto> listarDestacados();
+
+    List<Category> listarCategorias();
 
 
 }

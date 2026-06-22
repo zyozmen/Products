@@ -2,6 +2,7 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.adapter.out.mongodb.ProductoMongoAdapter;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
+import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.ProductoUseCase;
 import lombok.RequiredArgsConstructor;
@@ -87,5 +88,10 @@ public class ProductoService implements ProductoUseCase {
     @Override
     public List<Producto> listarDestacados() {
         return productoRepositoryPort.findFeatured();
+    }
+
+    @Override
+    public List<Category> listarCategorias() {
+        return productoRepositoryPort.findAllCategories();
     }
 }
