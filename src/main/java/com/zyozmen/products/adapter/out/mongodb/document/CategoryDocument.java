@@ -21,4 +21,7 @@ public class CategoryDocument {
 
     @Field("slug")
     private String slug;
+
+    @Field("products_count")
+    private Long productsCount;
 }

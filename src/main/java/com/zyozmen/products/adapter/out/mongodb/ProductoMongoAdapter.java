@@ -2,6 +2,7 @@ package com.zyozmen.products.adapter.out.mongodb;
 
 import com.mongodb.client.MongoClient;
 import com.zyozmen.products.adapter.out.mongodb.mapper.ProductoMongoMapper;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductoMongoDocument;
 import com.zyozmen.products.adapter.out.mongodb.repository.ProductoMongoRepository;
 import com.zyozmen.products.adapter.out.mongodb.sequence.SequenceGeneratorService;
 import com.zyozmen.products.config.MongoConfig;
@@ -11,12 +12,20 @@ import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -39,6 +48,7 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
     private final ProductoMongoRepository mongoRepository;
     private final ProductoMongoMapper mapper;
     private final SequenceGeneratorService sequenceGenerator;
+    private final MongoTemplate mongoTemplate;
 
     @Autowired
     private final MongoConfig mongoConfig;
@@ -49,6 +59,92 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
                 .stream()
                 .map(mapper::toDomain)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public Page<Producto> findAll(Pageable pageable) {
+        return mongoRepository.findAll(pageable)
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    public Page<Producto> findAllByCategoryIds(List<Long> categoryIds, Pageable pageable) {
+        return mongoRepository.findByCategoriesCategoryIdIn(categoryIds, pageable)
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    public Page<Producto> findAllFiltered(
+            List<Long> categoryIds,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            BigDecimal minRating,
+            BigDecimal maxRating,
+            String name,
+            Pageable pageable) {
+
+        Query query = new Query();
+        List<Criteria> criteria = new ArrayList<>();
+
+
+        addCategoryCriteria(categoryIds, criteria);
+
+        addPriceCriteria(minPrice, maxPrice, criteria);
+
+        if (minRating != null || maxRating != null) {
+            addRatingCriteria(minRating, maxRating, criteria);
+        }
+
+        addNameCriteria(name, criteria);
+
+        if (!criteria.isEmpty()) {
+            query.addCriteria(new Criteria().andOperator(criteria.toArray(new Criteria[0])));
+        }
+
+        long total = mongoTemplate.count(query, ProductoMongoDocument.class);
+        query.with(pageable);
+        List<Producto> content = mongoTemplate.find(query, ProductoMongoDocument.class)
+                .stream()
+                .map(mapper::toDomain)
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(content, pageable, total);
+
+    }
+
+    private void addNameCriteria(String name, List<Criteria> criteria) {
+        if (name != null && !name.isBlank()) {
+            String normalized = Pattern.quote(name.trim());
+            criteria.add(Criteria.where("name").regex(normalized, "i"));
+        }
+    }
+
+    private void addRatingCriteria(BigDecimal minRating, BigDecimal maxRating, List<Criteria> criteria) {
+
+            Criteria ratingCriteria = Criteria.where("ranking.average_rating");
+            if (minRating != null)
+                ratingCriteria.gte(minRating.doubleValue());
+            if (maxRating != null)
+                ratingCriteria.lte(maxRating.doubleValue());
+            criteria.add(ratingCriteria);
+
+    }
+
+    private void addPriceCriteria(BigDecimal minPrice, BigDecimal maxPrice, List<Criteria> criteria) {
+        if (minPrice != null || maxPrice != null) {
+            Criteria priceCriteria = Criteria.where("price.current");
+            if (minPrice != null)
+                priceCriteria.gte(minPrice.doubleValue());
+            if (maxPrice != null)
+                priceCriteria.lte(maxPrice.doubleValue());
+            criteria.add(priceCriteria);
+        }
+    }
+
+    private void addCategoryCriteria(List<Long> categoryIds, List<Criteria> criteria) {
+        if (categoryIds != null && !categoryIds.isEmpty()) {
+            criteria.add(Criteria.where("categories.category_id").in(categoryIds));
+        }
     }
 
     @Override
@@ -96,11 +192,9 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
         return mongoRepository.findDistinctCategories()
                 .stream()
                 .map(mapper::toCategoryDomain)
-            .sorted(Comparator.comparing(Category::getCategoryId,
-                Comparator.nullsLast(Comparator.naturalOrder())
-                ))
+                .sorted(Comparator.comparing(Category::getCategoryId,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
                 .collect(Collectors.toList());
     }
 
-    
 }

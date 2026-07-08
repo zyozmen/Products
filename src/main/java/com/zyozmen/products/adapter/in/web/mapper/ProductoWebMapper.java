@@ -11,6 +11,7 @@ import com.zyozmen.products.domain.model.Comment;
 import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Price;
 import com.zyozmen.products.adapter.in.web.dto.PriceDTO;
+import com.zyozmen.products.adapter.in.web.dto.ProductoListItemDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
 import org.springframework.stereotype.Component;
@@ -56,6 +57,25 @@ public class ProductoWebMapper {
                 .createdAt(producto.getCreatedAt())
                 .updatedAt(producto.getUpdatedAt())
                 .build();
+    }
+
+    public ProductoListItemDTO toListItemDTO(Producto producto) {
+        if (producto == null) return null;
+        return ProductoListItemDTO.builder()
+                .id(producto.getId())
+                .name(producto.getName())
+                .categoryIds(toCategoryIdList(producto.getCategories()))
+                .currentPrice(producto.getPrice() == null ? null : producto.getPrice().getCurrent())
+                .originalPrice(producto.getPrice() == null ? null : producto.getPrice().getOriginal())
+                .priceCurrency(producto.getPrice() == null ? null : producto.getPrice().getCurrency())
+                .averageRating(producto.getRanking() == null ? null : producto.getRanking().getAverageRating())
+                .totalReviews(producto.getRanking() == null ? null : producto.getRanking().getTotalReviews())
+                .build();
+    }
+
+    private List<Long> toCategoryIdList(List<Category> categories) {
+        if (categories == null) return null;
+        return categories.stream().map(Category::getCategoryId).toList();
     }
 
     private Price toPriceDomain(PriceDTO dto) {
@@ -136,6 +156,7 @@ public class ProductoWebMapper {
                 .categoryId(dto.getCategoryId())
                 .name(dto.getName())
                 .slug(dto.getSlug())
+                .productsCount(dto.getProductsCount())
                 .build();
     }
 
@@ -145,6 +166,7 @@ public class ProductoWebMapper {
                 .categoryId(category.getCategoryId())
                 .name(category.getName())
                 .slug(category.getSlug())
+                .productsCount(category.getProductsCount())
                 .build();
     }
 

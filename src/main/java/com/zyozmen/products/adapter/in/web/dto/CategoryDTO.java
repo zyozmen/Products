@@ -23,4 +23,8 @@ public class CategoryDTO {
 
     @Schema(description = "Slug de la categoría", example = "electronics")
     private String slug;
+
+    @JsonProperty("products_count")
+    @Schema(description = "Cantidad de productos asociados a la categoría", example = "42")
+    private Long productsCount;
 }

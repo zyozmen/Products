@@ -3,6 +3,7 @@ package com.zyozmen.products.adapter.in.web;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.ProductoUseCase;
 import com.zyozmen.products.adapter.in.web.dto.CategoryDTO;
+import com.zyozmen.products.adapter.in.web.dto.ProductoListItemDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
 import com.zyozmen.products.adapter.in.web.mapper.ProductoWebMapper;
@@ -15,11 +16,18 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -47,11 +55,62 @@ public class ProductoController {
     @Operation(summary = "Listar todos los productos")
     @ApiResponse(responseCode = "200", description = "Lista de productos obtenida exitosamente")
     @GetMapping
-    public ResponseEntity<List<ProductoResponseDTO>> listarTodos() {
-        List<ProductoResponseDTO> response = productoUseCase.listarTodos()
-                .stream()
-                .map(productoWebMapper::toResponseDTO)
+    public ResponseEntity<Page<ProductoListItemDTO>> listarTodos(
+            @Parameter(description = "Número de página (base 0)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamaño de página", example = "10")
+            @RequestParam(defaultValue = "15") int size,
+            @Parameter(description = "Campo para ordenar (price|rating)", example = "price")
+            @RequestParam(name = "sort_by", required = false) String sortBy,
+            @Parameter(description = "Dirección de orden (asc|desc)", example = "asc")
+            @RequestParam(name = "sort_dir", defaultValue = "desc") String sortDir,
+            @Parameter(description = "Precio mínimo (filtro)", example = "100")
+            @RequestParam(name = "min_price", required = false) BigDecimal minPrice,
+            @Parameter(description = "Precio máximo (filtro)", example = "500")
+            @RequestParam(name = "max_price", required = false) BigDecimal maxPrice,
+            @Parameter(description = "Calificación mínima (filtro)", example = "4.0")
+            @RequestParam(name = "min_rating", required = false) BigDecimal minRating,
+            @Parameter(description = "Calificación máxima (filtro)", example = "5.0")
+            @RequestParam(name = "max_rating", required = false) BigDecimal maxRating,
+            @Parameter(description = "Nombre del producto (filtro parcial, case-insensitive)", example = "headphone")
+            @RequestParam(name = "name", required = false) String name,
+            @Parameter(description = "Filtrar por múltiples IDs de categoría", example = "1,2,3")
+            @RequestParam(name = "category_ids", required = false) List<Long> categoryIds) {
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Sort sort = switch (sortBy == null ? "" : sortBy.toLowerCase()) {
+            case "price" -> Sort.by(direction, "price.current");
+            case "rating", "average_rating", "calificacion" -> Sort.by(direction, "ranking.averageRating");
+            default -> Sort.unsorted();
+        };
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        List<Long> effectiveCategoryIds = new ArrayList<>();
+        if (categoryIds != null) {
+            effectiveCategoryIds.addAll(categoryIds);
+        }
+
+        List<Long> normalizedCategoryIds = effectiveCategoryIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
                 .collect(Collectors.toList());
+
+            boolean hasPriceFilter = minPrice != null || maxPrice != null;
+            boolean hasRatingFilter = minRating != null || maxRating != null;
+            boolean hasNameFilter = name != null && !name.isBlank();
+
+            Page<ProductoListItemDTO> response = ((normalizedCategoryIds.isEmpty() && !hasPriceFilter && !hasRatingFilter && !hasNameFilter)
+                ? productoUseCase.listarTodos(pageable)
+                : (!hasPriceFilter && !hasRatingFilter && !hasNameFilter)
+                    ? productoUseCase.listarTodosPorCategorias(normalizedCategoryIds, pageable)
+                    : productoUseCase.listarTodosFiltrado(
+                        normalizedCategoryIds,
+                        minPrice,
+                        maxPrice,
+                        minRating,
+                        maxRating,
+                        name,
+                        pageable))
+                .map(productoWebMapper::toListItemDTO);
         return ResponseEntity.ok(response);
     }
 

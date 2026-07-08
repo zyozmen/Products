@@ -8,9 +8,12 @@ import com.zyozmen.products.domain.port.in.ProductoUseCase;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -32,6 +35,38 @@ public class ProductoService implements ProductoUseCase {
     @Transactional(readOnly = true)
     public List<Producto> listarTodos() {
         return productoRepositoryPort.findAll();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Producto> listarTodos(Pageable pageable) {
+        return productoRepositoryPort.findAll(pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Producto> listarTodosPorCategorias(List<Long> categoryIds, Pageable pageable) {
+        return productoRepositoryPort.findAllByCategoryIds(categoryIds, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Producto> listarTodosFiltrado(
+            List<Long> categoryIds,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            BigDecimal minRating,
+            BigDecimal maxRating,
+            String name,
+            Pageable pageable) {
+        return productoRepositoryPort.findAllFiltered(
+                categoryIds,
+                minPrice,
+                maxPrice,
+                minRating,
+                maxRating,
+                name,
+                pageable);
     }
 
     @Override

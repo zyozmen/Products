@@ -10,6 +10,7 @@ public class Category {
 	private Long categoryId;
 	private String name;
 	private String slug;
+	private Long productsCount;
 
 	public Category() {
 	}
@@ -18,6 +19,13 @@ public class Category {
 		this.categoryId = categoryId;
 		this.name = name;
 		this.slug = slug;
+	}
+
+	public Category(Long categoryId, String name, String slug, Long productsCount) {
+		this.categoryId = categoryId;
+		this.name = name;
+		this.slug = slug;
+		this.productsCount = productsCount;
 	}
 
 	public static Builder builder() {
@@ -48,6 +56,14 @@ public class Category {
 		this.slug = slug;
 	}
 
+	public Long getProductsCount() {
+		return productsCount;
+	}
+
+	public void setProductsCount(Long productsCount) {
+		this.productsCount = productsCount;
+	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
@@ -55,12 +71,13 @@ public class Category {
 		Category category = (Category) o;
 		return Objects.equals(categoryId, category.categoryId)
 				&& Objects.equals(name, category.name)
-				&& Objects.equals(slug, category.slug);
+				&& Objects.equals(slug, category.slug)
+				&& Objects.equals(productsCount, category.productsCount);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(categoryId, name, slug);
+		return Objects.hash(categoryId, name, slug, productsCount);
 	}
 
 	@Override
@@ -69,6 +86,7 @@ public class Category {
 				"categoryId='" + categoryId + '\'' +
 				", name='" + name + '\'' +
 				", slug='" + slug + '\'' +
+				", productsCount='" + productsCount + '\'' +
 				'}';
 	}
 
@@ -77,6 +95,7 @@ public class Category {
 		private Long categoryId;
 		private String name;
 		private String slug;
+		private Long productsCount;
 
 		public Builder categoryId(Long categoryId) {
 			this.categoryId = categoryId;
@@ -93,8 +112,13 @@ public class Category {
 			return this;
 		}
 
+		public Builder productsCount(Long productsCount) {
+			this.productsCount = productsCount;
+			return this;
+		}
+
 		public Category build() {
-			return new Category(categoryId, name, slug);
+			return new Category(categoryId, name, slug, productsCount);
 		}
 	}
 }

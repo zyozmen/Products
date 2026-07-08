@@ -177,6 +177,7 @@ public class ProductoMongoMapper {
                 .categoryId(doc.getCategoryId())
                 .name(doc.getName())
                 .slug(doc.getSlug())
+                .productsCount(doc.getProductsCount())
                 .build();
     }
 

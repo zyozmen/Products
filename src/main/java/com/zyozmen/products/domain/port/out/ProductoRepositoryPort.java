@@ -2,7 +2,10 @@ package com.zyozmen.products.domain.port.out;
 
 import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,6 +19,19 @@ import java.util.Optional;
 public interface ProductoRepositoryPort {
 
     List<Producto> findAll();
+
+    Page<Producto> findAll(Pageable pageable);
+
+    Page<Producto> findAllByCategoryIds(List<Long> categoryIds, Pageable pageable);
+
+        Page<Producto> findAllFiltered(
+            List<Long> categoryIds,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            BigDecimal minRating,
+            BigDecimal maxRating,
+            String name,
+            Pageable pageable);
 
     Optional<Producto> findById(Long id);
 
