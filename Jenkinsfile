@@ -1,11 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        jdk 'JDK 21'
-        maven '3.9.x' // Match your configured Maven name
-    }
-
     environment {
         APP_NAME = 'products-api'
         IMAGE_TAG = "${BUILD_NUMBER}"
