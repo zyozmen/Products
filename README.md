@@ -3,7 +3,7 @@
 ## 1. Resumen del proyecto
 Este proyecto implementa un microservicio REST para la gestión de productos (CRUD: crear, consultar, actualizar y eliminar), desarrollado como ejercicio académico con enfoque en arquitectura limpia (hexagonal), buenas prácticas de validación y resiliencia.
 
-El sistema expone una API HTTP documentada con OpenAPI/Swagger y utiliza una base de datos MySQL para persistencia.
+El sistema expone una API HTTP documentada con OpenAPI/Swagger y utiliza MongoDB para persistencia.
 
 ## 2. Objetivo académico
 El propósito del proyecto es evidenciar la aplicación integrada de los siguientes conceptos:
@@ -11,11 +11,10 @@ El propósito del proyecto es evidenciar la aplicación integrada de los siguien
 - Diseño por capas con separación de responsabilidades.
 - Arquitectura Hexagonal (puertos y adaptadores).
 - Desarrollo de APIs REST con Spring Boot.
-- Persistencia relacional con JPA/Hibernate.
+- Persistencia documental con Spring Data MongoDB.
 - Validación de datos de entrada.
-- Mecanismos de tolerancia a fallos (Circuit Breaker y Retry).
 - Documentación técnica de API con OpenAPI.
-- Pruebas unitarias/integración con el ecosistema de Spring Test.
+- Pruebas unitarias con el ecosistema de Spring Test.
 
 ## 3. Stack tecnológico utilizado
 ### 3.1 Lenguaje y plataforma
@@ -25,18 +24,15 @@ El propósito del proyecto es evidenciar la aplicación integrada de los siguien
 
 ### 3.2 Frameworks y librerías principales
 - spring-boot-starter-web: construcción de endpoints REST.
-- spring-boot-starter-data-jpa: acceso a datos con JPA/Hibernate.
+- spring-boot-starter-data-mongodb: acceso a datos con MongoDB.
 - spring-boot-starter-validation: validación con Jakarta Validation.
-- mysql-connector-j: conector JDBC para MySQL.
 - springdoc-openapi-starter-webmvc-ui 2.5.0: documentación OpenAPI y Swagger UI.
-- spring-boot-starter-actuator: endpoints operativos/observabilidad.
-- resilience4j-spring-boot3 2.2.0: Circuit Breaker y Retry.
 - Lombok: reducción de código boilerplate.
 - spring-boot-starter-test: pruebas con JUnit 5 y Mockito.
 
 ### 3.3 Base de datos
-- MySQL 8
-- Esquema objetivo: products_db.
+- MongoDB
+- Base de datos objetivo: GrowShop.
 
 ## 4. Arquitectura del proyecto
 La organización del código responde a una arquitectura hexagonal:
@@ -44,8 +40,7 @@ La organización del código responde a una arquitectura hexagonal:
 - Capa de dominio (domain): entidades/modelos, puertos y excepciones del negocio.
 - Capa de aplicación (application): casos de uso y servicios de aplicación.
 - Adaptadores de entrada (adapter.in): API REST, DTOs y mapeadores web.
-- Adaptadores de salida (adapter.out): persistencia y mapeadores hacia infraestructura.
-- Configuración transversal (config/exception): OpenAPI, manejo global de errores y aspectos no funcionales.
+- Configuración transversal (config/exception): OpenAPI, configuración de MongoDB y manejo global de errores.
 
 Esta estructura favorece desacoplamiento, mantenibilidad y testabilidad.
 
@@ -54,28 +49,30 @@ Para construir y ejecutar el proyecto localmente se requiere:
 
 - JDK 21.
 - Maven 3.9+.
-- MySQL ejecutándose y accesible desde el host (por defecto: 127.0.0.1:3306).
+- MongoDB ejecutándose y accesible desde el host o desde la red Docker configurada.
 
 ## 6. Configuración de entorno
-La aplicación usa variables de entorno con valores por defecto definidos en application.properties:
+La aplicación usa configuración de MongoDB definida en application.properties y puede sobrescribirse al ejecutar la aplicación:
 
-- DB_HOST (default: 127.0.0.1)
-- DB_PORT (default: 3306)
-- DB_NAME (default: products_db)
-- DB_USERNAME (default: USR_PRD_1)
-- DB_PASSWORD (default: USR_PSW_SCTR)
+- spring.data.mongodb.host (default: 127.0.0.1)
+- spring.data.mongodb.port (default: 27017)
+- spring.data.mongodb.database (default: GrowShop)
+- spring.data.mongodb.username (default: growShop)
+- spring.data.mongodb.password (default: GrowSh0p)
+- spring.data.mongodb.authentication-database (default: admin)
 
-Ejemplo en PowerShell (opcional, si desea sobrescribir defaults):
+Ejemplo en PowerShell usando variables de entorno reconocidas por Spring Boot:
 
 ```powershell
-$env:DB_HOST="127.0.0.1"
-$env:DB_PORT="3306"
-$env:DB_NAME="products_db"
-$env:DB_USERNAME="USR_PRD_1"
-$env:DB_PASSWORD="USR_PSW_SCTR"
+$env:SPRING_DATA_MONGODB_HOST="127.0.0.1"
+$env:SPRING_DATA_MONGODB_PORT="27017"
+$env:SPRING_DATA_MONGODB_DATABASE="GrowShop"
+$env:SPRING_DATA_MONGODB_USERNAME="growShop"
+$env:SPRING_DATA_MONGODB_PASSWORD="GrowSh0p"
+$env:SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE="admin"
 ```
 
-Nota: con la configuración actual, Hibernate utiliza ddl-auto=update, por lo que el esquema se ajusta automáticamente según el modelo.
+Nota: el pipeline de Jenkins inyecta la URI de MongoDB mediante la propiedad `spring.data.mongodb.uri` durante la fase de pruebas.
 
 ## 7. Proceso de construcción
 ### 7.1 Limpieza y compilación
@@ -122,6 +119,13 @@ java -jar target/products-0.0.1-SNAPSHOT.jar
 
 La API queda disponible en:
 - http://localhost:8080
+
+También puedes construir y ejecutar el contenedor con Java 21:
+
+```bash
+docker build -t products-api:local .
+docker run --rm -p 8080:8080 products-api:local
+```
 
 ### 8.2 Documentación interactiva
 - Swagger UI: http://localhost:8080/swagger-ui.html
@@ -182,20 +186,13 @@ Listar:
 curl "http://localhost:8080/api/productos"
 ```
 
-## 9. Observabilidad y resiliencia
-### 9.1 Actuator
-Endpoints expuestos:
-- /actuator/health
-- /actuator/info
-- /actuator/circuitbreakers
-- /actuator/retries
+## 9. Persistencia y ejecución
+La aplicación se conecta a MongoDB usando las propiedades `spring.data.mongodb.*` o una URI completa con `spring.data.mongodb.uri`.
 
-### 9.2 Resilience4j
-Se implementan políticas de:
-- Circuit Breaker para el componente de repositorio de productos.
-- Retry ante fallos transitorios de infraestructura.
-
-Esto permite una degradación controlada del servicio cuando existen fallas temporales de conectividad o acceso a datos.
+Para CI/CD, el proyecto queda alineado con Java 21 en estos puntos:
+- Maven compila con Java 21 definido en pom.xml.
+- Jenkins usa la herramienta JDK 21 y verifica la versión antes de ejecutar Maven.
+- Docker ejecuta la aplicación sobre una imagen base Eclipse Temurin 21.
 
 ## 10. Manejo de errores
 La API cuenta con un manejador global de excepciones que normaliza respuestas HTTP para casos como:
@@ -213,6 +210,6 @@ La API cuenta con un manejador global de excepciones que normaliza respuestas HT
 - target/: artefactos y reportes generados por Maven.
 
 ## 12. Conclusión
-El proyecto Products API constituye una implementación académica completa de un microservicio CRUD empresarial, integrando prácticas modernas de ingeniería de software en Java: arquitectura desacoplada, documentación automática, validaciones robustas, pruebas y mecanismos de resiliencia.
+El proyecto Products API constituye una implementación académica completa de un microservicio CRUD empresarial, integrando prácticas modernas de ingeniería de software en Java: arquitectura desacoplada, documentación automática, validaciones robustas y pruebas.
 
 Como resultado, el sistema no solo cumple con el objetivo funcional de gestión de productos, sino que también ofrece una base sólida para evolución, mantenimiento y despliegue en entornos reales.

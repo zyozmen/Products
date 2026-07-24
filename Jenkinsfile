@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    tools {
+        jdk 'JDK21'
+    }
+
     environment {
         APP_NAME = 'products-api'
         IMAGE_TAG = "${BUILD_NUMBER}"
@@ -23,6 +27,15 @@ pipeline {
         stage('Checkout') {  
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Verify Java 21') {
+            steps {
+                echo 'Verificando que Jenkins ejecute Maven con JDK 21...'
+                sh 'chmod +x mvnw'
+                sh 'java -version'
+                sh './mvnw -version'
             }
         }
 
@@ -63,8 +76,6 @@ pipeline {
         stage('Maven Compile & Test') {
             steps {
                 echo 'Ejecutando pruebas y compilación con Maven...'
-                // Garantiza permisos de ejecución al wrapper de Maven
-                sh 'chmod +x mvnw'
                 // Compila, corre pruebas unitarias y genera el .jar omitiendo fallos por falta de DB si no hay mocks
                 sh './mvnw clean package'
             }
