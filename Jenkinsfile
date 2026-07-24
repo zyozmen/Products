@@ -1,12 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        // Asume que configuraste JDK 17 en "Global Tool Configuration" de Jenkins
-        // O usas el Maven Wrapper integrado en el repo (recomendado)
-        jdk 'JDK21'
-    }
-
     environment {
         APP_NAME = 'products-api'
         IMAGE_TAG = "${BUILD_NUMBER}"
