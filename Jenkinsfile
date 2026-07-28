@@ -12,14 +12,15 @@ pipeline {
 
     stages {
 
-        stage('Static Analysis & Quality Gate') {
+        stage('SonarQube Analysis') {
             steps {
+                // Asegúrate de usar comillas DOBLES "" en el comando sh
                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-            // Cambia comillas simples ' por comillas dobles "
-            sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.token=${SONAR_TOKEN}"
+                    sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.token=${SONAR_TOKEN}"
+                }
             }
         }
-        }
+
 
         stage('Build, Test & Package') {
             steps {
