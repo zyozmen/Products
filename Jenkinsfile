@@ -68,6 +68,12 @@ pipeline {
                 }
             }
         }
+        stage('Test') {
+            steps {
+                // Genera reportes de pruebas unitarias
+                sh 'mvn test'
+            }
+        }
 
         stage('Maven Compile & Test') {
             steps {
