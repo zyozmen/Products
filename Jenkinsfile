@@ -19,6 +19,7 @@ pipeline {
             sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"
             }
         }
+        }
 
         stage('Build, Test & Package') {
             steps {
@@ -35,7 +36,5 @@ pipeline {
                 }
             }
         }
-
-
     }
 }
