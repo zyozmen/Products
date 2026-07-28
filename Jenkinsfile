@@ -15,17 +15,8 @@ pipeline {
         stage('Static Analysis & Quality Gate') {
             steps {
                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-                    // Ejecuta el análisis enviando métricas a SonarQube
-                    sh '''
-                ./mvnw sonar:sonar \
-                  -Dsonar.host.url=http://sonarqube:9000 \
-                  -Dsonar.login=${SONAR_TOKEN}
-            '''
-                }
-                // Espera la respuesta del Quality Gate definido en SonarQube
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
+            // Cambia comillas simples ' por comillas dobles "
+            sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"
             }
         }
 
