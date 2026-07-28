@@ -12,15 +12,6 @@ pipeline {
 
     stages {
 
-        stage('SonarQube Analysis') {
-            steps {
-                // Asegúrate de usar comillas DOBLES "" en el comando sh
-                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-                    sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.token=${SONAR_TOKEN}"
-                }
-            }
-        }
-
 
         stage('Build, Test & Package') {
             steps {
@@ -34,6 +25,15 @@ pipeline {
                         def mongoUri = "mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_CONTAINER_NAME}:${MONGO_PORT}/${DB_NAME}?authSource=admin"
                         sh "./mvnw clean package -Dspring.data.mongodb.uri='${mongoUri}'"
                     }
+                }
+            }
+        }
+
+         stage('SonarQube Analysis') {
+            steps {
+                // Asegúrate de usar comillas DOBLES "" en el comando sh
+                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                    sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.token=${SONAR_TOKEN}"
                 }
             }
         }
