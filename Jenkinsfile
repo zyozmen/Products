@@ -16,7 +16,7 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
             // Cambia comillas simples ' por comillas dobles "
-            sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar"
+            sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.token=${SONAR_TOKEN}"
             }
         }
         }
