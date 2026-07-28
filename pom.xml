@@ -21,7 +21,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <sonar.host.url>http://localhost:8070</sonar.host.url>
+        <sonar.host.url>http://sonarqube:9000</sonar.host.url>
         <sonar.projectKey>Products-sonar</sonar.projectKey>
         <sonar.projectName>Products-sonar</sonar.projectName>
     </properties>
