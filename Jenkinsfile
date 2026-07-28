@@ -18,7 +18,7 @@ pipeline {
                     // Ejecuta el análisis enviando métricas a SonarQube
                     sh '''
                 ./mvnw sonar:sonar \
-                  -Dsonar.host.url=http://sonarqube:9000 \
+                  -Dsonar.host.url=http://sonarqube:8070 \
                   -Dsonar.login=${SONAR_TOKEN}
             '''
                 }
