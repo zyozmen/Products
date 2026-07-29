@@ -1,10 +1,7 @@
 package com.zyozmen.products.domain.port.in;
 
-import com.zyozmen.products.application.service.ProductoService;
-import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
