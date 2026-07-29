@@ -30,4 +30,30 @@ class CommentTest {
         assertThat(comment.getBody()).isEqualTo("The battery lasts forever");
         assertThat(comment.getCreatedAt()).isEqualTo(createdAt);
     }
+
+    @Test
+    void settersAndEqualityShouldWork() {
+        Comment comment = new Comment();
+        comment.setCommentId("comment-2");
+        comment.setUserId("user-2");
+        comment.setUsername("Jane");
+        comment.setRating(4);
+        comment.setTitle("Nice");
+        comment.setBody("Great value");
+        comment.setCreatedAt(Instant.parse("2026-06-16T10:00:00Z"));
+
+        Comment sameComment = Comment.builder()
+                .commentId("comment-2")
+                .userId("user-2")
+                .username("Jane")
+                .rating(4)
+                .title("Nice")
+                .body("Great value")
+                .createdAt(Instant.parse("2026-06-16T10:00:00Z"))
+                .build();
+
+        assertThat(comment).isEqualTo(sameComment);
+        assertThat(comment.hashCode()).isEqualTo(sameComment.hashCode());
+        assertThat(comment.toString()).contains("Jane");
+    }
 }

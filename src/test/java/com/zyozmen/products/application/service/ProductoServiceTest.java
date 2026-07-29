@@ -45,6 +45,45 @@ class ProductoServiceTest {
     }
 
     @Test
+    void listarTodosPageableShouldDelegateToRepository() {
+        Pageable pageable = PageRequest.of(0, 5);
+        Producto producto = Producto.builder().id("2").name("Keyboard").build();
+        Page<Producto> expectedPage = new PageImpl<>(List.of(producto), pageable, 1);
+
+        when(productoRepositoryPort.findAll(pageable)).thenReturn(expectedPage);
+
+        Page<Producto> result = productoService.listarTodos(pageable);
+
+        assertThat(result.getContent()).containsExactly(producto);
+        verify(productoRepositoryPort).findAll(pageable);
+    }
+
+    @Test
+    void listarTodosPorCategoriasShouldDelegateToRepository() {
+        Pageable pageable = PageRequest.of(0, 3);
+        Producto producto = Producto.builder().id("3").name("Monitor").build();
+        Page<Producto> expectedPage = new PageImpl<>(List.of(producto), pageable, 1);
+
+        when(productoRepositoryPort.findAllByCategoryIds(List.of(1L, 2L), pageable)).thenReturn(expectedPage);
+
+        Page<Producto> result = productoService.listarTodosPorCategorias(List.of(1L, 2L), pageable);
+
+        assertThat(result.getContent()).containsExactly(producto);
+        verify(productoRepositoryPort).findAllByCategoryIds(List.of(1L, 2L), pageable);
+    }
+
+    @Test
+    void obtenerPorIdShouldReturnProductWhenPresent() {
+        Producto producto = Producto.builder().id("4").name("Speaker").build();
+        when(productoRepositoryPort.findById(4L)).thenReturn(Optional.of(producto));
+
+        Producto result = productoService.obtenerPorId(4L);
+
+        assertThat(result).isSameAs(producto);
+        verify(productoRepositoryPort).findById(4L);
+    }
+
+    @Test
     void obtenerPorIdShouldThrowWhenProductIsMissing() {
         when(productoRepositoryPort.findById(99L)).thenReturn(Optional.empty());
 
@@ -96,6 +135,46 @@ class ProductoServiceTest {
 
         assertThat(result.getContent()).containsExactly(producto);
         verify(productoRepositoryPort).findAllFiltered(List.of(1L), BigDecimal.TEN, BigDecimal.valueOf(100), BigDecimal.ONE, BigDecimal.valueOf(5), "key", pageable);
+    }
+
+    @Test
+    void actualizarShouldThrowWhenProductIsMissing() {
+        Producto updates = Producto.builder().name("New").build();
+
+        when(productoRepositoryPort.findById(42L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> productoService.actualizar(42L, updates))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("42");
+    }
+
+    @Test
+    void eliminarShouldThrowWhenProductDoesNotExist() {
+        when(productoRepositoryPort.existsById(7L)).thenReturn(false);
+
+        assertThatThrownBy(() -> productoService.eliminar(7L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("7");
+    }
+
+    @Test
+    void eliminarShouldDeleteExistingProduct() {
+        when(productoRepositoryPort.existsById(8L)).thenReturn(true);
+
+        productoService.eliminar(8L);
+
+        verify(productoRepositoryPort).deleteById(8L);
+    }
+
+    @Test
+    void listarDestacadosShouldDelegateToRepository() {
+        Producto producto = Producto.builder().id("5").name("Console").build();
+        when(productoRepositoryPort.findFeatured()).thenReturn(List.of(producto));
+
+        List<Producto> result = productoService.listarDestacados();
+
+        assertThat(result).containsExactly(producto);
+        verify(productoRepositoryPort).findFeatured();
     }
 
     @Test

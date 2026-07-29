@@ -24,4 +24,26 @@ class PriceTest {
         assertThat(price.getDiscountPercentage()).isEqualTo(20);
         assertThat(price.getTaxInclusive()).isTrue();
     }
+
+    @Test
+    void settersAndEqualityShouldWork() {
+        Price price = new Price();
+        price.setCurrent(new BigDecimal("10.00"));
+        price.setOriginal(new BigDecimal("15.00"));
+        price.setCurrency("EUR");
+        price.setDiscountPercentage(15);
+        price.setTaxInclusive(false);
+
+        Price samePrice = Price.builder()
+                .current(new BigDecimal("10.00"))
+                .original(new BigDecimal("15.00"))
+                .currency("EUR")
+                .discountPercentage(15)
+                .taxInclusive(false)
+                .build();
+
+        assertThat(price).isEqualTo(samePrice);
+        assertThat(price.hashCode()).isEqualTo(samePrice.hashCode());
+        assertThat(price.toString()).contains("EUR");
+    }
 }

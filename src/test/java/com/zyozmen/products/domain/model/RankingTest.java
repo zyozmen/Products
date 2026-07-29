@@ -28,4 +28,22 @@ class RankingTest {
         assertThat(ranking.getTotalReviews()).isEqualTo(1250);
         assertThat(ranking.getRatingDistribution()).isEqualTo(distribution);
     }
+
+    @Test
+    void settersAndEqualityShouldWork() {
+        Ranking ranking = new Ranking();
+        ranking.setAverageRating(new BigDecimal("4.2"));
+        ranking.setTotalReviews(200);
+        ranking.setRatingDistribution(RatingDistribution.builder().fiveStar(100).build());
+
+        Ranking sameRanking = Ranking.builder()
+                .averageRating(new BigDecimal("4.2"))
+                .totalReviews(200)
+                .ratingDistribution(RatingDistribution.builder().fiveStar(100).build())
+                .build();
+
+        assertThat(ranking).isEqualTo(sameRanking);
+        assertThat(ranking.hashCode()).isEqualTo(sameRanking.hashCode());
+        assertThat(ranking.toString()).contains("4.2");
+    }
 }

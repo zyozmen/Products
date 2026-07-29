@@ -22,4 +22,24 @@ class ReviewTest {
         assertThat(review.getReviewText()).isEqualTo("Great product");
         assertThat(review.getEmail()).isEqualTo("john@example.com");
     }
+
+    @Test
+    void settersAndEqualityShouldWork() {
+        Review review = new Review();
+        review.setAutor("Jane");
+        review.setStars(new BigDecimal("3.5"));
+        review.setReviewText("Good enough");
+        review.setEmail("jane@example.com");
+
+        Review sameReview = Review.builder()
+                .autor("Jane")
+                .stars(new BigDecimal("3.5"))
+                .reviewText("Good enough")
+                .email("jane@example.com")
+                .build();
+
+        assertThat(review).isEqualTo(sameReview);
+        assertThat(review.hashCode()).isEqualTo(sameReview.hashCode());
+        assertThat(review.toString()).contains("Jane");
+    }
 }

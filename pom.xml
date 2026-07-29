@@ -24,6 +24,13 @@
         <sonar.host.url>http://sonarqube:9000</sonar.host.url>
         <sonar.projectKey>Products-sonar</sonar.projectKey>
         <sonar.projectName>Products-sonar</sonar.projectName>
+        <sonar.exclusions>
+            **/dto/**,
+            **/entity/**,
+            **/model/**,
+            **/config/**,
+            **/*Application.java
+        </sonar.exclusions>
     </properties>
 
     <dependencies>
@@ -89,6 +96,19 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.11</version>
+                <configuration>
+                    <excludes>
+            <!-- Excluye paquetes completos -->
+                        <exclude>**/dto/**</exclude>
+                        <exclude>**/entity/**</exclude>
+                        <exclude>**/model/**</exclude>
+                        <exclude>**/domain/model/**</exclude>
+                        <exclude>**/adapter/**/mapper/**</exclude>
+                        <exclude>**/config/**</exclude>
+            <!-- Excluye la clase principal de Spring Boot -->
+                        <exclude>**/*Application.class</exclude>
+                    </excludes>
+    </configuration>
                 <executions>
         <!-- 1. OBLIGATORIO: Prepara el agente ANTES de correr los tests para crear jacoco.exec -->
                     <execution>
