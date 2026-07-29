@@ -1,5 +1,5 @@
 package com.zyozmen.products.adapter.in.web.mapper;
-
+import java.util.ArrayList;
 import com.zyozmen.products.adapter.in.web.dto.CategoryDTO;
 import com.zyozmen.products.adapter.in.web.dto.RankingDTO;
 import com.zyozmen.products.adapter.in.web.dto.RatingDistributionDTO;
@@ -74,7 +74,7 @@ public class ProductoWebMapper {
     }
 
     private List<Long> toCategoryIdList(List<Category> categories) {
-        if (categories == null) return null;
+        if (categories == null) return List.of();
         return categories.stream().map(Category::getCategoryId).toList();
     }
 
@@ -141,12 +141,12 @@ public class ProductoWebMapper {
     }
 
     public List<CategoryDTO> toCategoryDTOList(List<Category> categories) {
-        if (categories == null) return null;
+        if (categories == null) return List.of();
         return categories.stream().map(this::toCategoryDTO).toList();
     }
 
     private List<Category> toCategoryDomainList(List<CategoryDTO> categories) {
-        if (categories == null) return null;
+        if (categories == null) return List.of();
         return categories.stream().map(this::toCategoryDomain).toList();
     }
 
@@ -171,12 +171,12 @@ public class ProductoWebMapper {
     }
 
     private List<RecentCommentDTO> toRecentCommentDTOList(List<Comment> comments) {
-        if (comments == null) return null;
+        if (comments == null) return List.of();
         return comments.stream().map(this::toRecentCommentDTO).toList();
     }
 
     private List<Comment> toCommentDomainList(List<RecentCommentDTO> comments) {
-        if (comments == null) return null;
+        if (comments == null) return List.of();
         return comments.stream().map(this::toCommentDomain).toList();
     }
 

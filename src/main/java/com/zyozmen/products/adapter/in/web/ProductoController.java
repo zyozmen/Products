@@ -45,7 +45,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/productos")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*") // Permitir CORS para todas las fuentes (ajustar según necesidades)
 @Tag(name = "Productos", description = "API para gestión de productos")
 public class ProductoController {
 
@@ -92,34 +91,36 @@ public class ProductoController {
         List<Long> normalizedCategoryIds = effectiveCategoryIds.stream()
                 .filter(Objects::nonNull)
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
 
-            boolean hasPriceFilter = minPrice != null || maxPrice != null;
-            boolean hasRatingFilter = minRating != null || maxRating != null;
-            boolean hasNameFilter = name != null && !name.isBlank();
+        boolean hasPriceFilter = minPrice != null || maxPrice != null;
+        boolean hasRatingFilter = minRating != null || maxRating != null;
+        boolean hasNameFilter = name != null && !name.isBlank();
 
-            Page<ProductoListItemDTO> response = ((normalizedCategoryIds.isEmpty() && !hasPriceFilter && !hasRatingFilter && !hasNameFilter)
-                ? productoUseCase.listarTodos(pageable)
-                : (!hasPriceFilter && !hasRatingFilter && !hasNameFilter)
-                    ? productoUseCase.listarTodosPorCategorias(normalizedCategoryIds, pageable)
-                    : productoUseCase.listarTodosFiltrado(
-                        normalizedCategoryIds,
-                        minPrice,
-                        maxPrice,
-                        minRating,
-                        maxRating,
-                        name,
-                        pageable))
-                .map(productoWebMapper::toListItemDTO);
+        Page<Producto> productos;
+        if (normalizedCategoryIds.isEmpty() && !hasPriceFilter && !hasRatingFilter && !hasNameFilter) {
+            productos = productoUseCase.listarTodos(pageable);
+        } else if (!hasPriceFilter && !hasRatingFilter && !hasNameFilter) {
+            productos = productoUseCase.listarTodosPorCategorias(normalizedCategoryIds, pageable);
+        } else {
+            productos = productoUseCase.listarTodosFiltrado(
+                    normalizedCategoryIds,
+                    minPrice,
+                    maxPrice,
+                    minRating,
+                    maxRating,
+                    name,
+                    pageable);
+        }
+
+        Page<ProductoListItemDTO> response = productos.map(productoWebMapper::toListItemDTO);
         return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "Obtener un producto por ID")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Producto encontrado"),
-        @ApiResponse(responseCode = "404", description = "Producto no encontrado",
-                     content = @Content(schema = @Schema(hidden = true)))
-    })
+    @ApiResponse(responseCode = "200", description = "Producto encontrado")
+    @ApiResponse(responseCode = "404", description = "Producto no encontrado",
+                 content = @Content(schema = @Schema(hidden = true)))
     @GetMapping("/{id}")
     public ResponseEntity<ProductoResponseDTO> obtenerPorId(
             @Parameter(description = "ID del producto", example = "1")
@@ -128,11 +129,9 @@ public class ProductoController {
     }
 
     @Operation(summary = "Crear un nuevo producto")
-    @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Producto creado exitosamente"),
-        @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos",
-                     content = @Content(schema = @Schema(hidden = true)))
-    })
+    @ApiResponse(responseCode = "201", description = "Producto creado exitosamente")
+    @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos",
+                 content = @Content(schema = @Schema(hidden = true)))
     @PostMapping
     public ResponseEntity<ProductoResponseDTO> crear(@Valid @RequestBody ProductoRequestDTO requestDTO) {
         Producto creado = productoUseCase.crear(productoWebMapper.toDomain(requestDTO));
@@ -140,13 +139,11 @@ public class ProductoController {
     }
 
     @Operation(summary = "Actualizar un producto existente")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Producto actualizado exitosamente"),
-        @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos",
-                     content = @Content(schema = @Schema(hidden = true))),
-        @ApiResponse(responseCode = "404", description = "Producto no encontrado",
+    @ApiResponse(responseCode = "200", description = "Producto actualizado exitosamente")
+    @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos",
                      content = @Content(schema = @Schema(hidden = true)))
-    })
+    @ApiResponse(responseCode = "404", description = "Producto no encontrado",
+                     content = @Content(schema = @Schema(hidden = true)))
     @PutMapping("/{id}")
     public ResponseEntity<ProductoResponseDTO> actualizar(
             @Parameter(description = "ID del producto a actualizar", example = "1")
@@ -157,11 +154,10 @@ public class ProductoController {
     }
 
     @Operation(summary = "Eliminar un producto")
-    @ApiResponses({
-        @ApiResponse(responseCode = "204", description = "Producto eliminado exitosamente"),
-        @ApiResponse(responseCode = "404", description = "Producto no encontrado",
+    @ApiResponse(responseCode = "204", description = "Producto eliminado exitosamente")
+    @ApiResponse(responseCode = "404", description = "Producto no encontrado",
                      content = @Content(schema = @Schema(hidden = true)))
-    })
+    
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminar(
             @Parameter(description = "ID del producto a eliminar", example = "1")
@@ -177,7 +173,7 @@ public class ProductoController {
         List<ProductoResponseDTO> response = productoUseCase.listarDestacados()
                 .stream()
                 .map(productoWebMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(response);
     }
 
@@ -188,7 +184,7 @@ public class ProductoController {
         List<CategoryDTO> response = productoUseCase.listarCategorias()
                 .stream()
                 .map(productoWebMapper::toCategoryDTO)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(response);
     }
 }

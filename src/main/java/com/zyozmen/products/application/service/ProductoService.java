@@ -1,13 +1,12 @@
 package com.zyozmen.products.application.service;
 
-import com.zyozmen.products.adapter.out.mongodb.ProductoMongoAdapter;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.ProductoUseCase;
+import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
 import lombok.RequiredArgsConstructor;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -28,8 +27,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProductoService implements ProductoUseCase {
 
-    @Autowired
-    private ProductoMongoAdapter productoRepositoryPort;
+    private final ProductoRepositoryPort productoRepositoryPort;
 
     @Override
     @Transactional(readOnly = true)

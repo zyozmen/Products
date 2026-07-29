@@ -28,32 +28,20 @@ public class Producto {
     public Producto() {
     }
 
-    public Producto(String id,
-                    String name,
-                    String slug,
-                    String description,
-                    String sku,
-                    String status,
-                    List<Category> categories,
-                    Price price,
-                    Ranking ranking,
-                    List<Comment> recentComments,
-                    Boolean hasMoreComments,
-                    Instant createdAt,
-                    Instant updatedAt) {
-        this.id = id;
-        this.name = name;
-        this.slug = slug;
-        this.description = description;
-        this.sku = sku;
-        this.status = status;
-        this.categories = categories;
-        this.price = price;
-        this.ranking = ranking;
-        this.recentComments = recentComments;
-        this.hasMoreComments = hasMoreComments;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+    private Producto(Builder builder) {
+        this.id = builder.id;
+        this.name = builder.name;
+        this.slug = builder.slug;
+        this.description = builder.description;
+        this.sku = builder.sku;
+        this.status = builder.status;
+        this.categories = builder.categories;
+        this.price = builder.price;
+        this.ranking = builder.ranking;
+        this.recentComments = builder.recentComments;
+        this.hasMoreComments = builder.hasMoreComments;
+        this.createdAt = builder.createdAt;
+        this.updatedAt = builder.updatedAt;
     }
 
     public static Builder builder() {
@@ -170,19 +158,19 @@ public class Producto {
 
     // Legacy aliases kept temporarily to avoid breaking older request/service code.
     public String getNombre() {
-        return name;
+        return getName();
     }
 
     public void setNombre(String nombre) {
-        this.name = nombre;
+        setName(nombre);
     }
 
     public String getDescripcion() {
-        return description;
+        return getDescription();
     }
 
     public void setDescripcion(String descripcion) {
-        this.description = descripcion;
+        setDescription(descripcion);
     }
 
     public BigDecimal getPrecio() {
@@ -358,14 +346,13 @@ public class Producto {
             }
             this.recentComments = List.of(Comment.builder()
                     .username(reviews.getAutor())
-                    .body(reviews.getReview())
+                    .body(reviews.getReviewText())
                     .build());
             return this;
         }
 
         public Producto build() {
-            return new Producto(id, name, slug, description, sku, status, categories, price,
-                    ranking, recentComments, hasMoreComments, createdAt, updatedAt);
+            return new Producto(this);
         }
     }
 }

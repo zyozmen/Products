@@ -11,16 +11,16 @@ public class Review {
 
     private String autor;
     private BigDecimal stars;
-    private String review;
+    private String reviewText;
     private String email;
 
     public Review() {
     }
 
-    public Review(String autor, BigDecimal stars, String review, String email) {
+    public Review(String autor, BigDecimal stars, String reviewText, String email) {
         this.autor = autor;
         this.stars = stars;
-        this.review = review;
+        this.reviewText = reviewText;
         this.email = email;
     }
 
@@ -44,12 +44,12 @@ public class Review {
         this.stars = stars;
     }
 
-    public String getReview() {
-        return review;
+    public String getReviewText() {
+        return reviewText;
     }
 
-    public void setReview(String review) {
-        this.review = review;
+    public void setReviewText(String reviewText) {
+        this.reviewText = reviewText;
     }
 
     public String getEmail() {
@@ -67,13 +67,13 @@ public class Review {
         Review r = (Review) o;
         return Objects.equals(autor, r.autor)
                 && Objects.equals(stars, r.stars)
-                && Objects.equals(review, r.review)
+                && Objects.equals(reviewText, r.reviewText)
                 && Objects.equals(email, r.email);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(autor, stars, review, email);
+        return Objects.hash(autor, stars, reviewText, email);
     }
 
     @Override
@@ -81,7 +81,7 @@ public class Review {
         return "Review{" +
                 "autor='" + autor + '\'' +
                 ", stars=" + stars +
-                ", review='" + review + '\'' +
+                ", review='" + reviewText + '\'' +
                 ", email='" + email + '\'' +
                 '}';
     }
@@ -90,7 +90,7 @@ public class Review {
 
         private String autor;
         private BigDecimal stars;
-        private String review;
+        private String reviewText;
         private String email;
 
         public Builder autor(String autor) {
@@ -103,8 +103,8 @@ public class Review {
             return this;
         }
 
-        public Builder review(String review) {
-            this.review = review;
+        public Builder reviewText(String reviewText) {
+            this.reviewText = reviewText;
             return this;
         }
 
@@ -114,7 +114,7 @@ public class Review {
         }
 
         public Review build() {
-            return new Review(autor, stars, review, email);
+            return new Review(autor, stars, reviewText, email);
         }
     }
 }

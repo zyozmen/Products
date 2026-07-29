@@ -26,10 +26,7 @@ import java.util.List;
 @Component
 public class ProductoMongoMapper {
 
-    private final CompositeUriComponentsContributor compositeUriComponentsContributor;
-
     public ProductoMongoMapper(CompositeUriComponentsContributor compositeUriComponentsContributor) {
-        this.compositeUriComponentsContributor = compositeUriComponentsContributor;
     }
 
     public Producto toDomain(ProductoMongoDocument document) {
@@ -162,12 +159,12 @@ public class ProductoMongoMapper {
     }
 
     private List<Category> toCategoryDomainList(List<CategoryDocument> docs) {
-        if (docs == null) return null;
+        if (docs == null) return List.of();
         return docs.stream().map(this::toCategoryDomain).toList();
     }
 
     private List<CategoryDocument> toCategoryDocumentList(List<Category> categories) {
-        if (categories == null) return null;
+        if (categories == null) return List.of();
         return categories.stream().map(this::toCategoryDocument).toList();
     }
 
@@ -191,12 +188,12 @@ public class ProductoMongoMapper {
     }
 
     private List<Comment> toCommentDomainList(List<CommentDocument> docs) {
-        if (docs == null) return null;
+        if (docs == null) return List.of();
         return docs.stream().map(this::toCommentDomain).toList();
     }
 
     private List<CommentDocument> toCommentDocumentList(List<Comment> comments) {
-        if (comments == null) return null;
+        if (comments == null) return List.of();
         return comments.stream().map(this::toCommentDocument).toList();
     }
 

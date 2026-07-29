@@ -1,16 +1,13 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.mongodb.client.MongoClient;
 import com.zyozmen.products.adapter.out.mongodb.mapper.ProductoMongoMapper;
 import com.zyozmen.products.adapter.out.mongodb.document.ProductoMongoDocument;
 import com.zyozmen.products.adapter.out.mongodb.repository.ProductoMongoRepository;
 import com.zyozmen.products.adapter.out.mongodb.sequence.SequenceGeneratorService;
-import com.zyozmen.products.config.MongoConfig;
 import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -26,7 +23,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Adaptador de salida (Outbound Adapter) MongoDB.
@@ -50,15 +46,12 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
     private final SequenceGeneratorService sequenceGenerator;
     private final MongoTemplate mongoTemplate;
 
-    @Autowired
-    private final MongoConfig mongoConfig;
-
     @Override
     public List<Producto> findAll() {
         return mongoRepository.findAll()
                 .stream()
                 .map(mapper::toDomain)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -106,7 +99,7 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
         List<Producto> content = mongoTemplate.find(query, ProductoMongoDocument.class)
                 .stream()
                 .map(mapper::toDomain)
-                .collect(Collectors.toList());
+                .toList();
 
         return new PageImpl<>(content, pageable, total);
 
@@ -184,7 +177,7 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
                 .map(mapper::toDomain)
                 .filter(product -> product.getRanking().getAverageRating().compareTo(BigDecimal.valueOf(4L)) > 0)
                 .limit(10)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -194,7 +187,7 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
                 .map(mapper::toCategoryDomain)
                 .sorted(Comparator.comparing(Category::getCategoryId,
                         Comparator.nullsLast(Comparator.naturalOrder())))
-                .collect(Collectors.toList());
+                .toList();
     }
 
 }
