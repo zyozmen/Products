@@ -1,5 +1,4 @@
 package com.zyozmen.products.adapter.in.web.mapper;
-import java.util.ArrayList;
 import com.zyozmen.products.adapter.in.web.dto.CategoryDTO;
 import com.zyozmen.products.adapter.in.web.dto.RankingDTO;
 import com.zyozmen.products.adapter.in.web.dto.RatingDistributionDTO;
