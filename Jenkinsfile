@@ -119,8 +119,8 @@ pipeline {
                                 echo "--> Verificando estado del contenedor..."
                                 sleep 5
                                 docker ps -f name="\$APP_NAME"
-EOF
-"""
+                            EOF
+                            """
                     }
                 }
             }
