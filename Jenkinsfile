@@ -37,5 +37,36 @@ pipeline {
                 }
             }
         }
+
+        stage('Build & Push Docker Image') {
+            steps {
+                script {
+                    // 1. Definir estrategia de etiquetado (Semantic Versioning)
+                    // Usa la rama y el número de build. Ej: 'main-15' o 'develop-15'
+                    def gitBranch = env.BRANCH_NAME ?: 'main'
+                    def imageVersion = "1.0.${BUILD_NUMBER}"
+                    def fullImageName = "${DOCKER_USER}/${APP_NAME}"
+
+                    echo "Construyendo imagen: ${fullImageName}:${imageVersion}..."
+
+                    // 2. Construir la imagen localmente
+                    def customImage = docker.build("${fullImageName}:${imageVersion}")
+
+                    // 3. Autenticarse en Docker Hub y hacer Push de las etiquetas
+                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'DOCKER_HUB_CREDENTIALS') {
+                        
+                        // Sube la versión específica (ej. products-api:1.0.15)
+                        echo "Publicando tag de versión: ${imageVersion}..."
+                        customImage.push(imageVersion)
+
+                        // Si estamos en la rama principal, actualiza también el tag 'latest'
+                        if (gitBranch == 'main' || gitBranch == 'master') {
+                            echo "Publicando tag: latest..."
+                            customImage.push('latest')
+                        }
+                    }
+                }
+            }
+        }
     }
 }
