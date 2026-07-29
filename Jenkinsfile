@@ -119,7 +119,9 @@ pipeline {
                         docker ps -f name=\${APP_NAME}
 EOF
 """
+                }
             }
         }
+        
     }
 }
