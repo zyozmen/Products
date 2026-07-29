@@ -8,6 +8,7 @@ pipeline {
         MONGO_NETWORK_NAME = 'red-productos'
         DB_NAME = 'GrowShop'
         MONGO_PORT = '27017'
+        DOCKER_USER = 'zyozmen'
     }
 
     stages {
@@ -53,7 +54,7 @@ pipeline {
                     def customImage = docker.build("${fullImageName}:${imageVersion}")
 
                     // 3. Autenticarse en Docker Hub y hacer Push de las etiquetas
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'DOCKER_HUB_CREDENTIALS') {
+                    docker.withRegistry("https://index.docker.io/v1/", 'DOCKER_HUB_CREDENTIALS') {
                         
                         // Sube la versión específica (ej. products-api:1.0.15)
                         echo "Publicando tag de versión: ${imageVersion}..."
