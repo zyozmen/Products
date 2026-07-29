@@ -178,7 +178,7 @@ public class ProductoMongoMapper {
                 .build();
     }
 
-    private CategoryDocument toCategoryDocument(Category category) {
+    public CategoryDocument toCategoryDocument(Category category) {
         if (category == null) return null;
         return CategoryDocument.builder()
                 .categoryId(category.getCategoryId())
