@@ -99,7 +99,7 @@ pipeline {
                                 docker network inspect "\$NETWORK_NAME" >/dev/null 2>&1 || docker network create "\$NETWORK_NAME"
 
                                 echo "--> Removiendo contenedor anterior..."
-                                if [ \$(docker ps -aq -f name=^\/\$APP_NAME\$) ]; then
+                                if [ \$(docker ps -aq -f name=^\${APP_NAME}\$) ]; then
                                     docker stop "\$APP_NAME" || true
                                     docker rm "\$APP_NAME" || true
                                 fi
