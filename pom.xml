@@ -24,13 +24,7 @@
         <sonar.host.url>http://sonarqube:9000</sonar.host.url>
         <sonar.projectKey>Products-sonar</sonar.projectKey>
         <sonar.projectName>Products-sonar</sonar.projectName>
-        <sonar.exclusions>
-            **/dto/**,
-            **/entity/**,
-            **/model/**,
-            **/config/**,
-            **/*Application.java
-        </sonar.exclusions>
+        <sonar.exclusions>**/dto/**,**/entity/**,**/model/**,**/config/**,**/*Application.java</sonar.exclusions>
     </properties>
 
     <dependencies>
