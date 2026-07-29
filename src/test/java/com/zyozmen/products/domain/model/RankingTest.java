@@ -43,7 +43,7 @@ class RankingTest {
                 .build();
 
         assertThat(ranking).isEqualTo(sameRanking);
-        assertThat(ranking.hashCode()).isEqualTo(sameRanking.hashCode());
+        assertThat(ranking.hashCode()).hasSameHashCodeAs(sameRanking.hashCode());
         assertThat(ranking.toString()).contains("4.2");
     }
 }

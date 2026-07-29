@@ -43,7 +43,7 @@ class CategoryTest {
                 .build();
 
         assertThat(category).isEqualTo(sameCategory);
-        assertThat(category.hashCode()).isEqualTo(sameCategory.hashCode());
+        assertThat(category.hashCode()).hasSameHashCodeAs(sameCategory.hashCode());
         assertThat(category).isNotEqualTo(differentCategory);
         assertThat(category.toString()).contains("Gaming");
     }

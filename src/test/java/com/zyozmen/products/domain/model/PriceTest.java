@@ -43,7 +43,7 @@ class PriceTest {
                 .build();
 
         assertThat(price).isEqualTo(samePrice);
-        assertThat(price.hashCode()).isEqualTo(samePrice.hashCode());
+        assertThat(price.hashCode()).hasSameHashCodeAs(samePrice.hashCode());
         assertThat(price.toString()).contains("EUR");
     }
 }

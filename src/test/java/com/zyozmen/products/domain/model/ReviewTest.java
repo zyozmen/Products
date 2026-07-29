@@ -39,7 +39,7 @@ class ReviewTest {
                 .build();
 
         assertThat(review).isEqualTo(sameReview);
-        assertThat(review.hashCode()).isEqualTo(sameReview.hashCode());
+        assertThat(review.hashCode()).hasSameHashCodeAs(sameReview.hashCode());
         assertThat(review.toString()).contains("Jane");
     }
 }

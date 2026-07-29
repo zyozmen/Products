@@ -53,7 +53,7 @@ class CommentTest {
                 .build();
 
         assertThat(comment).isEqualTo(sameComment);
-        assertThat(comment.hashCode()).isEqualTo(sameComment.hashCode());
+        assertThat(comment.hashCode()).hasSameHashCodeAs(sameComment.hashCode());
         assertThat(comment.toString()).contains("Jane");
     }
 }

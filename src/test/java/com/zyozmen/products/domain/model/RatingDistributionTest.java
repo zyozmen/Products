@@ -41,7 +41,7 @@ class RatingDistributionTest {
                 .build();
 
         assertThat(distribution).isEqualTo(sameDistribution);
-        assertThat(distribution.hashCode()).isEqualTo(sameDistribution.hashCode());
+        assertThat(distribution.hashCode()).hasSameHashCodeAs(sameDistribution.hashCode());
         assertThat(distribution.toString()).contains("5");
     }
 }
