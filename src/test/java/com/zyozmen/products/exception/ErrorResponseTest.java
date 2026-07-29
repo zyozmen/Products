@@ -3,6 +3,7 @@ package com.zyozmen.products.exception;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,7 +12,7 @@ class ErrorResponseTest {
 
     @Test
     void builderShouldPopulateFieldsAndAccessors() {
-        LocalDateTime timestamp = LocalDateTime.of(2026, 7, 29, 12, 0);
+        LocalDateTime timestamp = LocalDateTime.of(2026, Month.JULY, 29, 12, 0);
         List<String> validationErrors = List.of("name is required");
 
         ErrorResponse response = ErrorResponse.builder()

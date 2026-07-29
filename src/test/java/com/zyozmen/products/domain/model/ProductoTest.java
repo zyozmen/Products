@@ -133,12 +133,13 @@ class ProductoTest {
         assertThat(producto.getRecentComments().get(0).getBody()).isEqualTo("Excellent");
         assertThat(productoWithNullReview.getRecentComments()).isNull();
 
-        assertThat(producto).isEqualTo(producto);
-        assertThat(producto).isEqualTo(sameProducto);
+        assertThat(producto)
+                .isEqualTo(producto)
+                .isEqualTo(sameProducto)
+                .isNotEqualTo(null)
+                .isNotEqualTo("not a product")
+                .isNotEqualTo(differentProducto);
         assertThat(producto.hashCode()).isEqualTo(sameProducto.hashCode());
-        assertThat(producto).isNotEqualTo(null);
-        assertThat(producto).isNotEqualTo("not a product");
-        assertThat(producto).isNotEqualTo(differentProducto);
         assertThat(producto.toString()).contains("Alias Name");
     }
 }
