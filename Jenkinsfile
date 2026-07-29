@@ -61,60 +61,64 @@ pipeline {
         }
 
         stage('Deploy to AWS EC2') {
-            steps {
-                sshagent(['SSH_DEPLOY_KEY']) {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'DOCKER_HUB_CREDENTIALS', 
-                        usernameVariable: 'DOCKER_USER', 
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
-                        script {
-                            def awsIp = "18.224.29.18"
-                            def fullImageTag = "${DOCKER_USER}/${APP_NAME}:${APP_VERSION}"
-                            
-                            sh """
-                                ssh -o StrictHostKeyChecking=no deployuser@${awsIp} "bash -s" << 'EOF'
-                                    set -e
-                                    APP_NAME="${APP_NAME}"
-                                    IMAGE_TAG="${fullImageTag}"
-                                    ENV_FILE="/etc/products-api/.env"
-                                    NETWORK_NAME="${MONGO_NETWORK_NAME}"
+    steps {
+        // En lugar de sshagent, se usa sshUserPrivateKey con withCredentials
+        withCredentials([
+            sshUserPrivateKey(
+                credentialsId: 'SSH_DEPLOY_KEY', 
+                keyFileVariable: 'SSH_KEY', 
+                usernameVariable: 'SSH_USER'
+            ),
+            usernamePassword(
+                credentialsId: 'DOCKER_HUB_CREDENTIALS', 
+                usernameVariable: 'DOCKER_USER', 
+                passwordVariable: 'DOCKER_PASS'
+            )
+        ]) {
+            script {
+                def awsIp = "18.224.29.18"
+                def fullImageTag = "${DOCKER_USER}/${APP_NAME}:${APP_VERSION}"
+                
+                sh """
+                    ssh -i \${SSH_KEY} -o StrictHostKeyChecking=no \${SSH_USER}@${awsIp} "bash -s" << 'EOF'
+                        set -e
+                        APP_NAME="${APP_NAME}"
+                        IMAGE_TAG="${fullImageTag}"
+                        ENV_FILE="/etc/products-api/.env"
+                        NETWORK_NAME="${MONGO_NETWORK_NAME}"
 
-                                    echo "--> Autenticando en Docker Hub..."
-                                    echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+                        echo "--> Autenticando en Docker Hub..."
+                        echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
 
-                                    echo "--> Descargando imagen desde Docker Hub: \${IMAGE_TAG}"
-                                    docker pull \${IMAGE_TAG}
+                        echo "--> Descargando imagen desde Docker Hub: \${IMAGE_TAG}"
+                        docker pull \${IMAGE_TAG}
 
-                                    echo "--> Verificando red aislada..."
-                                    docker network inspect \${NETWORK_NAME} >/dev/null 2>&1 || docker network create \${NETWORK_NAME}
+                        echo "--> Verificando red aislada..."
+                        docker network inspect \${NETWORK_NAME} >/dev/null 2>&1 || docker network create \${NETWORK_NAME}
 
-                                    echo "--> Removiendo contenedor anterior..."
-                                    if [ \$(docker ps -aq -f name=^/\${APP_NAME}\$) ]; then
-                                        docker stop \${APP_NAME} || true
-                                        docker rm \${APP_NAME} || true
-                                    fi
+                        echo "--> Removiendo contenedor anterior..."
+                        if [ \$(docker ps -aq -f name=^/\${APP_NAME}\$) ]; then
+                            docker stop \${APP_NAME} || true
+                            docker rm \${APP_NAME} || true
+                        fi
 
-                                    echo "--> Desplegando contenedor en AWS..."
-                                    docker run -d \\
-                                        --name \${APP_NAME} \\
-                                        --restart unless-stopped \\
-                                        --network \${NETWORK_NAME} \\
-                                        --env-file \${ENV_FILE} \\
-                                        -p 8080:8080 \\
-                                        \${IMAGE_TAG}
+                        echo "--> Desplegando contenedor en AWS..."
+                        docker run -d \\
+                            --name \${APP_NAME} \\
+                            --restart unless-stopped \\
+                            --network \${NETWORK_NAME} \\
+                            --env-file \${ENV_FILE} \\
+                            -p 8080:8080 \\
+                            \${IMAGE_TAG}
 
-                                    echo "--> Limpiando imágenes en desuso..."
-                                    docker image prune -f
+                        echo "--> Limpiando imágenes en desuso..."
+                        docker image prune -f
 
-                                    echo "--> Verificando estado del contenedor..."
-                                    sleep 5
-                                    docker ps -f name=\${APP_NAME}
+                        echo "--> Verificando estado del contenedor..."
+                        sleep 5
+                        docker ps -f name=\${APP_NAME}
 EOF
 """
-                        }
-                    }
-                }
             }
         }
     }
