@@ -43,7 +43,7 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 // Se define un tiempo máximo de espera por si el Webhook de SonarQube no responde
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 4, unit: 'MINUTES') {
                     script {
                         // abortPipeline: true hace que el build de Jenkins falle inmediatamente si SonarQube marca ERROR
                         def qg = waitForQualityGate()
