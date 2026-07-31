@@ -67,14 +67,16 @@ pipeline {
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     sh """
-                        # Autenticación explícita en ECR mediante AWS CLI instalada en el agente
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                        # --- PASO DE DIAGNÓSTICO ---
+                        echo "=== USUARIO ACTUAL ==="
+                        whoami
 
-                        # Build de la imagen Docker usando la estrategia multi-stage de la Fase 1
-                        docker build -t ${ECR_URL}:${IMAGE_TAG} .
+                        echo "=== PATH DEL SISTEMA ==="
+                        echo \$PATH
 
-                        # Push de la imagen etiquetada a ECR
-                        docker push ${ECR_URL}:${IMAGE_TAG}
+                        echo "=== BUSCANDO EL EJECUTABLE AWS ==="
+                        which aws || find / -name aws -type f 2>/dev/null || echo "AWS NO ENCONTRADO EN NINGUNA PARTE"
+                        # ---------------------------
                     """
                 }
             }
