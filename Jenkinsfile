@@ -66,16 +66,13 @@ pipeline {
                     string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
-                    sh """
-                        # Autenticación segura del daemon de Docker contra AWS ECR
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-
-                        # Compilación y empaquetado aislado dentro del contenedor
-                        docker build -t ${ECR_URL}:${IMAGE_TAG} .
-
-                        # Push a ECR
-                        docker push ${ECR_URL}:${IMAGE_TAG}
-                    """
+                script {
+                    // El SDK de Jenkins gestiona la autenticación con ECR sin invocar la AWS CLI directamente
+                        docker.withRegistry("https://${ECR_URL}", "ecr:${AWS_REGION}:${credentialsId('aws-access-key-id')}") {
+                            sh "docker build -t ${ECR_URL}:${IMAGE_TAG} ."
+                            sh "docker push ${ECR_URL}:${IMAGE_TAG}"
+                        }
+                    }
                 }
             }
         }
