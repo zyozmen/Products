@@ -130,3 +130,36 @@ pipeline {
         }
     }
 }
+
+# Anexo Técnico: Implementación de Estado Remoto e Importación en Terraform
+
+## 📌 Contexto y Problemática
+Posterior a la ejecución exitosa de los scripts de CI/CD, el workspace efímero de Jenkins (`cleanWs()`) eliminaba el archivo local `terraform.tfstate` tras cada ejecución. Esto generaba un fallo recurrente de desincronización (*State Drift*) en las siguientes ejecuciones:
+
+* **Incapacidad de rastrear recursos existentes:** Terraform intentaba crear nuevamente componentes presentes en AWS (`ECR`, `IAM Roles`, `Security Groups`, `CloudWatch Log Groups`), arrojando errores del API de AWS tipo `ResourceAlreadyExistsException`, `EntityAlreadyExists` e `InvalidGroup.Duplicate`.
+
+---
+
+## 🏗️ 1. Creación de Infraestructura para Estado Remoto (AWS CLI)
+
+Para solucionar de raíz la pérdida de estado, se aprovisionó un almacenamiento centralizado y un mecanismo de bloqueo concurrente mediante AWS CLI:
+
+```bash
+# 1. Crear Bucket de S3 para almacenar el terraform.tfstate en us-east-2
+aws s3api create-bucket \
+    --bucket terraform-state-505231787824 \
+    --region us-east-2 \
+    --create-bucket-configuration LocationConstraint=us-east-2
+
+# 2. Habilitar versionamiento en S3 (Resguardo histórico ante corrupción del estado)
+aws s3api put-bucket-versioning \
+    --bucket terraform-state-505231787824 \
+    --versioning-configuration Status=Enabled
+
+# 3. Crear tabla de DynamoDB para State Locking
+aws dynamodb create-table \
+    --table-name terraform-locks \
+    --attribute-definitions AttributeName=LockID,AttributeType=S \
+    --key-schema AttributeName=LockID,KeyType=HASH \
+    --billing-mode PAY_PER_REQUEST \
+    --region us-east-2
