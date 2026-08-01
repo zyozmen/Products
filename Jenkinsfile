@@ -89,8 +89,28 @@ pipeline {
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     sh """
-                        terraform init
-                        terraform apply -auto-approve -var="image_tag=${IMAGE_TAG}"
+                        # Configuración de credenciales de AWS en variables de entorno para Terraform
+                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                        export AWS_DEFAULT_REGION=${AWS_REGION}
+
+                        # 1. Garantizar binario de Terraform local en el workspace si el sistema no lo tiene
+                        if ! command -v terraform &> /dev/null; then
+                            echo "--> Terraform no encontrado en el PATH. Descargando binario ejecutable portátil..."
+                            curl -s -O https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+                            unzip -q -o terraform_1.5.7_linux_amd64.zip
+                            chmod +x terraform
+                            TF_CMD="./terraform"
+                        else
+                            TF_CMD="terraform"
+                        fi
+
+                        # 2. Ejecutar comandos de infraestructura
+                        echo "--> Ejecutando Terraform init..."
+                        \$TF_CMD init
+
+                        echo "--> Aplicando cambios en AWS ECS con la imagen: ${IMAGE_TAG}..."
+                        \$TF_CMD apply -auto-approve -var="image_tag=${IMAGE_TAG}"
                     """
                 }
             }
