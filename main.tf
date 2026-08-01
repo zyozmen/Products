@@ -7,10 +7,37 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    bucket         = "terraform-state-505231787824" # Nombre real de tu bucket
+    key            = "products-service/terraform.tfstate"
+    region         = "us-east-2"
+    dynamodb_table = "terraform-locks"
+  }
 }
 
 provider "aws" {
   region = "us-east-2"
+}
+
+import {
+  to = aws_ecr_repository.products_service
+  id = "products-service"
+}
+
+import {
+  to = aws_cloudwatch_log_group.ecs_log_group
+  id = "/ecs/products-service"
+}
+
+import {
+  to = aws_iam_role.ecs_task_execution_role
+  id = "products-ecs-task-execution-role"
+}
+
+import {
+  to = aws_security_group.app_sg
+  id = "sg-0e6fe540c5a946e48" 
 }
 
 resource "aws_ecr_repository" "products_service" {
