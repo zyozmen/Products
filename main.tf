@@ -35,6 +35,10 @@ import {
   id = "products-ecs-task-execution-role"
 }
 
+data "aws_security_group" "app_sg" {
+  name = "products-app-sg"
+}
+
 resource "aws_ecr_repository" "products_service" {
   name                 = "products-service"
   image_tag_mutability = "IMMUTABLE" # Garantiza trazabilidad y previene sobreescrituras
