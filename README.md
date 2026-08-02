@@ -19,7 +19,7 @@ El propósito del proyecto es evidenciar la aplicación integrada de los siguien
 ## 3. Stack tecnológico utilizado
 ### 3.1 Lenguaje y plataforma
 - Java 21
-- Spring Boot 3.2.5
+- Spring Boot 3.5.16
 - Maven (gestión de dependencias y construcción)
 
 ### 3.2 Frameworks y librerías principales
