@@ -163,3 +163,93 @@ aws dynamodb create-table \
     --key-schema AttributeName=LockID,KeyType=HASH \
     --billing-mode PAY_PER_REQUEST \
     --region us-east-2
+
+    # Anexo Técnico: Automatización de Infraestructura como Código (IaC) y Estado Remoto en CI/CD
+
+## 📌 Contexto y Problemática Final Resuelta
+
+Durante el despliegue del pipeline de Jenkins para el microservicio de productos, se identificaron dos grandes desafíos de arquitectura IaC:
+
+1. **Efecto "Huevo o la Gallina" con Terraform Backend:** Terraform no podía ejecutar `terraform init` si el bucket de S3 (`terraform-state-505231787824`) o la tabla de DynamoDB (`terraform-locks`) no existían previamente en AWS.
+2. **Inconsistencias por State Drift y Parches de Importación:** La combinación de bloques `import` con IDs estáticos y data sources (`data "aws_security_group"`) provocaba fallos recurrentes de duplicación (`InvalidGroup.Duplicate`, `InvalidPermission.Duplicate`) o de recursos inexistentes (`Cannot import non-existent remote object`) tras ejecuciones de limpieza.
+
+---
+
+## 🚀 1. Estrategia de Autoreparación del Backend en Jenkinsfile
+
+Para garantizar un pipeline 100% autónomo e idempotente, se integró una etapa de pre-aprovisionamiento directo mediante AWS CLI en el `Jenkinsfile`. Si la infraestructura del backend no existe (por ejemplo, tras un evento de limpieza total), el propio pipeline la crea antes de invocar `terraform init`.
+
+### Etapas implementadas en el `Jenkinsfile`:
+
+```groovy
+stage('Verify & Install Tools') {
+    steps {
+        sh '''
+            mkdir -p .bin
+            export PATH="${WORKSPACE}/.bin:${PATH}"
+
+            # Instalación aislada de AWS CLI v2 en el workspace
+            if ! command -v aws &> /dev/null; then
+                curl -s "[https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip](https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip)" -o "awscliv2.zip"
+                unzip -q -o awscliv2.zip
+                ./aws/install --bin-dir "${WORKSPACE}/.bin" --install-dir "${WORKSPACE}/.aws-cli" --update
+                rm -rf awscliv2.zip aws/
+            fi
+
+            # Instalación aislada de Terraform en el workspace
+            if ! command -v terraform &> /dev/null; then
+                curl -s -O [https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip](https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip)
+                unzip -q -o terraform_1.5.7_linux_amd64.zip -d "${WORKSPACE}/.bin/"
+                chmod +x "${WORKSPACE}/.bin/terraform"
+                rm -f terraform_1.5.7_linux_amd64.zip
+            fi
+        '''
+    }
+}
+
+stage('Terraform Provision & Deploy') {
+    steps {
+        withCredentials([
+            string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+            string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+        ]) {
+            sh '''
+                export PATH="${WORKSPACE}/.bin:${PATH}"
+                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                export AWS_DEFAULT_REGION=${AWS_REGION}
+
+                BUCKET_NAME="terraform-state-505231787824"
+                DYNAMO_TABLE="terraform-locks"
+
+                # 1. Creación idempotente de Bucket S3
+                if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+                    aws s3api create-bucket \
+                        --bucket "$BUCKET_NAME" \
+                        --region ${AWS_REGION} \
+                        --create-bucket-configuration LocationConstraint=${AWS_REGION}
+                    
+                    aws s3api put-bucket-versioning \
+                        --bucket "$BUCKET_NAME" \
+                        --versioning-configuration Status=Enabled
+                fi
+
+                # 2. Creación idempotente de Tabla DynamoDB para Locks
+                if ! aws dynamodb describe-table --table-name "$DYNAMO_TABLE" 2>/dev/null; then
+                    aws dynamodb create-table \
+                        --table-name "$DYNAMO_TABLE" \
+                        --attribute-definitions AttributeName=LockID,AttributeType=S \
+                        --key-schema AttributeName=LockID,KeyType=HASH \
+                        --billing-mode PAY_PER_REQUEST \
+                        --region ${AWS_REGION}
+
+                    aws dynamodb wait table-exists --table-name "$DYNAMO_TABLE" --region ${AWS_REGION}
+                fi
+
+                # 3. Inicialización y despliegue
+                terraform init
+                terraform apply -auto-approve -var="image_tag=${IMAGE_TAG}"
+            '''
+        }
+    }
+}

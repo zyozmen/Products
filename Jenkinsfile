@@ -29,7 +29,6 @@ pipeline {
                         usernameVariable: 'MONGO_USER',
                         passwordVariable: 'MONGO_PASSWORD'
                 )]) {
-                    // [Certeza] Inyección vía variable de entorno para evitar exposición en 'ps aux'
                     withEnv(["SPRING_DATA_MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_CONTAINER_NAME}:${MONGO_PORT}/${DB_NAME}?authSource=admin"]) {
                         sh './mvnw clean test'
                     }
@@ -56,28 +55,6 @@ pipeline {
                             error "Pipeline abortado debido a fallo en el Quality Gate de SonarQube: ${qg.status}"
                         }
                     }
-                }
-            }
-        }
-
-        stage('AWS ECR Login & Build') {
-            steps {
-                withCredentials([
-                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    sh """
-                        # --- PASO DE DIAGNÓSTICO ---
-                        echo "=== USUARIO ACTUAL ==="
-                        whoami
-
-                        echo "=== PATH DEL SISTEMA ==="
-                        echo \$PATH
-
-                        echo "=== BUSCANDO EL EJECUTABLE AWS ==="
-                        which aws || find / -name aws -type f 2>/dev/null || echo "AWS NO ENCONTRADO EN NINGUNA PARTE"
-                        # ---------------------------
-                    """
                 }
             }
         }
@@ -113,6 +90,32 @@ pipeline {
             }
         }
 
+        stage('Docker Build & Push to ECR') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    sh """
+                        export PATH="${WORKSPACE}/.bin:${PATH}"
+                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                        export AWS_DEFAULT_REGION=${AWS_REGION}
+
+                        echo "=== 1. Autenticando en AWS ECR ==="
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+                        echo "=== 2. Construyendo Imagen Docker ==="
+                        docker build -t ${REPO_NAME}:${IMAGE_TAG} .
+
+                        echo "=== 3. Etiquetando e Impulsando a ECR ==="
+                        docker tag ${REPO_NAME}:${IMAGE_TAG} ${ECR_URL}:${IMAGE_TAG}
+                        docker push ${ECR_URL}:${IMAGE_TAG}
+                    """
+                }
+            }
+        }
+
         stage('Terraform Provision & Deploy') {
             steps {
                 withCredentials([
@@ -120,7 +123,6 @@ pipeline {
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     sh '''
-                        # Asegurar que las herramientas instaladas en .bin estén en el PATH
                         export PATH="${WORKSPACE}/.bin:${PATH}"
                         export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                         export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
@@ -131,7 +133,6 @@ pipeline {
 
                         echo "=== 1. Verificando/Creando Backend Remoto en AWS ==="
                         
-                        # Crear Bucket S3 si no existe
                         if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
                             echo "Bucket $BUCKET_NAME no existe. Creando..."
                             aws s3api create-bucket \
@@ -146,7 +147,6 @@ pipeline {
                             echo "✓ Bucket $BUCKET_NAME ya existe."
                         fi
 
-                        # Crear Tabla DynamoDB si no existe
                         if ! aws dynamodb describe-table --table-name "$DYNAMO_TABLE" 2>/dev/null; then
                             echo "Tabla DynamoDB $DYNAMO_TABLE no existe. Creando..."
                             aws dynamodb create-table \
@@ -161,7 +161,7 @@ pipeline {
                             echo "✓ Tabla $DYNAMO_TABLE ya existe."
                         fi
 
-                        echo "=== 2. Ejecutando Terraform ==="
+                        echo "=== 2. Aplicando Terraform con la nueva Imagen ==="
                         terraform init
                         terraform apply -auto-approve -var="image_tag=${IMAGE_TAG}"
                     '''
@@ -174,6 +174,7 @@ pipeline {
     post {
         always {
             sh "docker rmi ${ECR_URL}:${IMAGE_TAG} || true"
+            sh "docker rmi ${REPO_NAME}:${IMAGE_TAG} || true"
             cleanWs()
         }
         failure {

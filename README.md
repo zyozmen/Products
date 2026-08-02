@@ -120,7 +120,7 @@ java -jar target/products-0.0.1-SNAPSHOT.jar
 La API queda disponible en:
 - http://localhost:8080
 
-También puedes construir y ejecutar el contenedor con Java 21:
+También se puede construir y ejecutar el contenedor con Java 21:
 
 ```bash
 docker build -t products-api:local .
@@ -186,7 +186,44 @@ Listar:
 curl "http://localhost:8080/api/productos"
 ```
 
-## 9. Persistencia y ejecución
+## 9. Despliegue con Terraform y AWS
+El proyecto incluye una configuración base de Terraform para desplegar el servicio en Amazon ECS Fargate.
+
+### 9.1 Recursos provisionados
+- Repositorio ECR para almacenar las imágenes Docker del servicio.
+- Política de ciclo de vida para eliminar imágenes sin tag y conservar solo las más recientes.
+- Cluster ECS, definición de tarea y servicio Fargate para ejecutar la aplicación.
+- Grupo de logs de CloudWatch, security group y rol de IAM para la ejecución de tareas.
+- Backend remoto en S3 con bloqueo en DynamoDB para guardar el estado de Terraform.
+
+### 9.2 Comandos de despliegue
+Desde la raíz del proyecto:
+
+```bash
+terraform init
+terraform validate
+terraform plan -var="image_tag=v1.0.0"
+terraform apply -var="image_tag=v1.0.0"
+```
+
+> El valor `image_tag` indica qué versión de la imagen ECR se desplegará en ECS.
+
+## 10. Destrucción y limpieza
+Para eliminar la infraestructura creada por Terraform se puede ejecutar:
+
+```bash
+terraform destroy -auto-approve -var="image_tag=cleanup"
+```
+
+luego se puede usar el script de limpieza preparado para AWS:
+
+```bash
+bash ./cleanup-aws.sh
+```
+
+Este script elimina recursos remanentes como el servicio ECS, el cluster, el repositorio ECR, el security group, el grupo de logs y el estado remoto en S3. Se recomienda ejecutarlo con precaución si el bucket de Terraform contiene datos de importancia.
+
+## 11. Persistencia y ejecución
 La aplicación se conecta a MongoDB usando las propiedades `spring.data.mongodb.*` o una URI completa con `spring.data.mongodb.uri`.
 
 Para CI/CD, el proyecto queda alineado con Java 21 en estos puntos:
@@ -194,7 +231,7 @@ Para CI/CD, el proyecto queda alineado con Java 21 en estos puntos:
 - Jenkins usa la herramienta JDK 21 y verifica la versión antes de ejecutar Maven.
 - Docker ejecuta la aplicación sobre una imagen base Eclipse Temurin 21.
 
-## 10. Manejo de errores
+## 12. Manejo de errores
 La API cuenta con un manejador global de excepciones que normaliza respuestas HTTP para casos como:
 
 - Recurso no encontrado (404).
@@ -202,14 +239,16 @@ La API cuenta con un manejador global de excepciones que normaliza respuestas HT
 - Servicio no disponible por resiliencia/infraestructura (503).
 - Errores no controlados (500).
 
-## 11. Estructura general del repositorio
+## 13. Estructura general del repositorio
 - pom.xml: definición del proyecto Maven y dependencias.
 - src/main/java: código fuente principal.
 - src/main/resources/application.properties: configuración de aplicación.
 - src/test/java: pruebas.
 - target/: artefactos y reportes generados por Maven.
+- main.tf y ecs.tf: infraestructura de Terraform para AWS.
+- cleanup-aws.sh: script para limpiar recursos AWS generados por la infraestructura.
 
-## 12. Conclusión
+## 14. Conclusión
 El proyecto Products API constituye una implementación académica completa de un microservicio CRUD empresarial, integrando prácticas modernas de ingeniería de software en Java: arquitectura desacoplada, documentación automática, validaciones robustas y pruebas.
 
 Como resultado, el sistema no solo cumple con el objetivo funcional de gestión de productos, sino que también ofrece una base sólida para evolución, mantenimiento y despliegue en entornos reales.

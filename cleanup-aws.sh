@@ -46,9 +46,8 @@ aws dynamodb delete-table --table-name $DYNAMO_TABLE --region $AWS_REGION 2>/dev
 
 echo "=== 8. Vaciando y Eliminando Bucket de S3 (State Remote) ==="
 aws s3 rm s3://$S3_BUCKET --recursive 2>/dev/null || true
-# Eliminar todas las versiones de objetos en S3 si el versionamiento está activo
 aws s3api delete-objects --bucket $S3_BUCKET --delete "$(aws s3api list-object-versions --bucket $S3_BUCKET --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json)" 2>/dev/null || true
 aws s3api delete-objects --bucket $S3_BUCKET --delete "$(aws s3api list-object-versions --bucket $S3_BUCKET --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --output json)" 2>/dev/null || true
 aws s3 rb s3://$S3_BUCKET --force 2>/dev/null || true
 
-echo "✅ Limpieza completa terminada. La cuenta AWS $AWS_REGION está en $0.00." 
+echo "✅ Limpieza completa terminada."
