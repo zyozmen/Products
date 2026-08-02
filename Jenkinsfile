@@ -82,66 +82,89 @@ pipeline {
             }
         }
 
+        stage('Verify & Install Tools') {
+            steps {
+                sh '''
+                    mkdir -p .bin
+                    export PATH="${WORKSPACE}/.bin:${PATH}"
+
+                    # 1. Verificar o instalar AWS CLI v2
+                    if ! command -v aws &> /dev/null; then
+                        echo "➜ AWS CLI no encontrado. Instalando localmente en el workspace..."
+                        curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                        unzip -q -o awscliv2.zip
+                        ./aws/install --bin-dir "${WORKSPACE}/.bin" --install-dir "${WORKSPACE}/.aws-cli" --update
+                        rm -rf awscliv2.zip aws/
+                    else
+                        echo "✓ AWS CLI ya está instalado: $(aws --version)"
+                    fi
+
+                    # 2. Verificar o instalar Terraform
+                    if ! command -v terraform &> /dev/null; then
+                        echo "➜ Terraform no encontrado. Descargando ejecutable portátil..."
+                        curl -s -O https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+                        unzip -q -o terraform_1.5.7_linux_amd64.zip -d "${WORKSPACE}/.bin/"
+                        chmod +x "${WORKSPACE}/.bin/terraform"
+                        rm -f terraform_1.5.7_linux_amd64.zip
+                    else
+                        echo "✓ Terraform ya está instalado: $(terraform --version)"
+                    fi
+                '''
+            }
+        }
+
         stage('Terraform Provision & Deploy') {
             steps {
                 withCredentials([
                     string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
-                    sh """
-                        # Configuración de credenciales de AWS en variables de entorno para Terraform
+                    sh '''
+                        # Asegurar que las herramientas instaladas en .bin estén en el PATH
+                        export PATH="${WORKSPACE}/.bin:${PATH}"
                         export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                         export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                         export AWS_DEFAULT_REGION=${AWS_REGION}
 
-
                         BUCKET_NAME="terraform-state-505231787824"
                         DYNAMO_TABLE="terraform-locks"
 
-                        # 1. Crear Bucket S3 si no existe
-                        if ! aws s3api head-bucket --bucket "\$BUCKET_NAME" 2>/dev/null; then
-                            echo "Bucket \$BUCKET_NAME no existe. Creando..."
+                        echo "=== 1. Verificando/Creando Backend Remoto en AWS ==="
+                        
+                        # Crear Bucket S3 si no existe
+                        if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+                            echo "Bucket $BUCKET_NAME no existe. Creando..."
                             aws s3api create-bucket \
-                                --bucket "\$BUCKET_NAME" \
+                                --bucket "$BUCKET_NAME" \
                                 --region ${AWS_REGION} \
                                 --create-bucket-configuration LocationConstraint=${AWS_REGION}
                             
                             aws s3api put-bucket-versioning \
-                                --bucket "\$BUCKET_NAME" \
+                                --bucket "$BUCKET_NAME" \
                                 --versioning-configuration Status=Enabled
+                        else
+                            echo "✓ Bucket $BUCKET_NAME ya existe."
                         fi
 
-                        # 2. Crear Tabla DynamoDB si no existe
-                        if ! aws dynamodb describe-table --table-name "\$DYNAMO_TABLE" 2>/dev/null; then
-                            echo "Tabla DynamoDB \$DYNAMO_TABLE no existe. Creando..."
+                        # Crear Tabla DynamoDB si no existe
+                        if ! aws dynamodb describe-table --table-name "$DYNAMO_TABLE" 2>/dev/null; then
+                            echo "Tabla DynamoDB $DYNAMO_TABLE no existe. Creando..."
                             aws dynamodb create-table \
-                                --table-name "\$DYNAMO_TABLE" \
+                                --table-name "$DYNAMO_TABLE" \
                                 --attribute-definitions AttributeName=LockID,AttributeType=S \
                                 --key-schema AttributeName=LockID,KeyType=HASH \
                                 --billing-mode PAY_PER_REQUEST \
                                 --region ${AWS_REGION}
 
-                            aws dynamodb wait table-exists --table-name "\$DYNAMO_TABLE" --region ${AWS_REGION}
-                        fi
-
-                        # 3. Garantizar binario de Terraform local en el workspace si el sistema no lo tiene
-                        if ! command -v terraform &> /dev/null; then
-                            echo "--> Terraform no encontrado en el PATH. Descargando binario ejecutable portátil..."
-                            curl -s -O https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
-                            unzip -q -o terraform_1.5.7_linux_amd64.zip
-                            chmod +x terraform
-                            TF_CMD="./terraform"
+                            aws dynamodb wait table-exists --table-name "$DYNAMO_TABLE" --region ${AWS_REGION}
                         else
-                            TF_CMD="terraform"
+                            echo "✓ Tabla $DYNAMO_TABLE ya existe."
                         fi
 
-                        # 4. Ejecutar comandos de infraestructura
-                        echo "--> Ejecutando Terraform init..."
-                        \$TF_CMD init
-
-                        echo "--> Aplicando cambios en AWS ECS con la imagen: ${IMAGE_TAG}..."
-                        \$TF_CMD apply -auto-approve -var="image_tag=${IMAGE_TAG}"
-                    """
+                        echo "=== 2. Ejecutando Terraform ==="
+                        terraform init
+                        terraform apply -auto-approve -var="image_tag=${IMAGE_TAG}"
+                    '''
                 }
             }
         }
