@@ -2,7 +2,7 @@
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /workspace
 
-# Descarga de dependencias para aprovechamiento de caché
+# Descarga de dependencias
 COPY .mvn/ .mvn
 COPY mvnw pom.xml ./
 RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
@@ -22,11 +22,10 @@ addgroup -S GrowShop-user && adduser -S -G GrowShop-user GrowShop-user
 mkdir -p /app && chown -R GrowShop-user:GrowShop-user /app
 EOF
 
-# Copia de capas con la propiedad asignada al usuario no-root
-COPY --chown=GrowShop-user:GrowShop-user --from=builder /workspace/dependencies/ ./dependencies/
-COPY --chown=GrowShop-user:GrowShop-user --from=builder /workspace/spring-boot-loader/ ./spring-boot-loader/
-COPY --chown=GrowShop-user:GrowShop-user --from=builder /workspace/snapshot-dependencies/ ./snapshot-dependencies/
-COPY --chown=GrowShop-user:GrowShop-user --from=builder /workspace/application/ ./application/
+COPY --chown=GrowShop-user:GrowShop-user --from=builder /workspace/dependencies/ ./
+COPY --chown=GrowShop-user:GrowShop-user --from=builder /workspace/spring-boot-loader/ ./
+COPY --chown=GrowShop-user:GrowShop-user --from=builder /workspace/snapshot-dependencies/ ./
+COPY --chown=GrowShop-user:GrowShop-user --from=builder /workspace/application/ ./
 
 USER GrowShop-user:GrowShop-user
 
