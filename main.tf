@@ -1,3 +1,4 @@
+# Configuración principal de Terraform para el despliegue de la imagen del servicio Products en AWS.
 terraform {
   required_version = ">= 1.5.0"
 
@@ -9,46 +10,30 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "terraform-state-505231787824" # Nombre real de tu bucket
+    bucket         = "terraform-state-505231787824"
     key            = "products-service/terraform.tfstate"
     region         = "us-east-2"
     dynamodb_table = "terraform-locks"
   }
 }
 
+# Proveedor de AWS y región donde se desplegará la infraestructura.
 provider "aws" {
   region = "us-east-2"
 }
 
-import {
-  to = aws_ecr_repository.products_service
-  id = "products-service"
-}
-
-import {
-  to = aws_cloudwatch_log_group.ecs_log_group
-  id = "/ecs/products-service"
-}
-
-import {
-  to = aws_iam_role.ecs_task_execution_role
-  id = "products-ecs-task-execution-role"
-}
-
-data "aws_security_group" "app_sg" {
-  name = "products-app-sg"
-}
-
+# Repositorio ECR para almacenar las imágenes Docker del servicio Products.
 resource "aws_ecr_repository" "products_service" {
   name                 = "products-service"
-  image_tag_mutability = "IMMUTABLE" # Garantiza trazabilidad y previene sobreescrituras
-  force_delete         = false       # Protección contra borrado accidental en entorno real
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
 
   image_scanning_configuration {
     scan_on_push = true
   }
 }
 
+# Política de ciclo de vida del repositorio ECR para limpiar imágenes antiguas y no etiquetadas.
 resource "aws_ecr_lifecycle_policy" "products_service_policy" {
   repository = aws_ecr_repository.products_service.name
 
@@ -72,7 +57,7 @@ resource "aws_ecr_lifecycle_policy" "products_service_policy" {
         description  = "Conservar solo las ultimas 2 imagenes con tag"
         selection = {
           tagStatus     = "tagged"
-          tagPrefixList = ["v", "build-"] # Ajusta segun la convencion de tags de tu CI/CD
+          tagPrefixList = ["v", "build-"]
           countType     = "imageCountMoreThan"
           countNumber   = 2
         }
