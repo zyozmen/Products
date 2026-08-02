@@ -9,7 +9,7 @@ RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
 
 # Compilación y extracción de capas
 COPY src ./src
-RUN ./mvnw -B -DskipTests package -o
+RUN ./mvnw -B -DskipTests package 
 RUN java -Djarmode=layertools -jar target/*.jar extract
 
 # Stage 2: Runtime
