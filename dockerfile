@@ -10,7 +10,7 @@ RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
 # Compilación y extracción de capas
 COPY src ./src
 RUN ./mvnw -B -DskipTests package 
-RUN java -Djarmode=layertools -jar target/*.jar extract
+RUN java -Djarmode=layertools -jar target/products-0.0.1-SNAPSHOT.jar extract
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
