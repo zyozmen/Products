@@ -42,7 +42,7 @@ data "aws_subnets" "public" {
 data "aws_instance" "mongo_db" {
   filter {
     name   = "tag:Name"
-    values = ["mongo-database-server"] # Asegúrate de que la EC2 tenga exactamente este Tag "Name"
+    values = ["products-db-aws"] # Asegúrate de que la EC2 tenga exactamente este Tag "Name"
   }
 }
 
