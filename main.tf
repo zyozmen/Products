@@ -153,7 +153,7 @@ resource "aws_security_group_rule" "allow_ecs_to_mongo" {
   from_port                = 27017
   to_port                  = 27017
   protocol                 = "tcp"
-  security_group_id        = data.aws_instance.mongo_db.vpc_security_group_ids[0] # El SG adjunto a tu EC2
+  security_group_id        = tolist(data.aws_instance.mongo_db.vpc_security_group_ids)[0] # <--- tolist() resuelve el error
   source_security_group_id = aws_security_group.ecs_sg.id                        # Autoriza a la tarea de ECS
   description              = "Permite trafico entrante desde ECS a MongoDB"
 }
