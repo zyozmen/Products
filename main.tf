@@ -44,6 +44,11 @@ data "aws_instance" "mongo_db" {
     name   = "tag:Name"
     values = ["products-db-aws"] # Asegúrate de que la EC2 tenga exactamente este Tag "Name"
   }
+
+  filter {
+    name   = "instance-state-name"
+    values = ["running"] # Garantiza que solo consulte la instancia que realmente está activa
+  }
 }
 
 # ============================================================
@@ -159,19 +164,15 @@ resource "aws_security_group_rule" "allow_ecs_to_mongo" {
 }
 
 # ============================================================
-# ECS CLUSTER, TASK DEFINITION & SERVICE
+# ECS TASK DEFINITION & SERVICE
 # ============================================================
-
-resource "aws_ecs_cluster" "main" {
-  name = "products-cluster"
-}
 
 resource "aws_ecs_task_definition" "app" {
   family                   = "products-api"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "256" # 0.25 vCPU
-  memory                   = "512" # 512 MB
+  cpu                      = "256"
+  memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
 
   container_definitions = jsonencode([
@@ -188,6 +189,7 @@ resource "aws_ecs_task_definition" "app" {
         }
       ]
 
+      # Pasa la URI completa para evitar que Spring Boot caiga en 'localhost'
       environment = [
         {
           name  = "MONGO_HOST"
@@ -218,4 +220,13 @@ resource "aws_ecs_service" "app" {
   depends_on = [
     aws_iam_role_policy_attachment.ecs_execution_policy
   ]
+}
+
+# ============================================================
+# OUTPUTS (DEBEN IR EN EL NIVEL RAÍZ, NO DENTRO DE UN RECURSO)
+# ============================================================
+
+output "mongo_ec2_private_ip" {
+  description = "IP privada recuperada para MongoDB"
+  value       = data.aws_instance.mongo_db.private_ip
 }
