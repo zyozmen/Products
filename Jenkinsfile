@@ -59,7 +59,7 @@ pipeline {
             }
         }
 
-        # MODIFICACIÓN 1: Crear infraestructura básica (ECR Backend) antes de Docker
+        // MODIFICACIÓN 1: Crear infraestructura básica (ECR Backend) antes de Docker
         stage('Terraform Init & Infrastructure Provision') {
             steps {
                 withCredentials([
@@ -114,7 +114,7 @@ pipeline {
             }
         }
 
-        # MODIFICACIÓN 2: Desplegar el resto de la aplicación pasando el TAG real generado
+    // MODIFICACIÓN 2: Desplegar el resto de la aplicación pasando el TAG real generado
         stage('Terraform Deploy App') {
             steps {
                 withCredentials([
