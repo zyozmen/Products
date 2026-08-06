@@ -17,6 +17,12 @@ terraform {
   }
 }
 
+variable "image_tag" {
+  type        = string
+  default     = "latest"
+  description = "Tag de la imagen de ECR a desplegar"
+}
+
 provider "aws" {
   region = "us-east-2"
 }
@@ -186,7 +192,8 @@ resource "aws_ecs_task_definition" "app" {
   container_definitions = jsonencode([
     {
       name      = "products-api"
-      image     = "${aws_ecr_repository.products_service.repository_url}:latest"
+      # Cambia :latest por :${var.image_tag}
+      image     = "${aws_ecr_repository.products_service.repository_url}:${var.image_tag}"
       essential = true
 
       portMappings = [
@@ -197,11 +204,10 @@ resource "aws_ecs_task_definition" "app" {
         }
       ]
 
-      # Pasa la URI completa para evitar que Spring Boot caiga en 'localhost'
       environment = [
         {
           name  = "MONGO_HOST"
-          value = data.aws_instance.mongo_db.private_ip # Inyecta automáticamente la IP privada de la EC2
+          value = data.aws_instance.mongo_db.private_ip
         },
         {
           name  = "MONGO_PORT"

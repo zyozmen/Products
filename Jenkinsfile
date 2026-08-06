@@ -121,19 +121,18 @@ pipeline {
                     string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
-                    sh '''
+                    sh """
                         export PATH="${WORKSPACE}/.bin:${PATH}"
                         export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                         export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                         export AWS_DEFAULT_REGION=${AWS_REGION}
 
-                        # Aplica el resto de recursos (ECS, Task Def, Security Groups, etc.)
-                        terraform apply -auto-approve
-                    '''
+                        # Pasa el tag exacto construido en el paso de Docker
+                        terraform apply -auto-approve -var="image_tag=${IMAGE_TAG}"
+                    """
                 }
             }
         }
-
     }
 
     post {
