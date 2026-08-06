@@ -44,4 +44,20 @@ aws s3 rm "s3://${S3_BUCKET}/${STATE_KEY}" --region $REGION 2>/dev/null || true
 aws dynamodb delete-item --table-name $DYNAMO_TABLE --key "{\"LockID\": {\"S\": \"${S3_BUCKET}/${STATE_KEY}-md5\"}}" --region $REGION 2>/dev/null || true
 aws dynamodb delete-item --table-name $DYNAMO_TABLE --key "{\"LockID\": {\"S\": \"${S3_BUCKET}/${STATE_KEY}\"}}" --region $REGION 2>/dev/null || true
 
+echo "=== 8. Limpiando Security Group de Mongo ==="
+SG_ID=$(aws ec2 describe-security-groups --region us-east-2 --filters "Name=group-name,Values=products-api-ecs-sg" --query "SecurityGroups[0].GroupId" --output text)
+
+echo "Security Group detectado: $SG_ID"
+
+# 2. Revocar reglas de Ingress/Egress asociadas
+aws ec2 describe-security-group-rules --region us-east-2 --filters "Name=group-id,Values=$SG_ID" --query "SecurityGroupRules[*].SecurityGroupRuleId" --output text | xargs -n 1 aws ec2 revoke-security-group-ingress --region us-east-2 --group-id "$SG_ID" --security-group-rule-ids 2>/dev/null || true
+
+# 3. Eliminar la regla de ingress creada en la EC2 de Mongo que apunta a este SG
+aws ec2 revoke-security-group-ingress --region us-east-2 --group-id $(aws ec2 describe-security-groups --region us-east-2 --filters "Name=ip-permission.group-id,Values=$SG_ID" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || true) --protocol tcp --port 27017 --source-group "$SG_ID" 2>/dev/null || true
+
+# 4. Eliminar el Security Group definitivamente
+aws ec2 delete-security-group --region us-east-2 --group-id "$SG_ID"
+
+
+
 echo "=== Limpieza terminada con éxito ==="
