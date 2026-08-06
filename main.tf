@@ -178,7 +178,16 @@ resource "aws_ecs_cluster" "main" {
 }
 
 # ============================================================
-# ECS TASK DEFINITION & SERVICE
+# CLOUDWATCH LOG GROUP
+# ============================================================
+
+resource "aws_cloudwatch_log_group" "ecs_log_group" {
+  name              = "/ecs/products-service"
+  retention_in_days = 7
+}
+
+# ============================================================
+# ECS TASK DEFINITION (ACTUALIZADA CON LOGS)
 # ============================================================
 
 resource "aws_ecs_task_definition" "app" {
@@ -192,7 +201,6 @@ resource "aws_ecs_task_definition" "app" {
   container_definitions = jsonencode([
     {
       name      = "products-api"
-      # Cambia :latest por :${var.image_tag}
       image     = "${aws_ecr_repository.products_service.repository_url}:${var.image_tag}"
       essential = true
 
@@ -204,6 +212,16 @@ resource "aws_ecs_task_definition" "app" {
         }
       ]
 
+      # Configuración de logs obligatoria para diagnóstico
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs_log_group.name
+          "awslogs-region"        = "us-east-2"
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+
       environment = [
         {
           name  = "MONGO_HOST"
@@ -212,6 +230,10 @@ resource "aws_ecs_task_definition" "app" {
         {
           name  = "MONGO_PORT"
           value = "27017"
+        },
+        {
+          name  = "SPRING_PROFILES_ACTIVE"
+          value = "prod"
         }
       ]
     }
