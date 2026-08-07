@@ -17,47 +17,72 @@ aws ecs delete-service --region $REGION --cluster products-cluster --service pro
 echo "=== 2. Eliminando Clúster ECS ==="
 aws ecs delete-cluster --region $REGION --cluster products-cluster 2>/dev/null || true
 
-echo "=== 3. Eliminando CloudWatch Log Group ==="
+echo "=== 3. Eliminando ALB, Listener y Target Group ==="
+ALB_ARN=$(aws elbv2 describe-load-balancers --region $REGION --names "products-api-alb" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || true)
+
+if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
+  LISTENER_ARN=$(aws elbv2 describe-listeners --region $REGION --load-balancer-arn "$ALB_ARN" --query "Listeners[0].ListenerArn" --output text 2>/dev/null || true)
+  if [ -n "$LISTENER_ARN" ] && [ "$LISTENER_ARN" != "None" ]; then
+    echo "Eliminando Listener: $LISTENER_ARN"
+    aws elbv2 delete-listener --region $REGION --listener-arn "$LISTENER_ARN" 2>/dev/null || true
+  fi
+
+  echo "Eliminando Load Balancer: $ALB_ARN"
+  aws elbv2 delete-load-balancer --region $REGION --load-balancer-arn "$ALB_ARN" 2>/dev/null || true
+  echo "Esperando que el ALB termine de liberarse..."
+  aws elbv2 wait load-balancers-deleted --region $REGION --load-balancer-arns "$ALB_ARN" 2>/dev/null || true
+fi
+
+TG_ARN=$(aws elbv2 describe-target-groups --region $REGION --names "products-api-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || true)
+if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
+  echo "Eliminando Target Group: $TG_ARN"
+  aws elbv2 delete-target-group --region $REGION --target-group-arn "$TG_ARN" 2>/dev/null || true
+fi
+
+echo "=== 4. Eliminando Security Groups (ECS, ALB, Mongo Rules) ==="
+ALB_SG_ID=$(aws ec2 describe-security-groups --region $REGION --filters "Name=group-name,Values=products-api-alb-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || true)
+ECS_SG_ID=$(aws ec2 describe-security-groups --region $REGION --filters "Name=group-name,Values=products-api-ecs-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || true)
+
+if [ -n "$ECS_SG_ID" ] && [ "$ECS_SG_ID" != "None" ]; then
+  echo "Limpiando reglas de Ingress en Security Group ECS: $ECS_SG_ID"
+  # Revocar regla de ingress en la EC2 de Mongo si todavía existiera
+  MONGO_SG_ID=$(aws ec2 describe-security-groups --region $REGION --filters "Name=ip-permission.group-id,Values=$ECS_SG_ID" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || true)
+  if [ -n "$MONGO_SG_ID" ] && [ "$MONGO_SG_ID" != "None" ]; then
+    aws ec2 revoke-security-group-ingress --region $REGION --group-id "$MONGO_SG_ID" --protocol tcp --port 27017 --source-group "$ECS_SG_ID" 2>/dev/null || true
+  fi
+
+  echo "Eliminando Security Group de ECS..."
+  aws ec2 delete-security-group --region $REGION --group-id "$ECS_SG_ID" 2>/dev/null || true
+fi
+
+if [ -n "$ALB_SG_ID" ] && [ "$ALB_SG_ID" != "None" ]; then
+  echo "Eliminando Security Group del ALB..."
+  aws ec2 delete-security-group --region $REGION --group-id "$ALB_SG_ID" 2>/dev/null || true
+fi
+
+# Limpieza adicional para SG residuales de pruebas
+for EXTRA_SG in "products-app-sg"; do
+  EXTRA_SG_ID=$(aws ec2 describe-security-groups --region $REGION --filters "Name=group-name,Values=$EXTRA_SG" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || true)
+  if [ -n "$EXTRA_SG_ID" ] && [ "$EXTRA_SG_ID" != "None" ]; then
+    aws ec2 delete-security-group --region $REGION --group-id "$EXTRA_SG_ID" 2>/dev/null || true
+  fi
+done
+
+echo "=== 5. Eliminando CloudWatch Log Group ==="
 aws logs delete-log-group --region $REGION --log-group-name "/ecs/products-service" 2>/dev/null || true
 
-echo "=== 4. Eliminando Security Groups ==="
-for SG_NAME in "products-api-ecs-sg" "products-app-sg"; do
-    SG_ID=$(aws ec2 describe-security-groups --region $REGION --filters "Name=group-name,Values=$SG_NAME" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || true)
-    if [ -n "$SG_ID" ] && [ "$SG_ID" != "None" ]; then
-        # Elimina reglas dependientes antes de borrar el SG
-        aws ec2 describe-security-group-rules --region $REGION --filters "Name=group-id,Values=$SG_ID" --query "SecurityGroupRules[*].SecurityGroupRuleId" --output text | xargs -n 1 aws ec2 revoke-security-group-ingress --region $REGION --group-id "$SG_ID" --security-group-rule-ids 2>/dev/null || true
-        aws ec2 delete-security-group --region $REGION --group-id "$SG_ID" 2>/dev/null || true
-    fi
-done
-
-echo "=== 5. Eliminando Roles IAM ==="
+echo "=== 6. Eliminando Roles IAM ==="
 for ROLE in "products-api-ecs-execution-role" "products-ecs-task-execution-role"; do
-    aws iam detach-role-policy --role-name $ROLE --policy-arn $POLICY_ARN 2>/dev/null || true
-    aws iam delete-role --role-name $ROLE 2>/dev/null || true
+  aws iam detach-role-policy --role-name "$ROLE" --policy-arn "$POLICY_ARN" 2>/dev/null || true
+  aws iam delete-role --role-name "$ROLE" 2>/dev/null || true
 done
 
-echo "=== 6. Eliminando Repositorio ECR ==="
+echo "=== 7. Eliminando Repositorio ECR ==="
 aws ecr delete-repository --region $REGION --repository-name "products-service" --force 2>/dev/null || true
 
-echo "=== 7. Destruyendo Estado Remoto Corrupto (S3 y DynamoDB) ==="
+echo "=== 8. Destruyendo Estado Remoto Corrupto (S3 y DynamoDB) ==="
 aws s3 rm "s3://${S3_BUCKET}/${STATE_KEY}" --region $REGION 2>/dev/null || true
-aws dynamodb delete-item --table-name $DYNAMO_TABLE --key "{\"LockID\": {\"S\": \"${S3_BUCKET}/${STATE_KEY}-md5\"}}" --region $REGION 2>/dev/null || true
-aws dynamodb delete-item --table-name $DYNAMO_TABLE --key "{\"LockID\": {\"S\": \"${S3_BUCKET}/${STATE_KEY}\"}}" --region $REGION 2>/dev/null || true
+aws dynamodb delete-item --table-name "$DYNAMO_TABLE" --key "{\"LockID\": {\"S\": \"${S3_BUCKET}/${STATE_KEY}-md5\"}}" --region $REGION 2>/dev/null || true
+aws dynamodb delete-item --table-name "$DYNAMO_TABLE" --key "{\"LockID\": {\"S\": \"${S3_BUCKET}/${STATE_KEY}\"}}" --region $REGION 2>/dev/null || true
 
-echo "=== 8. Limpiando Security Group de Mongo ==="
-SG_ID=$(aws ec2 describe-security-groups --region us-east-2 --filters "Name=group-name,Values=products-api-ecs-sg" --query "SecurityGroups[0].GroupId" --output text)
-
-echo "Security Group detectado: $SG_ID"
-
-# 2. Revocar reglas de Ingress/Egress asociadas
-aws ec2 describe-security-group-rules --region us-east-2 --filters "Name=group-id,Values=$SG_ID" --query "SecurityGroupRules[*].SecurityGroupRuleId" --output text | xargs -n 1 aws ec2 revoke-security-group-ingress --region us-east-2 --group-id "$SG_ID" --security-group-rule-ids 2>/dev/null || true
-
-# 3. Eliminar la regla de ingress creada en la EC2 de Mongo que apunta a este SG
-aws ec2 revoke-security-group-ingress --region us-east-2 --group-id $(aws ec2 describe-security-groups --region us-east-2 --filters "Name=ip-permission.group-id,Values=$SG_ID" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || true) --protocol tcp --port 27017 --source-group "$SG_ID" 2>/dev/null || true
-
-# 4. Eliminar el Security Group definitivamente
-aws ec2 delete-security-group --region us-east-2 --group-id "$SG_ID"
-
-
-
-echo "=== Limpieza terminada con éxito ==="
+echo "=== Limpieza terminada con éxito. Ya puedes correr el pipeline de Jenkins desde cero ==="

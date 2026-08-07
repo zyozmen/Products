@@ -256,7 +256,7 @@ resource "aws_ecs_task_definition" "app" {
           name  = "SPRING_DATA_MONGODB_URI"
           # REEMPLAZA CON TU URI REAL DE MONGO ATLAS (Asegúrate de cambiar usuario y contraseña)
 
-          value = "mongodb+srv://usuario_zyozgke1992_db_user:5mv3EVWoKIaiGbM5@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority"
+          value = "mongodb+srv://usuario_zyozgke1992_db_user:GrowShop@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority"
         },
         {
           name  = "SPRING_PROFILES_ACTIVE"
