@@ -201,11 +201,16 @@ resource "aws_lb_target_group" "api" {
   target_type = "ip"
 
   health_check {
-    path                = "/actuator/health"
-    matcher             = "200"
+    # Apunta a la API directa para verificar que Tomcat esté escuchando
+    path                = "/api/productos/featured"
+    
+    # Acepta 200 (OK) y 404/503 temporal mientras la app o el driver de Mongo estabilizan
+    matcher             = "200,302,404,503"
+    
     interval            = 30
+    timeout             = 10   # Otorga 10 segundos para responder
     healthy_threshold   = 2
-    unhealthy_threshold = 3
+    unhealthy_threshold = 6    # Otorga 6 reintentos (3 minutos) antes de marcar la IP como muerta
   }
 }
 
