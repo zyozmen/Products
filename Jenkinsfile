@@ -86,6 +86,12 @@ pipeline {
                         fi
 
                         terraform init
+
+                        # Importar recursos ya existentes para evitar fallos por 409/AlreadyExists
+                        terraform import -input=false aws_ssm_parameter.mongo_uri /prod/products-service/MONGO_URI || true
+                        terraform import -input=false aws_iam_role.ecs_execution_role products-api-ecs-execution-role || true
+                        terraform import -input=false aws_iam_policy.ssm_read_policy products-api-ssm-read-policy || true
+
                         # Target solo al ECR para garantizar que exista antes del push de Docker
                         terraform apply -auto-approve -target=aws_ecr_repository.products_service
                     '''

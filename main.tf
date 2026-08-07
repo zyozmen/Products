@@ -208,9 +208,10 @@ resource "aws_security_group" "ecs_sg" {
 
 # Referencia al parámetro creado externamente en AWS SSM
 resource "aws_ssm_parameter" "mongo_uri" {
-  name  = "/prod/products-service/MONGO_URI"
-  type  = "SecureString"
-  value = "placeholder"
+  name      = "/prod/products-service/MONGO_URI"
+  type      = "SecureString"
+  value     = "placeholder"
+  overwrite = true
 
   lifecycle {
     ignore_changes = [value]
