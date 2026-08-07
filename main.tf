@@ -242,9 +242,9 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_iam_policy" "ssm_read_policy" {
-  name        = "products-api-ssm-read-policy"
-  description = "Permite a ECS leer credenciales desde SSM"
+resource "aws_iam_role_policy" "ecs_ssm_inline_policy" {
+  name = "products-api-ssm-read-policy"
+  role = aws_iam_role.ecs_execution_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -256,11 +256,6 @@ resource "aws_iam_policy" "ssm_read_policy" {
       }
     ]
   })
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_ssm_policy_attach" {
-  role       = aws_iam_role.ecs_execution_role.name
-  policy_arn = aws_iam_policy.ssm_read_policy.arn
 }
 
 # ============================================================

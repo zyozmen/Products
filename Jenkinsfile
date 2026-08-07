@@ -91,11 +91,6 @@ pipeline {
                         terraform import -input=false aws_ssm_parameter.mongo_uri /prod/products-service/MONGO_URI || true
                         terraform import -input=false aws_iam_role.ecs_execution_role products-api-ecs-execution-role || true
 
-                        POLICY_ARN=$(aws iam list-policies --scope AWS --query 'Policies[?PolicyName==`products-api-ssm-read-policy`].Arn | [0]' --output text 2>/dev/null || true)
-                        if [ -n "$POLICY_ARN" ]; then
-                            terraform import -input=false aws_iam_policy.ssm_read_policy "$POLICY_ARN" || true
-                        fi
-
                         # Target solo al ECR para garantizar que exista antes del push de Docker
                         terraform apply -auto-approve -target=aws_ecr_repository.products_service
                     '''
