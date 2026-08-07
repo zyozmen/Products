@@ -159,6 +159,19 @@ resource "aws_route_table_association" "private_b" {
 }
 
 # ============================================================
+# OPTIMIZACIÓN DE COSTOS: S3 GATEWAY ENDPOINT (GRATUITO)
+# ============================================================
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.us-east-2.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+
+  tags = { Name = "vpce-s3-gateway-prod" }
+}
+
+# ============================================================
 # 2. SECURITY GROUPS
 # ============================================================
 
@@ -333,7 +346,7 @@ resource "aws_lb_listener" "http" {
 }
 
 # ============================================================
-# 7. ECS CLUSTER & TASK DEFINITION
+# 7. ECS CLUSTER & TASK DEFINITION (OPTIMIZADO FARGATE SPOT)
 # ============================================================
 
 resource "aws_ecs_cluster" "main" {
@@ -349,8 +362,10 @@ resource "aws_ecs_task_definition" "app" {
   family                   = "products-api"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
-  memory                   = "1024"
+  
+  # REDUCCIÓN DE RECURSOS: 0.25 vCPU y 512 MB RAM
+  cpu                      = "256"
+  memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
 
   container_definitions = jsonencode([
@@ -380,6 +395,11 @@ resource "aws_ecs_task_definition" "app" {
         {
           name  = "SPRING_PROFILES_ACTIVE"
           value = "prod"
+        },
+        # OPTIMIZACIÓN JVM PARA CONTENEDOR DE 512MB
+        {
+          name  = "JAVA_TOOL_OPTIONS"
+          value = "-Xms256m -Xmx352m -XX:+UseG1GC"
         }
       ]
 
@@ -402,7 +422,12 @@ resource "aws_ecs_service" "app" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = 1
-  launch_type     = "FARGATE"
+
+  # USO EXCLUSIVO DE FARGATE SPOT PARA MÁXIMO AHORRO (~70%)
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 100
+  }
 
   network_configuration {
     subnets          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
