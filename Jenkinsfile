@@ -99,14 +99,14 @@ pipeline {
                         DYNAMO_TABLE="terraform-locks"
 
                         # Verificación de Backend de Estado S3 + DynamoDB (Solo crea si no existen)
-                        if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
-                            aws s3api create-bucket --bucket "$BUCKET_NAME" --region ${AWS_REGION} --create-bucket-configuration LocationConstraint=${AWS_REGION}
-                            aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" --versioning-configuration Status=Enabled
+                        if ! aws s3api head-bucket --bucket "\$BUCKET_NAME" 2>/dev/null; then
+                            aws s3api create-bucket --bucket "\$BUCKET_NAME" --region ${AWS_REGION} --create-bucket-configuration LocationConstraint=${AWS_REGION}
+                            aws s3api put-bucket-versioning --bucket "\$BUCKET_NAME" --versioning-configuration Status=Enabled
                         fi
 
-                        if ! aws dynamodb describe-table --table-name "$DYNAMO_TABLE" 2>/dev/null; then
-                            aws dynamodb create-table --table-name "$DYNAMO_TABLE" --attribute-definitions AttributeName=LockID,AttributeType=S --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST --region ${AWS_REGION}
-                            aws dynamodb wait table-exists --table-name "$DYNAMO_TABLE" --region ${AWS_REGION}
+                        if ! aws dynamodb describe-table --table-name "\$DYNAMO_TABLE" 2>/dev/null; then
+                            aws dynamodb create-table --table-name "\$DYNAMO_TABLE" --attribute-definitions AttributeName=LockID,AttributeType=S --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST --region ${AWS_REGION}
+                            aws dynamodb wait table-exists --table-name "\$DYNAMO_TABLE" --region ${AWS_REGION}
                         fi
 
                         terraform init -input=false
