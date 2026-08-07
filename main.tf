@@ -243,7 +243,7 @@ resource "aws_cloudwatch_log_group" "ecs_log_group" {
 }
 
 # ============================================================
-# ECS TASK DEFINITION Y SERVICE
+# ECS TASK DEFINITION (CONFIGURADA PARA MONGO ATLAS)
 # ============================================================
 
 resource "aws_ecs_task_definition" "app" {
@@ -251,7 +251,7 @@ resource "aws_ecs_task_definition" "app" {
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
-  memory                   = "1024"
+  memory                   = "1024" # Mantenemos 1GB para asegurar el arranque fluido de Spring
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
 
   container_definitions = jsonencode([
@@ -277,14 +277,12 @@ resource "aws_ecs_task_definition" "app" {
         }
       }
 
+      # NUEVA CONFIGURACIÓN DE VARIABLES PARA ATLAS
       environment = [
         {
-          name  = "MONGO_HOST"
-          value = data.aws_instance.mongo_db.private_ip
-        },
-        {
-          name  = "MONGO_PORT"
-          value = "27017"
+          name  = "SPRING_DATA_MONGODB_URI"
+          # Reemplaza con tus credenciales y cluster real de Atlas
+          value = "mongodb+srv://zyozgke1992_db_user:5mv3EVWoKIaiGbM5@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority"
         },
         {
           name  = "SPRING_PROFILES_ACTIVE"
