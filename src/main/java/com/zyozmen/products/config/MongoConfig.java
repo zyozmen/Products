@@ -10,28 +10,32 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
 @Configuration
 public class MongoConfig extends AbstractMongoClientConfiguration {
 
-    @Value("${spring.data.mongodb.host}")
+    @Value("${spring.data.mongodb.uri:}")
+    private String uri;
+
+    @Value("${spring.data.mongodb.host:localhost}")
     private String host;
 
-    @Value("${spring.data.mongodb.port}")
+    @Value("${spring.data.mongodb.port:27017}")
     private int port;
 
-    @Value("${spring.data.mongodb.username}")
+    @Value("${spring.data.mongodb.username:}")
     private String username;
 
-    @Value("${spring.data.mongodb.password}")
+    @Value("${spring.data.mongodb.password:}")
     private String password;
 
-    @Value("${spring.data.mongodb.database}")
+    @Value("${spring.data.mongodb.database:}")
     private String database;
 
-    @Value("${spring.data.mongodb.authentication-database}")
+    @Value("${spring.data.mongodb.authentication-database:admin}")
     private String authenticationDatabase;
 
     @Override
@@ -42,6 +46,10 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
 
     @Override
     public MongoClient mongoClient() {
+        if (StringUtils.hasText(uri)) {
+            return MongoClients.create(uri);
+        }
+
         MongoCredential credential = MongoCredential.createCredential(
                 username,
                 authenticationDatabase,
