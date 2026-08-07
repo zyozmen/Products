@@ -31,12 +31,10 @@ provider "aws" {
 # DATOS DE INFRAESTRUCTURA EXISTENTE
 # ============================================================
 
-# VPC por defecto (o cambia a la VPC específica donde está tu EC2)
 data "aws_vpc" "selected" {
   default = true
 }
 
-# Subredes de la VPC para desplegar la tarea de ECS
 data "aws_subnets" "public" {
   filter {
     name   = "vpc-id"
@@ -44,16 +42,15 @@ data "aws_subnets" "public" {
   }
 }
 
-# Búsqueda de la EC2 existente de MongoDB por Tag
 data "aws_instance" "mongo_db" {
   filter {
     name   = "tag:Name"
-    values = ["products-db-aws"] # Asegúrate de que la EC2 tenga exactamente este Tag "Name"
+    values = ["products-db-aws"]
   }
 
   filter {
     name   = "instance-state-name"
-    values = ["running"] # Garantiza que solo consulte la instancia que realmente está activa
+    values = ["running"]
   }
 }
 
@@ -63,7 +60,7 @@ data "aws_instance" "mongo_db" {
 
 resource "aws_ecr_repository" "products_service" {
   name                 = "products-service"
-  image_tag_mutability = "MUTABLE" # Cambiado a MUTABLE si usas etiquetas como 'latest' en desarrollo
+  image_tag_mutability = "MUTABLE"
   force_delete         = false
 
   image_scanning_configuration {
@@ -110,7 +107,6 @@ resource "aws_ecr_lifecycle_policy" "products_service_policy" {
 # ROLES DE IAM PARA ECS
 # ============================================================
 
-# Rol de ejecución necesario para que ECS pueda descargar imágenes de ECR y emitir logs a CloudWatch
 resource "aws_iam_role" "ecs_execution_role" {
   name = "products-api-ecs-execution-role"
 
@@ -135,7 +131,6 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
 # SECURITY GROUPS (RED Y ACCESO)
 # ============================================================
 
-# 1. Security Group exclusivo para el ALB (definido primero)
 resource "aws_security_group" "alb_sg" {
   name        = "products-api-alb-sg"
   description = "Security Group para el ALB"
@@ -156,13 +151,11 @@ resource "aws_security_group" "alb_sg" {
   }
 }
 
-# 2. Security Group para la tarea en ECS
 resource "aws_security_group" "ecs_sg" {
   name        = "products-api-ecs-sg"
   description = "Security Group para la API de productos en ECS"
   vpc_id      = data.aws_vpc.selected.id
 
-  # Inbound: Solo permite tráfico que venga explícitamente desde el ALB
   ingress {
     from_port       = 8080
     to_port         = 8080
@@ -170,7 +163,6 @@ resource "aws_security_group" "ecs_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
-  # Outbound: Permite todo el tráfico de salida (necesario para hablar con MongoDB en la EC2)
   egress {
     from_port   = 0
     to_port     = 0
@@ -179,7 +171,6 @@ resource "aws_security_group" "ecs_sg" {
   }
 }
 
-# Regla para abrir el puerto 27017 en la EC2 permitiendo el Security Group de ECS
 resource "aws_security_group_rule" "allow_ecs_to_mongo" {
   type                     = "ingress"
   from_port                = 27017
@@ -190,10 +181,142 @@ resource "aws_security_group_rule" "allow_ecs_to_mongo" {
   description              = "Permite trafico entrante desde ECS a MongoDB"
 }
 
-# ... (Mantén aquí tus bloques de aws_lb, aws_lb_target_group, aws_lb_listener, ecs_cluster, log_group, task_definition y ecs_service tal como los tenías) ...
+# ============================================================
+# APPLICATION LOAD BALANCER (ALB)
+# ============================================================
+
+resource "aws_lb" "api" {
+  name               = "products-api-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = data.aws_subnets.public.ids
+}
+
+resource "aws_lb_target_group" "api" {
+  name        = "products-api-tg"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = data.aws_vpc.selected.id
+  target_type = "ip"
+
+  health_check {
+    path                = "/actuator/health"
+    matcher             = "200"
+    interval            = 30
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.api.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.api.arn
+  }
+}
 
 # ============================================================
-# OUTPUTS (CORREGIDOS Y EN NIVEL RAÍZ)
+# ECS CLUSTER
+# ============================================================
+
+resource "aws_ecs_cluster" "main" {
+  name = "products-cluster"
+}
+
+# ============================================================
+# CLOUDWATCH LOG GROUP
+# ============================================================
+
+resource "aws_cloudwatch_log_group" "ecs_log_group" {
+  name              = "/ecs/products-service"
+  retention_in_days = 7
+}
+
+# ============================================================
+# ECS TASK DEFINITION Y SERVICE
+# ============================================================
+
+resource "aws_ecs_task_definition" "app" {
+  family                   = "products-api"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "products-api"
+      image     = "${aws_ecr_repository.products_service.repository_url}:${var.image_tag}"
+      essential = true
+
+      portMappings = [
+        {
+          containerPort = 8080
+          hostPort      = 8080
+          protocol      = "tcp"
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs_log_group.name
+          "awslogs-region"        = "us-east-2"
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+
+      environment = [
+        {
+          name  = "MONGO_HOST"
+          value = data.aws_instance.mongo_db.private_ip
+        },
+        {
+          name  = "MONGO_PORT"
+          value = "27017"
+        },
+        {
+          name  = "SPRING_PROFILES_ACTIVE"
+          value = "prod"
+        }
+      ]
+    }
+  ])
+}
+
+resource "aws_ecs_service" "app" {
+  name            = "products-api-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.app.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = data.aws_subnets.public.ids
+    security_groups  = [aws_security_group.ecs_sg.id]
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.api.arn
+    container_name   = "products-api"
+    container_port   = 8080
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.ecs_execution_policy,
+    aws_lb_listener.http
+  ]
+}
+
+# ============================================================
+# OUTPUTS
 # ============================================================
 
 output "mongo_ec2_private_ip" {
