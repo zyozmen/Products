@@ -42,18 +42,6 @@ data "aws_subnets" "public" {
   }
 }
 
-data "aws_instance" "mongo_db" {
-  filter {
-    name   = "tag:Name"
-    values = ["products-db-aws"]
-  }
-
-  filter {
-    name   = "instance-state-name"
-    values = ["running"]
-  }
-}
-
 # ============================================================
 # ECR REPOSITORY & LIFECYCLE
 # ============================================================
@@ -171,16 +159,6 @@ resource "aws_security_group" "ecs_sg" {
   }
 }
 
-resource "aws_security_group_rule" "allow_ecs_to_mongo" {
-  type                     = "ingress"
-  from_port                = 27017
-  to_port                  = 27017
-  protocol                 = "tcp"
-  security_group_id        = tolist(data.aws_instance.mongo_db.vpc_security_group_ids)[0]
-  source_security_group_id = aws_security_group.ecs_sg.id
-  description              = "Permite trafico entrante desde ECS a MongoDB"
-}
-
 # ============================================================
 # APPLICATION LOAD BALANCER (ALB)
 # ============================================================
@@ -201,16 +179,12 @@ resource "aws_lb_target_group" "api" {
   target_type = "ip"
 
   health_check {
-    # Apunta a la API directa para verificar que Tomcat esté escuchando
     path                = "/api/productos/featured"
-    
-    # Acepta 200 (OK) y 404/503 temporal mientras la app o el driver de Mongo estabilizan
-    matcher             = "200,302,404"
-    
+    matcher             = "200-399,404"
     interval            = 30
-    timeout             = 10   # Otorga 10 segundos para responder
+    timeout             = 10
     healthy_threshold   = 2
-    unhealthy_threshold = 6    # Otorga 6 reintentos (3 minutos) antes de marcar la IP como muerta
+    unhealthy_threshold = 6
   }
 }
 
@@ -243,7 +217,7 @@ resource "aws_cloudwatch_log_group" "ecs_log_group" {
 }
 
 # ============================================================
-# ECS TASK DEFINITION (CONFIGURADA PARA MONGO ATLAS)
+# ECS TASK DEFINITION Y SERVICE (CONECTADO A MONGO ATLAS)
 # ============================================================
 
 resource "aws_ecs_task_definition" "app" {
@@ -251,7 +225,7 @@ resource "aws_ecs_task_definition" "app" {
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
-  memory                   = "1024" # Mantenemos 1GB para asegurar el arranque fluido de Spring
+  memory                   = "1024"
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
 
   container_definitions = jsonencode([
@@ -277,12 +251,11 @@ resource "aws_ecs_task_definition" "app" {
         }
       }
 
-      # NUEVA CONFIGURACIÓN DE VARIABLES PARA ATLAS
       environment = [
         {
           name  = "SPRING_DATA_MONGODB_URI"
-          # Reemplaza con tus credenciales y cluster real de Atlas
-          value = "mongodb+srv://zyozgke1992_db_user:5mv3EVWoKIaiGbM5@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority"
+          # REEMPLAZA CON TU URI REAL DE MONGO ATLAS (Asegúrate de cambiar usuario y contraseña)
+          value = "mongodb+srv://usuario_atlas:password_atlas@cluster0.mongodb.net/GrowShop?retryWrites=true&w=majority"
         },
         {
           name  = "SPRING_PROFILES_ACTIVE"
@@ -321,11 +294,6 @@ resource "aws_ecs_service" "app" {
 # ============================================================
 # OUTPUTS
 # ============================================================
-
-output "mongo_ec2_private_ip" {
-  description = "IP privada recuperada para MongoDB"
-  value       = data.aws_instance.mongo_db.private_ip
-}
 
 output "alb_dns_name" {
   description = "DNS del ALB para usar como Origen en CloudFront"
