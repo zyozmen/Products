@@ -135,18 +135,39 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
 # SECURITY GROUPS (RED Y ACCESO)
 # ============================================================
 
-# Security Group para la tarea en ECS
+# 1. Security Group exclusivo para el ALB (definido primero)
+resource "aws_security_group" "alb_sg" {
+  name        = "products-api-alb-sg"
+  description = "Security Group para el ALB"
+  vpc_id      = data.aws_vpc.selected.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# 2. Security Group para la tarea en ECS
 resource "aws_security_group" "ecs_sg" {
   name        = "products-api-ecs-sg"
   description = "Security Group para la API de productos en ECS"
   vpc_id      = data.aws_vpc.selected.id
 
-  # Inbound: Permite tráfico al puerto 8080 (donde corre Spring Boot)
+  # Inbound: Solo permite tráfico que venga explícitamente desde el ALB
   ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
   # Outbound: Permite todo el tráfico de salida (necesario para hablar con MongoDB en la EC2)
@@ -164,105 +185,23 @@ resource "aws_security_group_rule" "allow_ecs_to_mongo" {
   from_port                = 27017
   to_port                  = 27017
   protocol                 = "tcp"
-  security_group_id        = tolist(data.aws_instance.mongo_db.vpc_security_group_ids)[0] # <--- tolist() resuelve el error
-  source_security_group_id = aws_security_group.ecs_sg.id                        # Autoriza a la tarea de ECS
+  security_group_id        = tolist(data.aws_instance.mongo_db.vpc_security_group_ids)[0]
+  source_security_group_id = aws_security_group.ecs_sg.id
   description              = "Permite trafico entrante desde ECS a MongoDB"
 }
 
-# ============================================================
-# ECS CLUSTER
-# ============================================================
-
-resource "aws_ecs_cluster" "main" {
-  name = "products-cluster"
-}
+# ... (Mantén aquí tus bloques de aws_lb, aws_lb_target_group, aws_lb_listener, ecs_cluster, log_group, task_definition y ecs_service tal como los tenías) ...
 
 # ============================================================
-# CLOUDWATCH LOG GROUP
-# ============================================================
-
-resource "aws_cloudwatch_log_group" "ecs_log_group" {
-  name              = "/ecs/products-service"
-  retention_in_days = 7
-}
-
-# ============================================================
-# ECS TASK DEFINITION (ACTUALIZADA CON LOGS)
-# ============================================================
-
-resource "aws_ecs_task_definition" "app" {
-  family                   = "products-api"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name      = "products-api"
-      image     = "${aws_ecr_repository.products_service.repository_url}:${var.image_tag}"
-      essential = true
-
-      portMappings = [
-        {
-          containerPort = 8080
-          hostPort      = 8080
-          protocol      = "tcp"
-        }
-      ]
-
-      # Configuración de logs obligatoria para diagnóstico
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs_log_group.name
-          "awslogs-region"        = "us-east-2"
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
-
-      environment = [
-        {
-          name  = "MONGO_HOST"
-          value = data.aws_instance.mongo_db.private_ip
-        },
-        {
-          name  = "MONGO_PORT"
-          value = "27017"
-        },
-        {
-          name  = "SPRING_PROFILES_ACTIVE"
-          value = "prod"
-        }
-      ]
-    }
-  ])
-}
-
-resource "aws_ecs_service" "app" {
-  name            = "products-api-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = data.aws_subnets.public.ids
-    security_groups  = [aws_security_group.ecs_sg.id]
-    assign_public_ip = true
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.ecs_execution_policy
-  ]
-}
-
-# ============================================================
-# OUTPUTS (DEBEN IR EN EL NIVEL RAÍZ, NO DENTRO DE UN RECURSO)
+# OUTPUTS (CORREGIDOS Y EN NIVEL RAÍZ)
 # ============================================================
 
 output "mongo_ec2_private_ip" {
   description = "IP privada recuperada para MongoDB"
   value       = data.aws_instance.mongo_db.private_ip
+}
+
+output "alb_dns_name" {
+  description = "DNS del ALB para usar como Origen en CloudFront"
+  value       = aws_lb.api.dns_name
 }
