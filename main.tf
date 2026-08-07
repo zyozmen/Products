@@ -206,12 +206,11 @@ resource "aws_security_group" "ecs_sg" {
 # 3. AWS SSM PARAMETER STORE (SECRETOS)
 # ============================================================
 
-# Referencia al parámetro creado externamente en AWS SSM
 resource "aws_ssm_parameter" "mongo_uri" {
   name      = "/prod/products-service/MONGO_URI"
   type      = "SecureString"
   value     = "placeholder"
-  overwrite = true
+  overwrite = false
 
   lifecycle {
     ignore_changes = [value]
@@ -280,28 +279,14 @@ resource "aws_ecr_lifecycle_policy" "products_service_policy" {
       {
         rulePriority = 1
         description  = "Eliminar imagenes sin tag tras 1 dia"
-        selection = {
-          tagStatus   = "untagged"
-          countType   = "sinceImagePushed"
-          countUnit   = "days"
-          countNumber = 1
-        }
-        action = {
-          type = "expire"
-        }
+        selection    = { tagStatus = "untagged", countType = "sinceImagePushed", countUnit = "days", countNumber = 1 }
+        action       = { type = "expire" }
       },
       {
         rulePriority = 2
         description  = "Conservar las ultimas 2 imagenes etiquetadas"
-        selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["v", "build-", "latest"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 2
-        }
-        action = {
-          type = "expire"
-        }
+        selection    = { tagStatus = "tagged", tagPrefixList = ["v", "build-", "latest"], countType = "imageCountMoreThan", countNumber = 2 }
+        action       = { type = "expire" }
       }
     ]
   })
@@ -433,7 +418,7 @@ resource "aws_ecs_service" "app" {
 
   depends_on = [
     aws_iam_role_policy_attachment.ecs_execution_policy,
-    aws_iam_role_policy_attachment.ecs_ssm_policy_attach,
+    aws_iam_role_policy.ecs_ssm_inline_policy,
     aws_lb_listener.http
   ]
 }
@@ -448,6 +433,6 @@ output "alb_dns_name" {
 }
 
 output "nat_gateway_public_ip" {
-  description = "IP PÚBLICA FIJA para agregar a la Whitelist / Network Access de MongoDB Atlas"
+  description = "IP PÚBLICA FIJA para agregar a la Whitelist de MongoDB Atlas"
   value       = aws_eip.nat.public_ip
 }
