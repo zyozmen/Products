@@ -1,4 +1,7 @@
-# Configuración principal de Terraform para el servicio Products en AWS.
+# ============================================================
+# TERRAFORM & PROVIDER CONFIGURATION
+# ============================================================
+
 terraform {
   required_version = ">= 1.5.0"
 
@@ -17,82 +20,199 @@ terraform {
   }
 }
 
+provider "aws" {
+  region = "us-east-2"
+}
+
+# ============================================================
+# VARIABLES
+# ============================================================
+
 variable "image_tag" {
   type        = string
   default     = "latest"
   description = "Tag de la imagen de ECR a desplegar"
 }
 
-provider "aws" {
-  region = "us-east-2"
+variable "mongo_database" {
+  type        = string
+  default     = "GrowShop"
+  description = "Nombre de la base de datos MongoDB"
 }
 
 # ============================================================
-# DATOS DE INFRAESTRUCTURA EXISTENTE
+# 1. RED (VPC, SUBREDES MULTI-AZ, NAT GATEWAY)
 # ============================================================
 
-data "aws_vpc" "selected" {
-  default = true
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name        = "vpc-products-prod"
+    Environment = "production"
+  }
 }
 
-data "aws_subnets" "public" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.selected.id]
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "igw-products-prod"
+  }
+}
+
+# Subredes Públicas (Para ALB y NAT Gateway)
+resource "aws_subnet" "public_a" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-2a"
+  map_public_ip_on_launch = true
+
+  tags = { Name = "subnet-public-1a" }
+}
+
+resource "aws_subnet" "public_b" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "us-east-2b"
+  map_public_ip_on_launch = true
+
+  tags = { Name = "subnet-public-1b" }
+}
+
+# Subredes Privadas (Para tareas de ECS / Backend)
+resource "aws_subnet" "private_a" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.10.0/24"
+  availability_zone = "us-east-2a"
+
+  tags = { Name = "subnet-private-1a" }
+}
+
+resource "aws_subnet" "private_b" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.11.0/24"
+  availability_zone = "us-east-2b"
+
+  tags = { Name = "subnet-private-1b" }
+}
+
+# Elastic IP & NAT Gateway
+resource "aws_eip" "nat" {
+  domain     = "vpc"
+  depends_on = [aws_internet_gateway.igw]
+
+  tags = { Name = "eip-nat-gateway-prod" }
+}
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public_a.id
+
+  tags       = { Name = "nat-gateway-prod" }
+  depends_on = [aws_internet_gateway.igw]
+}
+
+# Tablas de Enrutamiento
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = { Name = "rt-public-prod" }
+}
+
+resource "aws_route_table_association" "public_a" {
+  subnet_id      = aws_subnet.public_a.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "public_b" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags = { Name = "rt-private-prod" }
+}
+
+resource "aws_route_table_association" "private_a" {
+  subnet_id      = aws_subnet.private_a.id
+  route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table_association" "private_b" {
+  subnet_id      = aws_subnet.private_b.id
+  route_table_id = aws_route_table.private.id
+}
+
+# ============================================================
+# 2. SECURITY GROUPS
+# ============================================================
+
+resource "aws_security_group" "alb_sg" {
+  name        = "products-api-alb-sg"
+  description = "Security Group para el ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "ecs_sg" {
+  name        = "products-api-ecs-sg"
+  description = "Security Group para la API de productos en ECS"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
 # ============================================================
-# ECR REPOSITORY & LIFECYCLE
+# 3. AWS SSM PARAMETER STORE (SECRETOS)
 # ============================================================
 
-resource "aws_ecr_repository" "products_service" {
-  name                 = "products-service"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = false
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-}
-
-resource "aws_ecr_lifecycle_policy" "products_service_policy" {
-  repository = aws_ecr_repository.products_service.name
-
-  policy = jsonencode({
-    rules = [
-      {
-        rulePriority = 1
-        description  = "Eliminar imagenes sin tag tras 1 dia"
-        selection = {
-          tagStatus   = "untagged"
-          countType   = "sinceImagePushed"
-          countUnit   = "days"
-          countNumber = 1
-        }
-        action = {
-          type = "expire"
-        }
-      },
-      {
-        rulePriority = 2
-        description  = "Conservar las ultimas 2 imagenes etiquetadas"
-        selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["v", "build-", "latest"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 2
-        }
-        action = {
-          type = "expire"
-        }
-      }
-    ]
-  })
+# Referencia al parámetro creado externamente en AWS SSM
+data "aws_ssm_parameter" "mongo_uri" {
+  name = "/prod/products-service/MONGO_URI"
 }
 
 # ============================================================
-# ROLES DE IAM PARA ECS
+# 4. ROLES DE IAM
 # ============================================================
 
 resource "aws_iam_role" "ecs_execution_role" {
@@ -115,52 +235,65 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ============================================================
-# SECURITY GROUPS (RED Y ACCESO)
-# ============================================================
+# Política para permitir a ECS leer la URI de Mongo desde SSM Parameter Store
+resource "aws_iam_policy" "ssm_read_policy" {
+  name        = "products-api-ssm-read-policy"
+  description = "Permite a ECS leer credenciales desde SSM"
 
-resource "aws_security_group" "alb_sg" {
-  name        = "products-api-alb-sg"
-  description = "Security Group para el ALB"
-  vpc_id      = data.aws_vpc.selected.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameters", "ssm:GetParameter"]
+        Resource = [data.aws_ssm_parameter.mongo_uri.arn]
+      }
+    ]
+  })
 }
 
-resource "aws_security_group" "ecs_sg" {
-  name        = "products-api-ecs-sg"
-  description = "Security Group para la API de productos en ECS"
-  vpc_id      = data.aws_vpc.selected.id
-
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_iam_role_policy_attachment" "ecs_ssm_policy_attach" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = aws_iam_policy.ssm_read_policy.arn
 }
 
 # ============================================================
-# APPLICATION LOAD BALANCER (ALB)
+# 5. ECR REPOSITORY & LIFECYCLE
+# ============================================================
+
+resource "aws_ecr_repository" "products_service" {
+  name                 = "products-service"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = false
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "products_service_policy" {
+  repository = aws_ecr_repository.products_service.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Eliminar imagenes sin tag tras 1 dia"
+        selection    = { tagStatus = "untagged", countType = "sinceImagePushed", countUnit = "days", countNumber = 1 }
+        action       = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Conservar las ultimas 2 imagenes etiquetadas"
+        selection    = { tagStatus = "tagged", tagPrefixList = ["v", "build-", "latest"], countType = "imageCountMoreThan", countNumber = 2 }
+        action       = { type = "expire" }
+      }
+    ]
+  })
+}
+
+# ============================================================
+# 6. APPLICATION LOAD BALANCER (ALB)
 # ============================================================
 
 resource "aws_lb" "api" {
@@ -168,14 +301,14 @@ resource "aws_lb" "api" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = data.aws_subnets.public.ids
+  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
 }
 
 resource "aws_lb_target_group" "api" {
   name        = "products-api-tg"
   port        = 8080
   protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.selected.id
+  vpc_id      = aws_vpc.main.id
   target_type = "ip"
 
   health_check {
@@ -200,32 +333,24 @@ resource "aws_lb_listener" "http" {
 }
 
 # ============================================================
-# ECS CLUSTER
+# 7. ECS CLUSTER & TASK DEFINITION
 # ============================================================
 
 resource "aws_ecs_cluster" "main" {
   name = "products-cluster"
 }
 
-# ============================================================
-# CLOUDWATCH LOG GROUP
-# ============================================================
-
 resource "aws_cloudwatch_log_group" "ecs_log_group" {
   name              = "/ecs/products-service"
   retention_in_days = 7
 }
 
-# ============================================================
-# ECS TASK DEFINITION Y SERVICE (CONECTADO A MONGO ATLAS)
-# ============================================================
-
 resource "aws_ecs_task_definition" "app" {
   family                   = "products-api"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "1024"
+  cpu                      = "512"  # Aumentado a 0.5 vCPU para evitar fallos de CPU en Spring Boot
+  memory                   = "1024" # 1 GB RAM
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
 
   container_definitions = jsonencode([
@@ -253,14 +378,24 @@ resource "aws_ecs_task_definition" "app" {
 
       environment = [
         {
-          name  = "SPRING_DATA_MONGODB_URI"
-          # REEMPLAZA CON TU URI REAL DE MONGO ATLAS (Asegúrate de cambiar usuario y contraseña)
-
-          value = "mongodb+srv://usuario_zyozgke1992_db_user:GrowShop@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority"
+          name  = "MONGO_DATABASE"
+          value = var.mongo_database
         },
         {
           name  = "SPRING_PROFILES_ACTIVE"
           value = "prod"
+        }
+      ]
+
+      # INYECCIÓN SEGURA DE SECRETOS DESDE SSM PARAMETER STORE
+      secrets = [
+        {
+          name      = "SPRING_DATA_MONGODB_URI"
+          valueFrom = data.aws_ssm_parameter.mongo_uri.arn
+        },
+        {
+          name      = "MONGO_URI"
+          valueFrom = data.aws_ssm_parameter.mongo_uri.arn
         }
       ]
     }
@@ -275,9 +410,9 @@ resource "aws_ecs_service" "app" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = data.aws_subnets.public.ids
+    subnets          = [aws_subnet.private_a.id, aws_subnet.private_b.id] # ECS desplegado en subredes privadas
     security_groups  = [aws_security_group.ecs_sg.id]
-    assign_public_ip = true
+    assign_public_ip = false # Sin IP pública directa (utiliza el NAT Gateway)
   }
 
   load_balancer {
@@ -288,6 +423,7 @@ resource "aws_ecs_service" "app" {
 
   depends_on = [
     aws_iam_role_policy_attachment.ecs_execution_policy,
+    aws_iam_role_policy_attachment.ecs_ssm_policy_attach,
     aws_lb_listener.http
   ]
 }
@@ -299,4 +435,9 @@ resource "aws_ecs_service" "app" {
 output "alb_dns_name" {
   description = "DNS del ALB para usar como Origen en CloudFront"
   value       = aws_lb.api.dns_name
+}
+
+output "nat_gateway_public_ip" {
+  description = "IP PÚBLICA FIJA para agregar a la Whitelist / Network Access de MongoDB Atlas"
+  value       = aws_eip.nat.public_ip
 }
