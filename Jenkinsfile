@@ -34,7 +34,7 @@ def getMongoUri() {
     if (isMainBranch()) {
         return 'mongodb+srv://zyozgke1992_db_user:GrowShop@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority&tls=true&authSource=admin'
     }
-    return 'mongodb://growShop:GrowSh0p@mongo:27017'
+    return 'mongodb://growShop:GrowSh0p@mongo:27017/GrowShop?authSource=admin'
 }
 
 pipeline {
@@ -73,7 +73,11 @@ pipeline {
                             docker start "${MONGO_CONTAINER_NAME}" >/dev/null
                         fi
                     else
-                        docker run -d --name "${MONGO_CONTAINER_NAME}" --network products-net -p "${MONGO_PORT}:${MONGO_PORT}" mongo:6.0
+                        docker run -d --name "${MONGO_CONTAINER_NAME}" --network products-net -p "${MONGO_PORT}:${MONGO_PORT}" \
+                          -e MONGO_INITDB_ROOT_USERNAME=growShop \
+                          -e MONGO_INITDB_ROOT_PASSWORD=GrowSh0p \
+                          -e MONGO_INITDB_DATABASE=${DB_NAME} \
+                          mongo:6.0
                     fi
 
                     sleep 10
@@ -133,7 +137,11 @@ pipeline {
                             docker start "${MONGO_CONTAINER_NAME}" >/dev/null
                         fi
                     else
-                        docker run -d --name "${MONGO_CONTAINER_NAME}" --network products-net -p "${MONGO_PORT}:${MONGO_PORT}" mongo:6.0
+                        docker run -d --name "${MONGO_CONTAINER_NAME}" --network products-net -p "${MONGO_PORT}:${MONGO_PORT}" \
+                          -e MONGO_INITDB_ROOT_USERNAME=growShop \
+                          -e MONGO_INITDB_ROOT_PASSWORD=GrowSh0p \
+                          -e MONGO_INITDB_DATABASE=${DB_NAME} \
+                          mongo:6.0
                     fi
 
                     if docker ps -a --filter "name=^/Products-Api$" --format '{{.Names}}' | grep -Fxq 'Products-Api'; then
@@ -145,7 +153,7 @@ pipeline {
                     if ! docker ps -a --filter "name=^/Products-Api$" --format '{{.Names}}' | grep -Fxq 'Products-Api'; then
                         docker build -t ${APP_NAME}:local .
                         docker run -d --name Products-Api --network products-net -p 8080:8080 \
-                          -e SPRING_DATA_MONGODB_URI=mongodb://growShop:GrowSh0p@mongo:27017 \
+                          -e SPRING_DATA_MONGODB_URI=mongodb://growShop:GrowSh0p@mongo:27017/GrowShop?authSource=admin \
                           ${APP_NAME}:local
                     fi
 
