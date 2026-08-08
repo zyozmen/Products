@@ -139,7 +139,7 @@ class ProductoTest {
                 .isNotEqualTo(null)
                 .isNotEqualTo("not a product")
                 .isNotEqualTo(differentProducto);
-        assertThat(producto.hashCode()).isEqualTo(sameProducto.hashCode());
+        assertThat(producto.hashCode()).hasSameHashCodeAs(sameProducto.hashCode());
         assertThat(producto.toString()).contains("Alias Name");
     }
 }

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,5 +83,67 @@ class ProductoMongoMapperTest {
         assertThat(document.getRanking().getAverageRating()).isEqualByComparingTo("4.2");
         assertThat(document.getRecentComments()).hasSize(1);
         assertThat(document.getHasMoreComments()).isFalse();
+    }
+
+    @Test
+    void toDocumentShouldHandleNullAndEmptyCollectionsAndNullRanking() {
+        Producto producto = Producto.builder()
+                .id("empty-id")
+                .name("Empty")
+                .categories(null)
+                .price(null)
+                .ranking(null)
+                .recentComments(null)
+                .createdAt(null)
+                .updatedAt(null)
+                .build();
+
+        ProductoMongoDocument document = mapper.toDocument(producto);
+
+        assertThat(document.getCategories()).isEmpty();
+        assertThat(document.getPrice()).isNull();
+        assertThat(document.getRanking()).isNull();
+        assertThat(document.getRecentComments()).isEmpty();
+        assertThat(document.getCreatedAt()).isNotNull();
+        assertThat(document.getUpdatedAt()).isNotNull();
+
+        ProductoMongoDocument documentWithExistingId = mapper.toDocument(producto, "existing-id");
+        assertThat(documentWithExistingId.getId()).isEqualTo("existing-id");
+    }
+
+    @Test
+    void toDomainShouldHandleNullsAndEmptyCollections() {
+        ProductoMongoDocument document = ProductoMongoDocument.builder()
+                .id("null-id")
+                .categories(null)
+                .price(null)
+                .ranking(null)
+                .recentComments(null)
+                .build();
+
+        Producto producto = mapper.toDomain(document);
+
+        assertThat(producto.getCategories()).isEmpty();
+        assertThat(producto.getPrice()).isNull();
+        assertThat(producto.getRanking().getAverageRating()).isEqualByComparingTo("0");
+        assertThat(producto.getRecentComments()).isEmpty();
+        assertThat(producto.getCreatedAt()).isNull();
+        assertThat(producto.getUpdatedAt()).isNull();
+    }
+
+    @Test
+    void helperMethodsShouldMapNullAndNonNullCategoryAndCommentValues() {
+        CategoryDocument categoryDocument = CategoryDocument.builder().categoryId(3L).name("Audio").slug("audio").productsCount(7L).build();
+        Category category = mapper.toCategoryDomain(categoryDocument);
+        assertThat(category.getCategoryId()).isEqualTo(3L);
+        assertThat(mapper.toCategoryDomain((CategoryDocument) null)).isNull();
+
+        CategoryDocument nullCategoryDocument = mapper.toCategoryDocument((Category) null);
+        assertThat(nullCategoryDocument).isNull();
+
+        CommentDocument commentDocument = CommentDocument.builder().commentId("c1").username("alice").body("Nice").build();
+        assertThat(mapper.toDomain(ProductoMongoDocument.builder().id("x").build()).getRecentComments()).isEmpty();
+        assertThat(mapper.toDomain(ProductoMongoDocument.builder().id("x").recentComments(List.of(commentDocument)).build()).getRecentComments()).hasSize(1);
+        assertThat(mapper.toDomain(ProductoMongoDocument.builder().id("x").recentComments(new ArrayList<>()).build()).getRecentComments()).isEmpty();
     }
 }

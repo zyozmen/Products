@@ -1,44 +1,31 @@
 package com.zyozmen.products.config;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoDatabase;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@ExtendWith(MockitoExtension.class)
 class MongoConfigTest {
 
-    @Mock
-    private MongoClient mongoClient;
-
-    @Mock
-    private MongoDatabase mongoDatabase;
-
     @Test
-    void shouldExposeConfiguredDatabaseName() {
+    void shouldRejectLocalhostUrisToAvoidWrongTarget() {
         MongoConfig config = new MongoConfig();
-        ReflectionTestUtils.setField(config, "database", "products");
+        ReflectionTestUtils.setField(config, "uri", "mongodb://localhost:27017/GrowShop");
 
-        assertThat(config.getDatabaseName()).isEqualTo("products");
+        assertThatThrownBy(config::mongoClient)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Atlas");
     }
 
     @Test
-    void shouldCreateMongoTemplateUsingProvidedClient() {
+    void shouldCreateMongoClientFromAtlasUri() {
         MongoConfig config = new MongoConfig();
-        ReflectionTestUtils.setField(config, "database", "products");
-        when(mongoClient.getDatabase("products")).thenReturn(mongoDatabase);
-        when(mongoDatabase.getName()).thenReturn("products");
+        ReflectionTestUtils.setField(config, "uri", "mongodb+srv://user:pass@products-db-cluster.9wjnrah.mongodb.net/GrowShop");
 
-        org.springframework.data.mongodb.core.MongoTemplate template = config.mongoTemplate(mongoClient);
+        MongoClient client = config.mongoClient();
 
-        assertThat(template).isNotNull();
-        assertThat(template.getDb()).isNotNull();
-        assertThat(template.getDb().getName()).isEqualTo("products");
+        assertThat(client).isNotNull();
     }
 }
