@@ -1,6 +1,21 @@
 def getBranchName() {
-    def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: ''
-    return branch?.replaceFirst(/^origin\//, '') ?: ''
+    def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: env.CHANGE_BRANCH ?: ''
+
+    if (!branch) {
+        try {
+            branch = sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+        } catch (Exception e) {
+            branch = ''
+        }
+    }
+
+    return branch
+        .replaceFirst(/^origin\//, '')
+        .replaceFirst(/^refs\/heads\//, '')
+        .replaceFirst(/^\*\//, '')
+        .replaceFirst(/^\//, '')
+        .tokenize('/')
+        .last()
 }
 
 def isMainBranch() {
@@ -47,7 +62,7 @@ pipeline {
 
         stage('Start test infrastructure') {
             when {
-                expression { !isMainBranch() }
+                expression { isDevelopBranch() }
             }
             steps {
                 sh '''
@@ -67,6 +82,7 @@ pipeline {
             }
             steps {
                 script {
+                    echo "Rama detectada: ${getBranchName()}"
                     def mongoUri = getMongoUri()
                     withEnv(["SPRING_DATA_MONGODB_URI=${mongoUri}"]) {
                         sh './mvnw clean test'
