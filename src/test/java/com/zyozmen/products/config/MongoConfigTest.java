@@ -10,13 +10,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MongoConfigTest {
 
     @Test
-    void shouldRejectLocalhostUrisToAvoidWrongTarget() {
+    void shouldCreateMongoClientFromLocalUri() {
         MongoConfig config = new MongoConfig();
-        ReflectionTestUtils.setField(config, "uri", "mongodb://localhost:27017/GrowShop");
+        ReflectionTestUtils.setField(config, "uri", "mongodb://user:pass@mongo:27017/GrowShop");
 
-        assertThatThrownBy(config::mongoClient)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Atlas");
+        MongoClient client = config.mongoClient();
+
+        assertThat(client).isNotNull();
     }
 
     @Test

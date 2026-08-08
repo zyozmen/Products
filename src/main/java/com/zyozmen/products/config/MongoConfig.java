@@ -32,12 +32,12 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
             throw new IllegalStateException("La configuración de MongoDB debe definir spring.data.mongodb.uri apuntando al cluster de Atlas.");
         }
 
-        if (uri.contains("localhost") || uri.contains("127.0.0.1")) {
-            throw new IllegalStateException("La conexión de MongoDB no puede apuntar a localhost. Debe usar un URI de Atlas.");
+        if (uri.startsWith("mongodb://") && (uri.contains("localhost") || uri.contains("127.0.0.1") || uri.contains("mongo"))) {
+            return MongoClients.create(uri);
         }
 
         if (!uri.startsWith("mongodb+srv://")) {
-            throw new IllegalStateException("La URI de MongoDB debe usar el formato mongodb+srv:// para Atlas.");
+            throw new IllegalStateException("La URI de MongoDB debe usar el formato mongodb+srv:// para Atlas o mongodb:// para desarrollo local.");
         }
 
         return MongoClients.create(normalizeAtlasUri(uri));
