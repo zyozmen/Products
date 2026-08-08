@@ -34,7 +34,7 @@ def getMongoUri() {
     if (isMainBranch()) {
         return 'mongodb+srv://zyozgke1992_db_user:GrowShop@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority&tls=true&authSource=admin'
     }
-    return 'mongodb://growShop:GrowSh0p@localhost:27017'
+    return 'mongodb://growShop:GrowSh0p@mongo:27017'
 }
 
 pipeline {
@@ -145,7 +145,7 @@ pipeline {
                     if ! docker ps -a --filter "name=^/Products-Api$" --format '{{.Names}}' | grep -Fxq 'Products-Api'; then
                         docker build -t ${APP_NAME}:local .
                         docker run -d --name Products-Api --network products-net -p 8080:8080 \
-                          -e SPRING_DATA_MONGODB_URI=mongodb://growShop:GrowSh0p@localhost:27017 \
+                          -e SPRING_DATA_MONGODB_URI=mongodb://growShop:GrowSh0p@mongo:27017 \
                           ${APP_NAME}:local
                     fi
 
