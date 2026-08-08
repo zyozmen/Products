@@ -66,12 +66,12 @@ pipeline {
             }
             steps {
                 sh '''
-                    docker rm -f ${MONGO_CONTAINER_NAME} products-api-local || true
-                    docker network rm products-net || true
-                    docker network create products-net
-                    docker run -d --name ${MONGO_CONTAINER_NAME} --network products-net -p ${MONGO_PORT}:${MONGO_PORT} mongo:6.0
+                    docker network inspect products-net >/dev/null 2>&1 || docker network create products-net
+                    if ! docker ps -a --format '{{.Names}}' | grep -q '^${MONGO_CONTAINER_NAME}$'; then
+                        docker run -d --name ${MONGO_CONTAINER_NAME} --network products-net -p ${MONGO_PORT}:${MONGO_PORT} mongo:6.0
+                    fi
                     sleep 10
-                    docker ps
+                    docker ps --filter "name=${MONGO_CONTAINER_NAME}"
                 '''
             }
         }
@@ -120,16 +120,32 @@ pipeline {
             }
             steps {
                 sh '''
-                    docker rm -f ${MONGO_CONTAINER_NAME} products-api-local || true
-                    docker network rm products-net || true
-                    docker network create products-net
-                    docker run -d --name ${MONGO_CONTAINER_NAME} --network products-net -p ${MONGO_PORT}:${MONGO_PORT} mongo:6.0
-                    docker build -t ${APP_NAME}:local .
-                    docker run -d --name products-api-local --network products-net -p 8080:8080 \
-                      -e SPRING_DATA_MONGODB_URI=mongodb://${MONGO_CONTAINER_NAME}:${MONGO_PORT}/${DB_NAME} \
-                      ${APP_NAME}:local
-                    sleep 20
-                    docker ps
+                    docker network inspect products-net >/dev/null 2>&1 || docker network create products-net
+                    if ! docker ps -a --format '{{.Names}}' | grep -q '^${MONGO_CONTAINER_NAME}$'; then
+                        docker run -d --name ${MONGO_CONTAINER_NAME} --network products-net -p ${MONGO_PORT}:${MONGO_PORT} mongo:6.0
+                    fi
+
+                    if docker ps -a --format '{{.Names}}' | grep -q '^products-api-local$'; then
+                        if ! curl -fsS http://localhost:8080/actuator/health >/dev/null 2>&1; then
+                            docker rm -f products-api-local >/dev/null 2>&1 || true
+                        fi
+                    fi
+
+                    if ! docker ps -a --format '{{.Names}}' | grep -q '^products-api-local$'; then
+                        docker build -t ${APP_NAME}:local .
+                        docker run -d --name products-api-local --network products-net -p 8080:8080 \
+                          -e SPRING_DATA_MONGODB_URI=mongodb://${MONGO_CONTAINER_NAME}:${MONGO_PORT}/${DB_NAME} \
+                          ${APP_NAME}:local
+                    fi
+
+                    for i in $(seq 1 20); do
+                        if curl -fsS http://localhost:8080/actuator/health >/dev/null 2>&1; then
+                            break
+                        fi
+                        sleep 3
+                    done
+
+                    docker ps --filter "name=${MONGO_CONTAINER_NAME}" --filter "name=products-api-local"
                 '''
             }
         }
@@ -198,11 +214,8 @@ pipeline {
     post {
         always {
             sh '''
-                docker rm -f ${MONGO_CONTAINER_NAME} products-api-local || true
-                docker network rm products-net || true
                 docker rmi ${ECR_URL}:${IMAGE_TAG} || true
                 docker rmi ${REPO_NAME}:${IMAGE_TAG} || true
-                docker rmi ${APP_NAME}:local || true
             '''
             cleanWs()
         }
