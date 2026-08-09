@@ -211,34 +211,38 @@ pipeline {
             steps {
                 withCredentials([
                     string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY'),
-                    string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI')
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
-                    sh """
-                        export PATH="${WORKSPACE}/.bin:${PATH}"
-                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                        export AWS_DEFAULT_REGION=${AWS_REGION}
+                    script {
+                        def mongoUri = getMongoUri()
+                        def secretUri = env.MONGODB_URI ?: mongoUri
 
-                        aws eks update-kubeconfig --name ${K8S_CLUSTER_NAME} --region ${AWS_REGION}
+                        sh """
+                            export PATH="${WORKSPACE}/.bin:${PATH}"
+                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                            export AWS_DEFAULT_REGION=${AWS_REGION}
 
-                        kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                            aws eks update-kubeconfig --name ${K8S_CLUSTER_NAME} --region ${AWS_REGION}
 
-                        kubectl apply -f products-api-configmap.yaml
+                            kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-                        kubectl create secret generic backend-secrets \
-                          --namespace ${K8S_NAMESPACE} \
-                          --from-literal=MONGODB_URI="${MONGODB_URI}" \
-                          --from-literal=SPRING_DATA_MONGODB_URI="${MONGODB_URI}" \
-                          --from-literal=MONGO_URI="${MONGODB_URI}" \
-                          --dry-run=client -o yaml | kubectl apply -f -
+                            kubectl apply -f products-api-configmap.yaml
 
-                        sed -i "s|image: zyozmen/products-api:latest|image: ${ECR_URL}:${IMAGE_TAG}|g" products-api-deployment.yaml
+                            kubectl create secret generic backend-secrets \
+                              --namespace ${K8S_NAMESPACE} \
+                              --from-literal=MONGODB_URI="${secretUri}" \
+                              --from-literal=SPRING_DATA_MONGODB_URI="${secretUri}" \
+                              --from-literal=MONGO_URI="${secretUri}" \
+                              --dry-run=client -o yaml | kubectl apply -f -
 
-                        kubectl apply -f products-api-deployment.yaml
-                        kubectl apply -f products-api-service.yaml
-                        kubectl rollout status deployment/backend-products-api -n ${K8S_NAMESPACE} --timeout=300s
-                    """
+                            sed -i "s|image: zyozmen/products-api:latest|image: ${ECR_URL}:${IMAGE_TAG}|g" products-api-deployment.yaml
+
+                            kubectl apply -f products-api-deployment.yaml
+                            kubectl apply -f products-api-service.yaml
+                            kubectl rollout status deployment/backend-products-api -n ${K8S_NAMESPACE} --timeout=300s
+                        """
+                    }
                 }
             }
         }
