@@ -50,8 +50,9 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "vpc-products-prod"
-    Environment = "production"
+    Name                                           = "vpc-products-prod"
+    Environment                                    = "production"
+    "kubernetes.io/cluster/products-cluster"       = "shared"
   }
 }
 
@@ -63,14 +64,18 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# Subredes Públicas (Para ALB y NAT Gateway)
+# Subredes Públicas (Con tags requeridos por Kubernetes Ingress / ALB)
 resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "us-east-2a"
   map_public_ip_on_launch = true
 
-  tags = { Name = "subnet-public-1a" }
+  tags = { 
+    Name                                     = "subnet-public-1a"
+    "kubernetes.io/cluster/products-cluster" = "shared"
+    "kubernetes.io/role/elb"                 = "1"
+  }
 }
 
 resource "aws_subnet" "public_b" {
@@ -79,16 +84,24 @@ resource "aws_subnet" "public_b" {
   availability_zone       = "us-east-2b"
   map_public_ip_on_launch = true
 
-  tags = { Name = "subnet-public-1b" }
+  tags = { 
+    Name                                     = "subnet-public-1b"
+    "kubernetes.io/cluster/products-cluster" = "shared"
+    "kubernetes.io/role/elb"                 = "1"
+  }
 }
 
-# Subredes Privadas (Para tareas de ECS / Backend)
+# Subredes Privadas (Para Nodos de K8s / Pods)
 resource "aws_subnet" "private_a" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.10.0/24"
   availability_zone = "us-east-2a"
 
-  tags = { Name = "subnet-private-1a" }
+  tags = { 
+    Name                                     = "subnet-private-1a"
+    "kubernetes.io/cluster/products-cluster" = "shared"
+    "kubernetes.io/role/internal-elb"        = "1"
+  }
 }
 
 resource "aws_subnet" "private_b" {
@@ -96,7 +109,11 @@ resource "aws_subnet" "private_b" {
   cidr_block        = "10.0.11.0/24"
   availability_zone = "us-east-2b"
 
-  tags = { Name = "subnet-private-1b" }
+  tags = { 
+    Name                                     = "subnet-private-1b"
+    "kubernetes.io/cluster/products-cluster" = "shared"
+    "kubernetes.io/role/internal-elb"        = "1"
+  }
 }
 
 # Elastic IP & NAT Gateway
@@ -158,10 +175,7 @@ resource "aws_route_table_association" "private_b" {
   route_table_id = aws_route_table.private.id
 }
 
-# ============================================================
-# OPTIMIZACIÓN DE COSTOS: S3 GATEWAY ENDPOINT (GRATUITO)
-# ============================================================
-
+# S3 Gateway Endpoint (Ahorro de Costos)
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.us-east-2.s3"
@@ -172,51 +186,7 @@ resource "aws_vpc_endpoint" "s3" {
 }
 
 # ============================================================
-# 2. SECURITY GROUPS
-# ============================================================
-
-resource "aws_security_group" "alb_sg" {
-  name        = "products-api-alb-sg"
-  description = "Security Group para el ALB"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_security_group" "ecs_sg" {
-  name        = "products-api-ecs-sg"
-  description = "Security Group para la API de productos en ECS"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# ============================================================
-# 3. AWS SSM PARAMETER STORE (SECRETOS)
+# 2. AWS SSM PARAMETER STORE (SECRETOS)
 # ============================================================
 
 resource "aws_ssm_parameter" "mongo_uri" {
@@ -231,47 +201,7 @@ resource "aws_ssm_parameter" "mongo_uri" {
 }
 
 # ============================================================
-# 4. ROLES DE IAM
-# ============================================================
-
-resource "aws_iam_role" "ecs_execution_role" {
-  name = "products-api-ecs-execution-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action    = "sts:AssumeRole"
-        Effect    = "Allow"
-        Principal = { Service = "ecs-tasks.amazonaws.com" }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
-  role       = aws_iam_role.ecs_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-resource "aws_iam_role_policy" "ecs_ssm_inline_policy" {
-  name = "products-api-ssm-read-policy"
-  role = aws_iam_role.ecs_execution_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["ssm:GetParameters", "ssm:GetParameter"]
-        Resource = [aws_ssm_parameter.mongo_uri.arn]
-      }
-    ]
-  })
-}
-
-# ============================================================
-# 5. ECR REPOSITORY & LIFECYCLE
+# 3. ECR REPOSITORY & LIFECYCLE
 # ============================================================
 
 resource "aws_ecr_repository" "products_service" {
@@ -306,155 +236,59 @@ resource "aws_ecr_lifecycle_policy" "products_service_policy" {
 }
 
 # ============================================================
-# 6. APPLICATION LOAD BALANCER (ALB)
+# 4. CLÚSTER DE KUBERNETES (AWS EKS PROFESIONAL)
 # ============================================================
 
-resource "aws_lb" "api" {
-  name               = "products-api-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-}
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~> 19.15"
 
-resource "aws_lb_target_group" "api" {
-  name        = "products-api-tg"
-  port        = 8080
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "ip"
+  cluster_name    = "products-cluster"
+  cluster_version = "1.29"
 
-  health_check {
-    path                = "/api/productos/featured"
-    matcher             = "200-399,404"
-    interval            = 30
-    timeout             = 10
-    healthy_threshold   = 2
-    unhealthy_threshold = 6
-  }
-}
+  cluster_endpoint_public_access = true
 
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.api.arn
-  port              = 80
-  protocol          = "HTTP"
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
 
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
-}
+  # Configuración de Nodos de Worker (Optimización de costos con Instancias Spot)
+  eks_managed_node_groups = {
+    spot_nodes = {
+      min_size     = 1
+      max_size     = 3
+      desired_size = 2
 
-# ============================================================
-# 7. ECS CLUSTER & TASK DEFINITION (OPTIMIZADO FARGATE SPOT)
-# ============================================================
+      instance_types = ["t3.medium", "t3a.medium"]
+      capacity_type  = "SPOT"
 
-resource "aws_ecs_cluster" "main" {
-  name = "products-cluster"
-}
-
-resource "aws_cloudwatch_log_group" "ecs_log_group" {
-  name              = "/ecs/products-service"
-  retention_in_days = 7
-}
-
-resource "aws_ecs_task_definition" "app" {
-  family                   = "products-api"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  
-  # REDUCCIÓN DE RECURSOS: 0.25 vCPU y 512 MB RAM
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name      = "products-api"
-      image     = "${aws_ecr_repository.products_service.repository_url}:${var.image_tag}"
-      essential = true
-
-      portMappings = [
-        {
-          containerPort = 8080
-          hostPort      = 8080
-          protocol      = "tcp"
-        }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs_log_group.name
-          "awslogs-region"        = "us-east-2"
-          "awslogs-stream-prefix" = "ecs"
-        }
+      labels = {
+        Environment = "production"
+        Workload    = "products-api"
       }
-
-      environment = [
-        {
-          name  = "SPRING_PROFILES_ACTIVE"
-          value = "prod"
-        },
-        # OPTIMIZACIÓN JVM PARA CONTENEDOR DE 512MB
-        {
-          name  = "JAVA_TOOL_OPTIONS"
-          value = "-Xms256m -Xmx352m -XX:+UseG1GC"
-        }
-      ]
-
-      secrets = [
-        {
-          name      = "SPRING_DATA_MONGODB_URI"
-          valueFrom = aws_ssm_parameter.mongo_uri.arn
-        },
-        {
-          name      = "MONGO_URI"
-          valueFrom = aws_ssm_parameter.mongo_uri.arn
-        }
-      ]
     }
-  ])
-}
-
-resource "aws_ecs_service" "app" {
-  name            = "products-api-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = 1
-
-  # USO EXCLUSIVO DE FARGATE SPOT PARA MÁXIMO AHORRO (~70%)
-  capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
-    weight            = 100
   }
 
-  network_configuration {
-    subnets          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-    security_groups  = [aws_security_group.ecs_sg.id]
-    assign_public_ip = false
-  }
+  # Configuración de accesos y seguridad
+  manage_aws_auth_configmap = true
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "products-api"
-    container_port   = 8080
+  tags = {
+    Environment = "production"
+    Terraform   = "true"
   }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.ecs_execution_policy,
-    aws_iam_role_policy.ecs_ssm_inline_policy,
-    aws_lb_listener.http
-  ]
 }
 
 # ============================================================
 # OUTPUTS
 # ============================================================
 
-output "alb_dns_name" {
-  description = "DNS del ALB para usar como Origen en CloudFront"
-  value       = aws_lb.api.dns_name
+output "cluster_endpoint" {
+  description = "Endpoint del Control Plane del clúster de EKS"
+  value       = module.eks.cluster_endpoint
+}
+
+output "cluster_name" {
+  description = "Nombre oficial del clúster EKS para Kubeconfig"
+  value       = module.eks.cluster_name
 }
 
 output "nat_gateway_public_ip" {
