@@ -40,6 +40,12 @@ variable "mongo_database" {
   description = "Nombre de la base de datos MongoDB"
 }
 
+variable "cluster_version" {
+  type        = string
+  default     = "1.30"
+  description = "Versión de Kubernetes para el cluster EKS"
+}
+
 # ============================================================
 # 1. RED (VPC, SUBREDES MULTI-AZ, NAT GATEWAY)
 # ============================================================
