@@ -40,6 +40,12 @@ variable "mongo_database" {
   description = "Nombre de la base de datos MongoDB"
 }
 
+variable "cluster_version" {
+  type        = string
+  default     = "1.30"
+  description = "Versión de Kubernetes para el cluster EKS"
+}
+
 # ============================================================
 # 1. RED (VPC, SUBREDES MULTI-AZ, NAT GATEWAY)
 # ============================================================
@@ -306,145 +312,97 @@ resource "aws_ecr_lifecycle_policy" "products_service_policy" {
 }
 
 # ============================================================
-# 6. APPLICATION LOAD BALANCER (ALB)
+# 6. EKS CLUSTER PARA KUBERNETES
 # ============================================================
 
-resource "aws_lb" "api" {
-  name               = "products-api-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-}
+resource "aws_iam_role" "eks_cluster_role" {
+  name = "products-eks-cluster-role"
 
-resource "aws_lb_target_group" "api" {
-  name        = "products-api-tg"
-  port        = 8080
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "ip"
-
-  health_check {
-    path                = "/api/productos/featured"
-    matcher             = "200-399,404"
-    interval            = 30
-    timeout             = 10
-    healthy_threshold   = 2
-    unhealthy_threshold = 6
-  }
-}
-
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.api.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
-}
-
-# ============================================================
-# 7. ECS CLUSTER & TASK DEFINITION (OPTIMIZADO FARGATE SPOT)
-# ============================================================
-
-resource "aws_ecs_cluster" "main" {
-  name = "products-cluster"
-}
-
-resource "aws_cloudwatch_log_group" "ecs_log_group" {
-  name              = "/ecs/products-service"
-  retention_in_days = 7
-}
-
-resource "aws_ecs_task_definition" "app" {
-  family                   = "products-api"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  
-  # REDUCCIÓN DE RECURSOS: 0.25 vCPU y 512 MB RAM
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name      = "products-api"
-      image     = "${aws_ecr_repository.products_service.repository_url}:${var.image_tag}"
-      essential = true
-
-      portMappings = [
-        {
-          containerPort = 8080
-          hostPort      = 8080
-          protocol      = "tcp"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "eks.amazonaws.com"
         }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs_log_group.name
-          "awslogs-region"        = "us-east-2"
-          "awslogs-stream-prefix" = "ecs"
-        }
+        Action = "sts:AssumeRole"
       }
-
-      environment = [
-        {
-          name  = "SPRING_PROFILES_ACTIVE"
-          value = "prod"
-        },
-        # OPTIMIZACIÓN JVM PARA CONTENEDOR DE 512MB
-        {
-          name  = "JAVA_TOOL_OPTIONS"
-          value = "-Xms256m -Xmx352m -XX:+UseG1GC"
-        }
-      ]
-
-      secrets = [
-        {
-          name      = "SPRING_DATA_MONGODB_URI"
-          valueFrom = aws_ssm_parameter.mongo_uri.arn
-        },
-        {
-          name      = "MONGO_URI"
-          valueFrom = aws_ssm_parameter.mongo_uri.arn
-        }
-      ]
-    }
-  ])
+    ]
+  })
 }
 
-resource "aws_ecs_service" "app" {
-  name            = "products-api-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = 1
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.eks_cluster_role.name
+}
 
-  # USO EXCLUSIVO DE FARGATE SPOT PARA MÁXIMO AHORRO (~70%)
-  capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
-    weight            = 100
+resource "aws_iam_role" "eks_node_group_role" {
+  name = "products-eks-node-group-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_node_group_worker" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.eks_node_group_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_node_group_cni" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.eks_node_group_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_node_group_ecr" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.eks_node_group_role.name
+}
+
+resource "aws_eks_cluster" "main" {
+  name     = "products-cluster"
+  role_arn = aws_iam_role.eks_cluster_role.arn
+  version  = var.cluster_version
+
+  vpc_config {
+    subnet_ids              = [aws_subnet.public_a.id, aws_subnet.public_b.id, aws_subnet.private_a.id, aws_subnet.private_b.id]
+    endpoint_private_access = true
+    endpoint_public_access  = true
+    public_access_cidrs     = ["0.0.0.0/0"]
   }
 
-  network_configuration {
-    subnets          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-    security_groups  = [aws_security_group.ecs_sg.id]
-    assign_public_ip = false
+  depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
+}
+
+resource "aws_eks_node_group" "general" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "general"
+  node_role_arn   = aws_iam_role.eks_node_group_role.arn
+  subnet_ids      = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+
+  scaling_config {
+    desired_size = 1
+    max_size     = 2
+    min_size     = 1
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "products-api"
-    container_port   = 8080
-  }
+  capacity_type  = "ON_DEMAND"
+  instance_types = ["t3.small"]
 
   depends_on = [
-    aws_iam_role_policy_attachment.ecs_execution_policy,
-    aws_iam_role_policy.ecs_ssm_inline_policy,
-    aws_lb_listener.http
+    aws_iam_role_policy_attachment.eks_node_group_worker,
+    aws_iam_role_policy_attachment.eks_node_group_cni,
+    aws_iam_role_policy_attachment.eks_node_group_ecr,
   ]
 }
 
@@ -452,9 +410,19 @@ resource "aws_ecs_service" "app" {
 # OUTPUTS
 # ============================================================
 
-output "alb_dns_name" {
-  description = "DNS del ALB para usar como Origen en CloudFront"
-  value       = aws_lb.api.dns_name
+output "eks_cluster_name" {
+  description = "Nombre del cluster EKS para usar con kubectl"
+  value       = aws_eks_cluster.main.name
+}
+
+output "eks_cluster_endpoint" {
+  description = "Endpoint del cluster EKS"
+  value       = aws_eks_cluster.main.endpoint
+}
+
+output "ecr_repository_url" {
+  description = "URL del repositorio ECR"
+  value       = aws_ecr_repository.products_service.repository_url
 }
 
 output "nat_gateway_public_ip" {
