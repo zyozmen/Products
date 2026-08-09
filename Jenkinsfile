@@ -141,7 +141,7 @@ pipeline {
                           -e MONGO_INITDB_ROOT_USERNAME=growShop \
                           -e MONGO_INITDB_ROOT_PASSWORD=GrowSh0p \
                           -e MONGO_INITDB_DATABASE=${DB_NAME} \
-                          mongo:6.0
+                          mongo:8.0
                     fi
 
                     if docker ps -a --filter "name=^/Products-Api$" --format '{{.Names}}' | grep -Fxq 'Products-Api'; then
