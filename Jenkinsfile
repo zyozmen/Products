@@ -31,10 +31,13 @@ def isMainOrDevelopBranch() {
 }
 
 def getMongoUri() {
-    if (isMainBranch()) {
+    def branchName = getBranchName()
+
+    if (branchName == 'main') {
         return 'mongodb+srv://zyozgke1992_db_user:GrowShop@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority&tls=true&authSource=admin'
     }
-    return 'mongodb://growShop:GrowSh0p@mongo:27017/GrowShop?authSource=admin'
+
+    return 'mongodb+srv://zyozgke1992_db_user:GrowShop@products-db-cluster.9wjnrah.mongodb.net/GrowShopDev?retryWrites=true&w=majority&tls=true&authSource=admin'
 }
 
 pipeline {
@@ -42,7 +45,7 @@ pipeline {
 
     environment {
         AWS_REGION = 'us-east-2'
-        REPO_NAME = 'products-service'
+        REPO_NAME = 'products-api'
         ECR_ACCOUNT_ID = '505231787824'
         ECR_URL = "${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
         IMAGE_TAG = "build-${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
@@ -51,6 +54,9 @@ pipeline {
         MONGO_CONTAINER_NAME = 'mongo'
         MONGO_PORT = '27017'
         DB_NAME = 'GrowShop'
+        DEV_DB_NAME = 'GrowShopDev'
+        K8S_NAMESPACE = 'products'
+        K8S_CLUSTER_NAME = 'products-cluster'
     }
 
     stages {
@@ -94,7 +100,8 @@ pipeline {
                 script {
                     echo "Rama detectada: ${getBranchName()}"
                     def mongoUri = getMongoUri()
-                    withEnv(["SPRING_DATA_MONGODB_URI=${mongoUri}"]) {
+                    def dbName = isMainBranch() ? env.DB_NAME : env.DEV_DB_NAME
+                    withEnv(["SPRING_DATA_MONGODB_URI=${mongoUri}", "SPRING_DATA_MONGODB_DATABASE=${dbName}", "MONGO_DATABASE=${dbName}"]) {
                         sh './mvnw clean test'
                     }
                 }
@@ -184,6 +191,9 @@ pipeline {
                         export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                         export AWS_DEFAULT_REGION=${AWS_REGION}
 
+                        aws ecr describe-repositories --repository-names ${REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1 || \
+                        aws ecr create-repository --repository-name ${REPO_NAME} --region ${AWS_REGION} >/dev/null
+
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
                         docker build -t ${REPO_NAME}:${IMAGE_TAG} .
@@ -194,14 +204,15 @@ pipeline {
             }
         }
 
-        stage('Terraform Provision & Deploy App') {
+        stage('Deploy to EKS') {
             when {
                 expression { isMainBranch() }
             }
             steps {
                 withCredentials([
                     string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY'),
+                    string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI')
                 ]) {
                     sh """
                         export PATH="${WORKSPACE}/.bin:${PATH}"
@@ -209,21 +220,24 @@ pipeline {
                         export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                         export AWS_DEFAULT_REGION=${AWS_REGION}
 
-                        BUCKET_NAME="terraform-state-505231787824"
-                        DYNAMO_TABLE="terraform-locks"
+                        aws eks update-kubeconfig --name ${K8S_CLUSTER_NAME} --region ${AWS_REGION}
 
-                        if ! aws s3api head-bucket --bucket "\$BUCKET_NAME" 2>/dev/null; then
-                            aws s3api create-bucket --bucket "\$BUCKET_NAME" --region ${AWS_REGION} --create-bucket-configuration LocationConstraint=${AWS_REGION}
-                            aws s3api put-bucket-versioning --bucket "\$BUCKET_NAME" --versioning-configuration Status=Enabled
-                        fi
+                        kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-                        if ! aws dynamodb describe-table --table-name "\$DYNAMO_TABLE" 2>/dev/null; then
-                            aws dynamodb create-table --table-name "\$DYNAMO_TABLE" --attribute-definitions AttributeName=LockID,AttributeType=S --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST --region ${AWS_REGION}
-                            aws dynamodb wait table-exists --table-name "\$DYNAMO_TABLE" --region ${AWS_REGION}
-                        fi
+                        kubectl apply -f products-api-configmap.yaml
 
-                        terraform init -input=false
-                        terraform apply -auto-approve -var="image_tag=${IMAGE_TAG}"
+                        kubectl create secret generic backend-secrets \
+                          --namespace ${K8S_NAMESPACE} \
+                          --from-literal=MONGODB_URI="${MONGODB_URI}" \
+                          --from-literal=SPRING_DATA_MONGODB_URI="${MONGODB_URI}" \
+                          --from-literal=MONGO_URI="${MONGODB_URI}" \
+                          --dry-run=client -o yaml | kubectl apply -f -
+
+                        sed -i "s|image: zyozmen/products-api:latest|image: ${ECR_URL}:${IMAGE_TAG}|g" products-api-deployment.yaml
+
+                        kubectl apply -f products-api-deployment.yaml
+                        kubectl apply -f products-api-service.yaml
+                        kubectl rollout status deployment/backend-products-api -n ${K8S_NAMESPACE} --timeout=300s
                     """
                 }
             }

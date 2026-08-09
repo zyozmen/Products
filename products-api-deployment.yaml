@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-products-api
+  namespace: products
+  labels:
+    app: backend-products-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-products-api
+  template:
+    metadata:
+      labels:
+        app: backend-products-api
+    spec:
+      containers:
+      - name: products-api
+        image: zyozmen/products-api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: backend-config
+        - secretRef:
+            name: backend-secrets
+        env:
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: MONGODB_URI
+        - name: SPRING_DATA_MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: MONGODB_URI
+        - name: SPRING_MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: MONGODB_URI
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: MONGODB_URI
+        - name: MONGO_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: MONGO_DATABASE
+        - name: SPRING_DATA_MONGODB_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: SPRING_DATA_MONGODB_DATABASE
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "768Mi"
+            cpu: "750m"
