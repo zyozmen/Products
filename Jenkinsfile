@@ -21,6 +21,12 @@ pipeline {
                 sh 'mvn clean package -DskipTests'
             }
         }
+        stage('Install Tooling') {
+            steps {
+                // La imagen maven:...-alpine solo trae el socket montado, no los clientes
+                sh 'apk add --no-cache aws-cli docker-cli jq'
+            }
+        }
         stage('Build & Push Docker Image') {
             steps {
                 script {
@@ -39,8 +45,6 @@ pipeline {
                     // Clona la Task Definition activa, la apunta al tag inmutable del build
                     // y registra una revision nueva: el despliegue queda trazado a esa imagen exacta.
                     sh """
-                        command -v jq >/dev/null 2>&1 || apk add --no-cache jq
-
                         NEW_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
                         aws ecs describe-task-definition \
