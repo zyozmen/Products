@@ -13,6 +13,7 @@ pipeline {
         IMAGE_TAG      = "${BUILD_NUMBER}"
         CLUSTER_NAME   = 'prod-cluster'
         SERVICE_NAME   = 'prod-backend-service'
+        TASK_FAMILY    = 'prod-backend-service'
     }
     stages {
         stage('Build & Test') {
@@ -35,13 +36,33 @@ pipeline {
         stage('Deploy to ECS Fargate') {
             steps {
                 script {
-                    // Forzamos la actualización del servicio. 
-                    // ECS Fargate se encargará automáticamente de leer la Task Definition actual,
-                    // resolver las referencias a SSM Parameter Store y montarlas como ENV variables en el contenedor Linux.
+                    // Clona la Task Definition activa, la apunta al tag inmutable del build
+                    // y registra una revision nueva: el despliegue queda trazado a esa imagen exacta.
                     sh """
-                        aws ecs update-service --cluster ${CLUSTER_NAME} \
+                        command -v jq >/dev/null 2>&1 || apk add --no-cache jq
+
+                        NEW_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+                        aws ecs describe-task-definition \
+                            --task-definition ${TASK_FAMILY} \
+                            --region ${AWS_REGION} \
+                            --query 'taskDefinition' > current-task-def.json
+
+                        jq --arg IMAGE "\$NEW_IMAGE" \
+                            '.containerDefinitions[0].image = \$IMAGE
+                             | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+                            current-task-def.json > new-task-def.json
+
+                        NEW_REVISION=\$(aws ecs register-task-definition \
+                            --cli-input-json file://new-task-def.json \
+                            --region ${AWS_REGION} \
+                            --query 'taskDefinition.revision' \
+                            --output text)
+
+                        aws ecs update-service \
+                            --cluster ${CLUSTER_NAME} \
                             --service ${SERVICE_NAME} \
-                            --force-new-deployment \
+                            --task-definition ${TASK_FAMILY}:\$NEW_REVISION \
                             --region ${AWS_REGION}
                     """
                 }
