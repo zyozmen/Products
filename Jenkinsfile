@@ -9,7 +9,6 @@ pipeline {
     environment {
         AWS_REGION     = 'us-east-2'
         ECR_REGISTRY   = credentials('ECR_REGISTRY')
-        ECR_REPOSITORY = 'backend-prod'
         IMAGE_TAG      = "${BUILD_NUMBER}"
         CLUSTER_NAME   = 'products-cluster'
         SERVICE_NAME   = 'prod-backend-service'
@@ -37,10 +36,11 @@ pipeline {
                         sh """
                             export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                             export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                            docker build -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest .
-                            docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
-                            docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+                            ECR_HOST="\${ECR_REGISTRY%%/*}"
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin "\$ECR_HOST"
+                            docker build -t ${ECR_REGISTRY}:${IMAGE_TAG} -t ${ECR_REGISTRY}:latest .
+                            docker push ${ECR_REGISTRY}:${IMAGE_TAG}
+                            docker push ${ECR_REGISTRY}:latest
                         """
                     }
                 }
@@ -59,7 +59,7 @@ pipeline {
                             export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                             export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
-                            NEW_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+                            NEW_IMAGE="${ECR_REGISTRY}:${IMAGE_TAG}"
 
                             aws ecs describe-task-definition \
                                 --task-definition ${TASK_FAMILY} \
@@ -90,7 +90,7 @@ pipeline {
     }
     post {
         always {
-            sh 'docker logout ${ECR_REGISTRY}'
+            sh 'docker logout "${ECR_REGISTRY%%/*}"'
         }
     }
 }
