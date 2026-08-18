@@ -8,10 +8,10 @@ pipeline {
     }
     environment {
         AWS_REGION     = 'us-east-2'
-        ECR_REGISTRY   = '123456789012.dkr.ecr.us-east-2.amazonaws.com'
+        ECR_REGISTRY   = credentials('ECR_REGISTRY')
         ECR_REPOSITORY = 'backend-prod'
         IMAGE_TAG      = "${BUILD_NUMBER}"
-        CLUSTER_NAME   = 'prod-cluster'
+        CLUSTER_NAME   = 'products-cluster'
         SERVICE_NAME   = 'prod-backend-service'
         TASK_FAMILY    = 'prod-backend-service'
     }
