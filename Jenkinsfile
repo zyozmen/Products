@@ -62,6 +62,15 @@ pipeline {
                                 --name ${CLUSTER_NAME} \
                                 --region ${AWS_REGION}
 
+                            kubectl get namespace ${K8S_NAMESPACE} >/dev/null 2>&1 || \
+                                kubectl create namespace ${K8S_NAMESPACE}
+
+                            kubectl apply \
+                                -f products-api-configmap.yaml \
+                                -f products-api-secrets.yaml \
+                                -f products-api-deployment.yaml \
+                                -f products-api-service.yaml
+
                             kubectl -n ${K8S_NAMESPACE} set image \
                                 deployment/${DEPLOYMENT_NAME} \
                                 ${CONTAINER_NAME}=${ECR_REGISTRY}:${IMAGE_TAG}
