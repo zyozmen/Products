@@ -77,7 +77,14 @@ pipeline {
 
                             kubectl -n ${K8S_NAMESPACE} rollout status \
                                 deployment/${DEPLOYMENT_NAME} \
-                                --timeout=180s
+                                --timeout=180s || {
+                                    echo 'Rollout fallido. Diagnostico de pods:'
+                                    kubectl -n ${K8S_NAMESPACE} get pods -o wide
+                                    kubectl -n ${K8S_NAMESPACE} describe deployment/${DEPLOYMENT_NAME}
+                                    kubectl -n ${K8S_NAMESPACE} describe pods
+                                    kubectl -n ${K8S_NAMESPACE} get events --sort-by=.lastTimestamp
+                                    exit 1
+                                }
                         """
                     }
                 }
