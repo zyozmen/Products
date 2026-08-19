@@ -65,15 +65,14 @@ pipeline {
                             kubectl get namespace ${K8S_NAMESPACE} >/dev/null 2>&1 || \
                                 kubectl create namespace ${K8S_NAMESPACE}
 
+                            sed "s|image: .*|image: ${ECR_REGISTRY}:${IMAGE_TAG}|" \
+                                products-api-deployment.yaml > deployment-rendered.yaml
+
                             kubectl apply \
                                 -f products-api-configmap.yaml \
                                 -f products-api-secrets.yaml \
-                                -f products-api-deployment.yaml \
+                                -f deployment-rendered.yaml \
                                 -f products-api-service.yaml
-
-                            kubectl -n ${K8S_NAMESPACE} set image \
-                                deployment/${DEPLOYMENT_NAME} \
-                                ${CONTAINER_NAME}=${ECR_REGISTRY}:${IMAGE_TAG}
 
                             kubectl -n ${K8S_NAMESPACE} rollout status \
                                 deployment/${DEPLOYMENT_NAME} \
