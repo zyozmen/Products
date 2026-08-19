@@ -79,6 +79,9 @@ pipeline {
                                 --timeout=180s || {
                                     echo 'Rollout fallido. Diagnostico de pods:'
                                     kubectl -n ${K8S_NAMESPACE} get pods -o wide
+                                    kubectl get nodes -o wide
+                                    kubectl describe nodes
+                                    kubectl get pods --all-namespaces -o wide
                                     kubectl -n ${K8S_NAMESPACE} describe deployment/${DEPLOYMENT_NAME}
                                     kubectl -n ${K8S_NAMESPACE} describe pods
                                     kubectl -n ${K8S_NAMESPACE} get events --sort-by=.lastTimestamp
