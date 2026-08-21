@@ -3,7 +3,7 @@ pipeline {
         docker {
             image 'maven:3.9-eclipse-temurin-21-alpine'
             // Uso estricto del Socket de Docker para agentes efímeros
-            args '-v /var/run/docker.sock:/var/run/docker.sock -v products-maven-repository:/root/.m2'
+            args '--network=products-net -v /var/run/docker.sock:/var/run/docker.sock -v products-maven-repository:/root/.m2'
         }
     }
     environment {
@@ -24,6 +24,7 @@ pipeline {
         stage('E2E Tests') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
+                    sh 'echo "Resolucion DNS de Mongo desde el agente E2E:"; getent hosts mongo'
                     sh 'mvn -B -ntp -Dit.test=ProductoApiIT failsafe:integration-test failsafe:verify'
                 }
             }

@@ -88,6 +88,23 @@ El stage E2E no necesita acceso a Docker para ejecutar las pruebas. El agente Je
 
 El agente usa el volumen Docker nombrado `products-maven-repository` montado en `/root/.m2`. Ese volumen conserva las dependencias y plugins entre ejecuciones del pipeline. La primera ejecución puede descargar dependencias; las siguientes deben reutilizar el cache.
 
+El agente Docker de Jenkins debe ejecutarse en la red `products-net`, que es la red donde está conectado el contenedor `mongo`. El `Jenkinsfile` agrega `--network products-net` al agente Maven, por lo que el hostname `mongo` puede resolverse desde las pruebas E2E.
+
+El stage E2E ejecuta `getent hosts mongo` antes de Maven. Si esa instrucción falla, el job no está usando el Jenkinsfile actualizado o el agente fue creado en una red distinta; en ese caso el problema es de topología Docker y no de la prueba.
+
+Si el contenedor controlador de Jenkins ya está creado fuera de esa red, conectarlo una vez desde el host Docker:
+
+```bash
+docker network connect products-net jenkins-playground
+```
+
+La red debe existir antes de iniciar el pipeline y el contenedor Mongo debe conservar el alias `mongo`:
+
+```bash
+docker network inspect products-net
+docker network inspect products-net | grep mongo
+```
+
 ## Buenas prácticas
 
 - No ejecutar las pruebas E2E contra MongoDB de desarrollo.
