@@ -37,7 +37,11 @@ pipeline {
         stage('Install Tooling') {
             steps {
                 // La imagen maven:...-alpine solo trae el socket montado, no los clientes
-                sh 'apk add --no-cache aws-cli docker-cli kubectl'
+                sh '''
+                    apk add --no-cache aws-cli curl docker-cli kubectl
+                    curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-amd64
+                    chmod +x /usr/local/bin/kind
+                '''
             }
         }
         stage('Build & Push Docker Image') {
@@ -58,6 +62,43 @@ pipeline {
                         """
                     }
                 }
+            }
+        }
+        stage('Deploy to kind (Local)') {
+            steps {
+                sh """
+                    docker network inspect products-net >/dev/null 2>&1 || {
+                        echo 'La red Docker products-net no existe'
+                        exit 1
+                    }
+
+                    if ! kind get clusters | grep -qx '${CLUSTER_NAME}'; then
+                        kind create cluster --name ${CLUSTER_NAME}
+                    fi
+
+                    for node in \$(kind get nodes --name ${CLUSTER_NAME}); do
+                        docker network connect products-net "\$node" 2>/dev/null || true
+                    done
+
+                    kind load docker-image ${ECR_REGISTRY}:${IMAGE_TAG} --name ${CLUSTER_NAME}
+
+                    kubectl --context kind-${CLUSTER_NAME} get namespace ${K8S_NAMESPACE} >/dev/null 2>&1 || \\
+                        kubectl --context kind-${CLUSTER_NAME} create namespace ${K8S_NAMESPACE}
+
+                    sed \\
+                        -e "s|image: .*|image: ${ECR_REGISTRY}:${IMAGE_TAG}|" \\
+                        -e 's|imagePullPolicy: Always|imagePullPolicy: IfNotPresent|' \\
+                        products-api-deployment.yaml > deployment-kind-rendered.yaml
+
+                    kubectl --context kind-${CLUSTER_NAME} apply \\
+                        -f products-api-configmap.yaml \\
+                        -f products-api-secrets.yaml \\
+                        -f deployment-kind-rendered.yaml \\
+                        -f products-api-service.yaml
+
+                    kubectl --context kind-${CLUSTER_NAME} -n ${K8S_NAMESPACE} rollout status \\
+                        deployment/${DEPLOYMENT_NAME} --timeout=180s
+                """
             }
         }
         stage('Deploy to EKS') {
