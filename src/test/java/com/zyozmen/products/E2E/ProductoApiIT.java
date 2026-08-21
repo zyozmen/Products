@@ -5,6 +5,10 @@ import org.junit.jupiter.api.Test;
 
 import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
@@ -13,29 +17,18 @@ import static org.hamcrest.Matchers.notNullValue;
 
 class ProductoApiIT extends ApiIntegrationTest {
 
-    private static final String VALID_PRODUCT = """
-            {
-              "name": "Producto E2E",
-              "slug": "producto-e2e",
-              "description": "Producto creado por una prueba end to end",
-              "sku": "E2E-001",
-              "status": "active",
-                            "categories": [
-                                {
-                                    "category_id": 1,
-                                    "name": "Electronics",
-                                    "slug": "electronics"
-                                }
-                            ],
-              "price": {
-                "current": 99.99,
-                "original": 129.99,
-                "currency": "USD",
-                "discount_percentage": 23,
-                "tax_inclusive": true
-              }
+    private static final String VALID_PRODUCT = loadResource("/valid-product.json");
+
+    private static String loadResource(String resourcePath) {
+        try (InputStream resource = ProductoApiIT.class.getResourceAsStream(resourcePath)) {
+            if (resource == null) {
+                throw new IllegalStateException("Test resource not found: " + resourcePath);
             }
-            """;
+            return new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not read test resource: " + resourcePath, exception);
+        }
+    }
 
     @Test
     void shouldCreateAndRetrieveProductThroughHttp() {
@@ -78,19 +71,7 @@ class ProductoApiIT extends ApiIntegrationTest {
 
     @Test
     void shouldReturnBadRequestWhenProductHasNoCategories() {
-                String productWithoutCategories = """
-                                {
-                                    "name": "Producto sin categoría",
-                                    "slug": "producto-sin-categoria",
-                                    "sku": "E2E-NO-CATEGORY",
-                                    "status": "active",
-                                    "categories": [],
-                                    "price": {
-                                        "current": 99.99,
-                                        "currency": "USD"
-                                    }
-                                }
-                                """;
+        String productWithoutCategories = loadResource("/product-without-categories.json");
 
         given()
                 .contentType(ContentType.JSON)

@@ -1,0 +1,11 @@
+{
+  "name": "Producto sin categoría",
+  "slug": "producto-sin-categoria",
+  "sku": "E2E-NO-CATEGORY",
+  "status": "active",
+  "categories": [],
+  "price": {
+    "current": 99.99,
+    "currency": "USD"
+  }
+}

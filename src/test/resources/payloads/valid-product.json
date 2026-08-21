@@ -1,0 +1,21 @@
+{
+  "name": "Producto E2E",
+  "slug": "producto-e2e",
+  "description": "Producto creado por una prueba end to end",
+  "sku": "E2E-001",
+  "status": "active",
+  "categories": [
+    {
+      "category_id": 1,
+      "name": "Electronics",
+      "slug": "electronics"
+    }
+  ],
+  "price": {
+    "current": 99.99,
+    "original": 129.99,
+    "currency": "USD",
+    "discount_percentage": 23,
+    "tax_inclusive": true
+  }
+}
