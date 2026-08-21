@@ -16,9 +16,15 @@ pipeline {
         CONTAINER_NAME = 'products-api'
     }
     stages {
-        stage('Build & Test') {
+        stage('Unit Tests') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                sh 'mvn clean test'
+            }
+        }
+        stage('E2E Tests') {
+            steps {
+                sh 'mvn -DskipTests package'
+                sh 'mvn -Dit.test=ProductoApiIT failsafe:integration-test failsafe:verify'
             }
         }
         stage('Install Tooling') {
