@@ -1,6 +1,8 @@
 package com.zyozmen.products.adapter.in.web.dto;
 
 import org.junit.jupiter.api.Test;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -8,6 +10,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ProductoRequestDTOTest {
+
+        private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @Test
     void builderShouldPopulateFieldsAndAccessors() {
@@ -64,4 +68,19 @@ class ProductoRequestDTOTest {
         assertThat(dto.getRecentComments()).containsExactly(comment);
         assertThat(dto.getHasMoreComments()).isTrue();
     }
+
+        @Test
+        void categoriesShouldRequireAtLeastOneCategory() {
+                ProductoRequestDTO dto = ProductoRequestDTO.builder()
+                                .name("Product")
+                                .slug("product")
+                                .sku("SKU-001")
+                                .status("active")
+                                .categories(List.of())
+                                .build();
+
+                assertThat(validator.validateProperty(dto, "categories"))
+                                .extracting("message")
+                                .contains("El producto debe tener al menos una categoría");
+        }
 }
