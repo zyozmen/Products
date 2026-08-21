@@ -8,6 +8,7 @@ import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
 
 class ProductoApiIT extends ApiIntegrationTest {
@@ -98,7 +99,7 @@ class ProductoApiIT extends ApiIntegrationTest {
                 .post("/api/productos")
             .then()
                 .statusCode(400)
-                .body("validationErrors", containsString("[El producto debe tener al menos una categoría]"));
+                .body("validationErrors", hasItem("El producto debe tener al menos una categoría"));
     }
 
     @Test
