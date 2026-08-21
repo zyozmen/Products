@@ -3,6 +3,7 @@ package com.zyozmen.products.adapter.in.web.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,7 +41,8 @@ public class ProductoRequestDTO {
     @Schema(description = "Estado del producto", example = "active")
     private String status;
 
-    @Schema(description = "Listado de categorías asociadas")
+    @NotEmpty(message = "El producto debe tener al menos una categoría")
+    @Schema(description = "Listado de categorías asociadas; debe contener al menos una categoría")
     private List<CategoryDTO> categories;
 
     @NotNull(message = "La estructura de precio del producto es obligatoria")
