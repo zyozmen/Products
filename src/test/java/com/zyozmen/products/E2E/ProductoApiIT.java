@@ -98,7 +98,7 @@ class ProductoApiIT extends ApiIntegrationTest {
                 .post("/api/productos")
             .then()
                 .statusCode(400)
-                .body("validationErrors", containsString("al menos una categoría"));
+                .body("validationErrors", containsString("El producto debe tener al menos una categoría"));
     }
 
     @Test
