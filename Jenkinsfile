@@ -3,7 +3,7 @@ pipeline {
         docker {
             image 'maven:3.9-eclipse-temurin-21-alpine'
             // Uso estricto del Socket de Docker para agentes efímeros
-            args '-v /var/run/docker.sock:/var/run/docker.sock -v /root/.m2:/root/.m2'
+            args '-v /var/run/docker.sock:/var/run/docker.sock -v products-maven-repository:/root/.m2'
         }
     }
     environment {
@@ -18,13 +18,19 @@ pipeline {
     stages {
         stage('Unit Tests') {
             steps {
-                sh 'mvn clean test'
+                sh 'mvn -B -ntp clean test'
             }
         }
         stage('E2E Tests') {
             steps {
-                sh 'mvn -DskipTests package'
-                sh 'mvn -Dit.test=ProductoApiIT failsafe:integration-test failsafe:verify'
+                timeout(time: 10, unit: 'MINUTES') {
+                    sh 'mvn -B -ntp -Dit.test=ProductoApiIT failsafe:integration-test failsafe:verify'
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'target/failsafe-reports/*.xml'
+                }
             }
         }
         stage('Install Tooling') {
