@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: backend-config
+  name: products-api-config
   namespace: products
 data:
   SERVER_PORT: "8080"

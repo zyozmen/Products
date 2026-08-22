@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: backend-products-api
+  name: products-api
   namespace: products
   labels:
-    app: backend-products-api
+    app: products-api
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: backend-products-api
+      app: products-api
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: backend-products-api
+        app: products-api
     spec:
       containers:
       - name: products-api
@@ -25,39 +25,39 @@ spec:
         - containerPort: 8080
         envFrom:
         - configMapRef:
-            name: backend-config
+            name: products-api-config
         - secretRef:
-            name: backend-secrets
+            name: products-api-secrets
         env:
         - name: MONGODB_URI
           valueFrom:
             secretKeyRef:
-              name: backend-secrets
+              name: products-api-secrets
               key: MONGODB_URI
         - name: SPRING_DATA_MONGODB_URI
           valueFrom:
             secretKeyRef:
-              name: backend-secrets
+              name: products-api-secrets
               key: MONGODB_URI
         - name: SPRING_MONGODB_URI
           valueFrom:
             secretKeyRef:
-              name: backend-secrets
+              name: products-api-secrets
               key: MONGODB_URI
         - name: MONGO_URI
           valueFrom:
             secretKeyRef:
-              name: backend-secrets
+              name: products-api-secrets
               key: MONGODB_URI
         - name: MONGO_DATABASE
           valueFrom:
             configMapKeyRef:
-              name: backend-config
+              name: products-api-config
               key: MONGO_DATABASE
         - name: SPRING_DATA_MONGODB_DATABASE
           valueFrom:
             configMapKeyRef:
-              name: backend-config
+              name: products-api-config
               key: SPRING_DATA_MONGODB_DATABASE
         resources:
           requests:
