@@ -149,7 +149,7 @@ pipeline {
     }
     post {
         always {
-            sh 'docker logout "${ECR_REGISTRY%%/*}"'
+            sh 'command -v docker >/dev/null 2>&1 && docker logout "${ECR_REGISTRY%%/*}" || true'
         }
     }
 }

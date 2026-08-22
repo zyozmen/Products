@@ -17,7 +17,7 @@ import static org.hamcrest.Matchers.notNullValue;
 
 class ProductoApiIT extends ApiIntegrationTest {
 
-    private static final String VALID_PRODUCT = loadResource("/valid-product.json");
+    private static final String VALID_PRODUCT = loadResource("/payloads/valid-product.json");
 
     private static String loadResource(String resourcePath) {
         try (InputStream resource = ProductoApiIT.class.getResourceAsStream(resourcePath)) {
@@ -71,7 +71,7 @@ class ProductoApiIT extends ApiIntegrationTest {
 
     @Test
     void shouldReturnBadRequestWhenProductHasNoCategories() {
-        String productWithoutCategories = loadResource("/product-without-categories.json");
+        String productWithoutCategories = loadResource("/payloads/product-without-categories.json");
 
         given()
                 .contentType(ContentType.JSON)
