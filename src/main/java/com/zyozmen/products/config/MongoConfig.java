@@ -9,9 +9,6 @@ import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.util.StringUtils;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-
 @Configuration
 public class MongoConfig extends AbstractMongoClientConfiguration {
 
@@ -46,31 +43,28 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
     }
 
     private String normalizeAtlasUri(String rawUri) {
-        try {
-            URI parsedUri = new URI(rawUri);
-            String query = parsedUri.getQuery();
-            StringBuilder normalized = new StringBuilder(rawUri);
+        // Se busca el '?' de forma textual: java.net.URI falla si el password trae caracteres reservados (@, %, /, etc.)
+        int queryIndex = rawUri.indexOf('?');
+        String query = queryIndex >= 0 ? rawUri.substring(queryIndex + 1) : "";
+        StringBuilder normalized = new StringBuilder(rawUri);
 
-            if (!StringUtils.hasText(query)) {
-                normalized.append("?retryWrites=true&w=majority&tls=true&authSource=admin");
-            } else {
-                if (!query.contains("retryWrites=")) {
-                    normalized.append("&retryWrites=true");
-                }
-                if (!query.contains("w=")) {
-                    normalized.append("&w=majority");
-                }
-                if (!query.contains("tls=")) {
-                    normalized.append("&tls=true");
-                }
-                if (!query.contains("authSource=")) {
-                    normalized.append("&authSource=admin");
-                }
+        if (!StringUtils.hasText(query)) {
+            normalized.append("?retryWrites=true&w=majority&tls=true&authSource=admin");
+        } else {
+            if (!query.contains("retryWrites=")) {
+                normalized.append("&retryWrites=true");
             }
-            return normalized.toString();
-        } catch (URISyntaxException ex) {
-            throw new IllegalStateException("La URI de MongoDB no tiene un formato válido", ex);
+            if (!query.contains("w=")) {
+                normalized.append("&w=majority");
+            }
+            if (!query.contains("tls=")) {
+                normalized.append("&tls=true");
+            }
+            if (!query.contains("authSource=")) {
+                normalized.append("&authSource=admin");
+            }
         }
+        return normalized.toString();
     }
 
     @Bean
