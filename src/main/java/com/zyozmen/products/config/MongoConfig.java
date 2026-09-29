@@ -8,12 +8,24 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.util.StringUtils;
+import org.springframework.web.util.UriUtils;
+
+import java.nio.charset.StandardCharsets;
 
 @Configuration
 public class MongoConfig extends AbstractMongoClientConfiguration {
 
     @Value("${spring.data.mongodb.uri:}")
     private String uri;
+
+    @Value("${MONGO_HOST:${MONGODB_HOST:}}")
+    private String atlasHost;
+
+    @Value("${MONGO_USERNAME:${MONGODB_USERNAME:}}")
+    private String atlasUsername;
+
+    @Value("${MONGO_PASSWORD:${MONGODB_PASSWORD:}}")
+    private String atlasPassword;
 
     @Value("${spring.data.mongodb.database:GrowShop}")
     private String database;
@@ -25,6 +37,15 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
 
     @Override
     public MongoClient mongoClient() {
+        // Se prefiere ensamblar la URI con usuario/password por separado: evita que un password con
+        // caracteres reservados (@, :, /, etc.) desplace el '@' que separa credenciales del host.
+        if (StringUtils.hasText(atlasHost) && StringUtils.hasText(atlasUsername) && StringUtils.hasText(atlasPassword)) {
+            String encodedUser = UriUtils.encode(atlasUsername.trim(), StandardCharsets.UTF_8);
+            String encodedPassword = UriUtils.encode(atlasPassword.trim(), StandardCharsets.UTF_8);
+            String builtUri = "mongodb+srv://" + encodedUser + ":" + encodedPassword + "@" + atlasHost.trim();
+            return MongoClients.create(normalizeAtlasUri(builtUri));
+        }
+
         String resolvedUri = StringUtils.trimWhitespace(uri);
 
         if (!StringUtils.hasText(resolvedUri) || resolvedUri.contains("<db_password>") || resolvedUri.contains("db_password") || resolvedUri.contains("REPLACE_ME")) {
