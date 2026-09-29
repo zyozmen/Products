@@ -52,28 +52,195 @@ Para construir y ejecutar el proyecto localmente se requiere:
 - MongoDB ejecutándose y accesible desde el host o desde la red Docker configurada.
 
 ## 6. Configuración de entorno
-La aplicación usa configuración de MongoDB definida en application.properties y puede sobrescribirse al ejecutar la aplicación:
+La aplicación usa configuración de MongoDB definida en application.properties y puede sobrescribirse al ejecutar la aplicación.
 
-- spring.data.mongodb.host (default: 127.0.0.1)
-- spring.data.mongodb.port (default: 27017)
-- spring.data.mongodb.database (default: GrowShop)
-- spring.data.mongodb.username (default: growShop)
-- spring.data.mongodb.password (default: GrowSh0p)
-- spring.data.mongodb.authentication-database (default: admin)
+### 6.1 MongoDB local / fallback
+Se mantiene un fallback local para que el proyecto pueda arrancar sin depender de una conexión Atlas en desarrollo inicial:
 
-Ejemplo en PowerShell usando variables de entorno reconocidas por Spring Boot:
-
-```powershell
-$env:SPRING_DATA_MONGODB_HOST="127.0.0.1"
-$env:SPRING_DATA_MONGODB_PORT="27017"
-$env:SPRING_DATA_MONGODB_DATABASE="GrowShop"
-$env:SPRING_DATA_MONGODB_USERNAME="growShop"
-$env:SPRING_DATA_MONGODB_PASSWORD="GrowSh0p"
-$env:SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE="admin"
+```properties
+spring.data.mongodb.uri=${SPRING_DATA_MONGODB_URI:${MONGO_URI:mongodb://localhost:27017/GrowShop?authSource=admin}}
+spring.data.mongodb.database=${MONGO_DATABASE:GrowShop}
 ```
 
-Nota: el pipeline de Jenkins inyecta la URI de MongoDB mediante la propiedad `spring.data.mongodb.uri` durante la fase de pruebas.
+Esto evita que el proyecto falle al iniciar si la variable de entorno `SPRING_DATA_MONGODB_URI` no está definida.
 
+### 6.2 MongoDB Atlas
+Para una conexión real a Atlas, se debe definir la URI completa con usuario y contraseña reales:
+
+```powershell
+$env:SPRING_DATA_MONGODB_URI="mongodb+srv://zyozgke1992_db_user:<PASSWORD_REAL>@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority&tls=true&authSource=admin&appName=Products-db-cluster"
+$env:MONGO_URI=$env:SPRING_DATA_MONGODB_URI
+$env:MONGO_DATABASE="GrowShop"
+```
+
+> Es importante no dejar placeholders como `<db_password>` o `db_password` en la URI. Si el valor no es válido, la app no podrá autenticar contra MongoDB.
+
+### 6.3 CORS para desarrollo local
+Se agregó una configuración global de CORS para permitir peticiones del frontend durante pruebas locales:
+
+```java
+registry.addMapping("/**")
+    .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+    .allowedHeaders("*")
+    .allowCredentials(true)
+    .allowedOriginPatterns("http://localhost:[*]", "http://127.0.0.1:[*]");
+```
+
+Esto evita el bloqueo del navegador cuando se consume la API desde un proyecto frontend en `localhost`.
+
+## 7. Cambios recientes aplicados
+Se documentan aquí los ajustes realizados para dejar el proyecto operativo con Maven y pruebas locales:
+
+- Ajuste del fallback de MongoDB para que la app no falle si no hay conexión Atlas configurada.
+- Validación de URIs con placeholder y uso de `mongodb://localhost:27017/...` como valor por defecto en desarrollo.
+- Configuración global de CORS para aceptar peticiones desde frontend local en `localhost`.
+- Soporte explícito para `SPRING_DATA_MONGODB_URI` y `MONGO_URI` como variables de entorno principales.
+- Seguimiento de errores de autenticación MongoDB con mensajes más claros para depuración.
+
+## 8. Proceso de construcción
+### 8.1 Limpieza y compilación
+Desde la raíz del proyecto:
+
+```bash
+mvn clean compile
+```
+
+Resultado esperado:
+- Resolución de dependencias.
+- Compilación de clases en target/classes.
+
+### 8.2 Ejecución de pruebas
+```bash
+mvn test
+```
+
+Resultado esperado:
+- Ejecución de pruebas definidas en src/test/java.
+- Reportes en target/surefire-reports.
+
+### 8.3 Empaquetado
+```bash
+mvn clean package
+```
+
+Resultado esperado:
+- Generación del artefacto ejecutable en target/.
+
+## 9. Cómo usar el proyecto
+### 9.1 Ejecutar la aplicación
+Opción A (recomendada en desarrollo):
+
+```bash
+mvn spring-boot:run
+```
+
+Opción B (jar empaquetado):
+
+```bash
+java -jar target/products-0.0.1-SNAPSHOT.jar
+```
+
+La API queda disponible en:
+- http://localhost:8080
+
+También se puede construir y ejecutar el contenedor con Java 21:
+
+```bash
+docker build -t products-api:local .
+docker run --rm -p 8080:8080 products-api:local
+```
+
+### 9.2 Documentación interactiva
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- OpenAPI JSON: http://localhost:8080/v3/api-docs
+
+### 9.3 Endpoints principales (CRUD)
+Base path: /api/productos
+
+1. Listar productos
+```http
+GET /api/productos
+```
+
+2. Obtener producto por ID
+```http
+GET /api/productos/{id}
+```
+
+3. Crear producto
+```http
+POST /api/productos
+Content-Type: application/json
+
+{
+  "nombre": "Laptop Dell XPS 15",
+  "descripcion": "Procesador Intel Core i7, 16GB RAM",
+  "precio": 1299.99
+}
+```
+
+4. Actualizar producto
+```http
+PUT /api/productos/{id}
+Content-Type: application/json
+
+{
+  "nombre": "Laptop Dell XPS 15 (2026)",
+  "descripcion": "32GB RAM, SSD 1TB",
+  "precio": 1499.99
+}
+```
+
+5. Eliminar producto
+```http
+DELETE /api/productos/{id}
+```
+
+### 9.4 Ejemplos con curl
+Crear:
+```bash
+curl -X POST "http://localhost:8080/api/productos" \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Teclado Mecanico","descripcion":"Switch Blue","precio":89.90}'
+```
+
+Listar:
+```bash
+curl "http://localhost:8080/api/productos"
+```
+
+## 10. Despliegue con Terraform y AWS
+El proyecto incluye una configuración base de Terraform para desplegar el servicio en Amazon ECS Fargate.
+
+### 10.1 Recursos provisionados
+- Repositorio ECR para almacenar las imágenes Docker del servicio.
+- Política de ciclo de vida para eliminar imágenes sin tag y conservar solo las más recientes.
+- Cluster ECS, definición de tarea y servicio Fargate para ejecutar la aplicación.
+- Grupo de logs de CloudWatch, security group y rol de IAM para la ejecución de tareas.
+- Backend remoto en S3 con bloqueo en DynamoDB para guardar el estado de Terraform.
+
+### 10.2 Comandos de despliegue
+Desde la raíz del proyecto:
+
+```bash
+terraform init
+terraform validate
+terraform plan -var="image_tag=v1.0.0"
+terraform apply -var="image_tag=v1.0.0"
+```
+
+> El valor `image_tag` indica qué versión de la imagen ECR se desplegará en ECS.
+
+## 11. Destrucción y limpieza
+Para eliminar la infraestructura creada por Terraform se puede ejecutar:
+
+```bash
+terraform destroy -auto-approve -var="image_tag=cleanup"
+```
+
+luego se puede usar el script de limpieza preparado para AWS:
+
+```bash
 ## 7. Proceso de construcción
 ### 7.1 Limpieza y compilación
 Desde la raíz del proyecto:

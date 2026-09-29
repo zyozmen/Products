@@ -28,19 +28,21 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
 
     @Override
     public MongoClient mongoClient() {
-        if (!StringUtils.hasText(uri)) {
-            throw new IllegalStateException("La configuración de MongoDB debe definir spring.data.mongodb.uri apuntando al cluster de Atlas.");
+        String resolvedUri = StringUtils.trimWhitespace(uri);
+
+        if (!StringUtils.hasText(resolvedUri) || resolvedUri.contains("<db_password>") || resolvedUri.contains("db_password") || resolvedUri.contains("REPLACE_ME")) {
+            resolvedUri = "mongodb://localhost:27017/GrowShop?authSource=admin";
         }
 
-        if (uri.startsWith("mongodb://") && (uri.contains("localhost") || uri.contains("127.0.0.1") || uri.contains("mongo"))) {
-            return MongoClients.create(uri);
+        if (resolvedUri.startsWith("mongodb://") && (resolvedUri.contains("localhost") || resolvedUri.contains("127.0.0.1") || resolvedUri.contains("mongo"))) {
+            return MongoClients.create(resolvedUri);
         }
 
-        if (!uri.startsWith("mongodb+srv://")) {
-            throw new IllegalStateException("La URI de MongoDB debe usar el formato mongodb+srv:// para Atlas o mongodb:// para desarrollo local.");
+        if (resolvedUri.startsWith("mongodb+srv://")) {
+            return MongoClients.create(normalizeAtlasUri(resolvedUri));
         }
 
-        return MongoClients.create(normalizeAtlasUri(uri));
+        throw new IllegalStateException("La URI de MongoDB debe usar el formato mongodb+srv:// para Atlas o mongodb:// para desarrollo local.");
     }
 
     private String normalizeAtlasUri(String rawUri) {
