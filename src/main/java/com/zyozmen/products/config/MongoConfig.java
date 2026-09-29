@@ -45,12 +45,21 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
     private String normalizeAtlasUri(String rawUri) {
         // Se busca el '?' de forma textual: java.net.URI falla si el password trae caracteres reservados (@, %, /, etc.)
         int queryIndex = rawUri.indexOf('?');
+        String base = queryIndex >= 0 ? rawUri.substring(0, queryIndex) : rawUri;
         String query = queryIndex >= 0 ? rawUri.substring(queryIndex + 1) : "";
-        StringBuilder normalized = new StringBuilder(rawUri);
+
+        // El driver exige un '/' entre el host y las opciones (mongodb+srv://host/?opt=...)
+        int schemeEnd = base.indexOf("://") + 3;
+        if (base.indexOf('/', schemeEnd) < 0) {
+            base = base + "/";
+        }
+
+        StringBuilder normalized = new StringBuilder(base).append('?');
 
         if (!StringUtils.hasText(query)) {
-            normalized.append("?retryWrites=true&w=majority&tls=true&authSource=admin");
+            normalized.append("retryWrites=true&w=majority&tls=true&authSource=admin");
         } else {
+            normalized.append(query);
             if (!query.contains("retryWrites=")) {
                 normalized.append("&retryWrites=true");
             }
