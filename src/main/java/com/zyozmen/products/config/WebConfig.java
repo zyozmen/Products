@@ -18,7 +18,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
-                .map(String::trim)
+                .map(String::trim) 
                 .filter(s -> !s.isEmpty())
                 .toList();
 
