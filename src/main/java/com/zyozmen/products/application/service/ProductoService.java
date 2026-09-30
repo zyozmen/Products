@@ -111,6 +111,24 @@ public class ProductoService implements ProductoUseCase {
 
     @Override
     @Transactional
+    public Producto guardarImagenes(Long idProducto, String fotoPrincipal, List<String> fotosSecundarias) {
+        Producto existente = productoRepositoryPort.findById(idProducto)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Producto no encontrado con ID: " + idProducto));
+
+        if (fotoPrincipal != null) {
+            existente.setFotoPrincipal(fotoPrincipal);
+        }
+        if (fotosSecundarias != null && !fotosSecundarias.isEmpty()) {
+            existente.setFotosSecundarias(fotosSecundarias);
+        }
+        existente.setUpdatedAt(Instant.now());
+
+        return productoRepositoryPort.save(existente);
+    }
+
+    @Override
+    @Transactional
     public void eliminar(Long id) {
         if (!productoRepositoryPort.existsById(id)) {
             throw new ResourceNotFoundException("Producto no encontrado con ID: " + id);

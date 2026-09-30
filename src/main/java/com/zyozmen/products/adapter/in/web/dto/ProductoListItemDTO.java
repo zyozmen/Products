@@ -46,4 +46,8 @@ public class ProductoListItemDTO {
     @JsonProperty("total_reviews")
     @Schema(description = "Total de reseñas", example = "128")
     private Integer totalReviews;
+
+    @JsonProperty("foto_principal")
+    @Schema(description = "Foto principal del producto en formato Base64", example = "data:image/png;base64,...")
+    private String fotoPrincipal;
 }

@@ -20,11 +20,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
@@ -184,5 +188,76 @@ public class ProductoController {
                 .map(productoWebMapper::toCategoryDTO)
                 .toList();
         return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Almacenar imágenes de un producto (foto principal y hasta 5 secundarias)")
+    @ApiResponse(responseCode = "200", description = "Imágenes guardadas exitosamente")
+    @ApiResponse(responseCode = "400", description = "Límite de imágenes excedido o tipo de archivo inválido")
+    @ApiResponse(responseCode = "404", description = "Producto no encontrado")
+    @PostMapping(value = "/{idProducto}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ProductoResponseDTO> guardarImagenes(
+            @Parameter(description = "ID del producto", example = "1")
+            @PathVariable Long idProducto,
+            @RequestParam(name = "fotoPrincipal", required = false) MultipartFile fotoPrincipal,
+            @RequestParam(name = "fotosSecundarias", required = false) List<MultipartFile> fotosSecundarias) {
+
+        String fotoPrincipalBase64 = validateAndConvertFotoPrincipal(fotoPrincipal);
+        List<String> fotosSecundariasBase64 = validateAndConvertFotosSecundarias(fotosSecundarias);
+
+        Producto actualizado = productoUseCase.guardarImagenes(idProducto, fotoPrincipalBase64, fotosSecundariasBase64);
+        return ResponseEntity.ok(productoWebMapper.toResponseDTO(actualizado));
+    }
+
+    private String validateAndConvertFotoPrincipal(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return null;
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new IllegalArgumentException("La foto principal debe ser una imagen válida.");
+        }
+        try {
+            return convertToBase64DataUrl(file);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("No se pudo leer el archivo de la foto principal.");
+        }
+    }
+
+    private List<String> validateAndConvertFotosSecundarias(List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) {
+            return List.of();
+        }
+
+        long count = files.stream().filter(f -> f != null && !f.isEmpty()).count();
+        if (count > 5) {
+            throw new IllegalArgumentException("No se permiten más de 5 fotos secundarias.");
+        }
+
+        List<String> result = new ArrayList<>();
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) {
+                continue;
+            }
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                throw new IllegalArgumentException("Todas las fotos secundarias deben ser imágenes válidas.");
+            }
+            try {
+                result.add(convertToBase64DataUrl(file));
+            } catch (IOException e) {
+                throw new IllegalArgumentException("No se pudo leer uno de los archivos de fotos secundarias.");
+            }
+        }
+        return result;
+    }
+
+    private String convertToBase64DataUrl(MultipartFile file) throws IOException {
+        String contentType = file.getContentType();
+        if (contentType == null) {
+            contentType = "image/jpeg";
+        }
+        byte[] bytes = file.getBytes();
+        String base64 = Base64.getEncoder().encodeToString(bytes);
+        return "data:" + contentType + ";base64," + base64;
     }
 }

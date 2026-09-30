@@ -39,6 +39,8 @@ public interface ProductoUseCase {
 
     Producto actualizar(Long id, Producto producto);
 
+    Producto guardarImagenes(Long idProducto, String fotoPrincipal, List<String> fotosSecundarias);
+
     void eliminar(Long id);
 
     List<Producto> listarDestacados();

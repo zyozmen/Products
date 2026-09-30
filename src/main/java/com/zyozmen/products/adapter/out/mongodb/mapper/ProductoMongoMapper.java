@@ -44,6 +44,8 @@ public class ProductoMongoMapper {
                 .hasMoreComments(document.getHasMoreComments())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
+                .fotoPrincipal(document.getFotoPrincipal())
+                .fotosSecundarias(document.getFotosSecundarias())
                 .build();
     }
 
@@ -62,6 +64,8 @@ public class ProductoMongoMapper {
                 .hasMoreComments(domain.getHasMoreComments())
                 .createdAt(domain.getCreatedAt()== null ? Instant.now(): domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt() == null ? Instant.now(): domain.getUpdatedAt())
+                .fotoPrincipal(domain.getFotoPrincipal())
+                .fotosSecundarias(domain.getFotosSecundarias())
                 .build();
     }
 
@@ -80,6 +84,8 @@ public class ProductoMongoMapper {
                 .hasMoreComments(domain.getHasMoreComments())
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
+                .fotoPrincipal(domain.getFotoPrincipal())
+                .fotosSecundarias(domain.getFotosSecundarias())
                 .build();
     }
 

@@ -20,14 +20,18 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -282,5 +286,65 @@ class ProductoControllerTest {
         assertThat(response.getBody()).containsExactly(categoryDTO);
         verify(productoUseCase).listarCategorias();
         verify(productoWebMapper).toCategoryDTO(category);
+    }
+
+    @Test
+    void guardarImagenesWithValidDataShouldSaveAndReturnMappedResponse() throws IOException {
+        MultipartFile fotoPrincipal = mock(MultipartFile.class);
+        when(fotoPrincipal.isEmpty()).thenReturn(false);
+        when(fotoPrincipal.getContentType()).thenReturn("image/png");
+        when(fotoPrincipal.getBytes()).thenReturn(new byte[]{1, 2, 3});
+
+        MultipartFile fotoSecundaria = mock(MultipartFile.class);
+        when(fotoSecundaria.isEmpty()).thenReturn(false);
+        when(fotoSecundaria.getContentType()).thenReturn("image/jpeg");
+        when(fotoSecundaria.getBytes()).thenReturn(new byte[]{4, 5, 6});
+
+        Producto mockActualizado = Producto.builder()
+                .id("1")
+                .fotoPrincipal("data:image/png;base64,AQID")
+                .fotosSecundarias(List.of("data:image/jpeg;base64,BBUF"))
+                .build();
+
+        ProductoResponseDTO responseDTO = ProductoResponseDTO.builder()
+                .id("1")
+                .fotoPrincipal("data:image/png;base64,AQID")
+                .fotosSecundarias(List.of("data:image/jpeg;base64,BBUF"))
+                .build();
+
+        when(productoUseCase.guardarImagenes(eq(1L), any(), anyList())).thenReturn(mockActualizado);
+        when(productoWebMapper.toResponseDTO(mockActualizado)).thenReturn(responseDTO);
+
+        ResponseEntity<ProductoResponseDTO> response = productoController.guardarImagenes(1L, fotoPrincipal, List.of(fotoSecundaria));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(responseDTO);
+    }
+
+    @Test
+    void guardarImagenesShouldThrowExceptionWhenSecondaryImagesExceedFive() {
+        List<MultipartFile> list = List.of(
+                mock(MultipartFile.class),
+                mock(MultipartFile.class),
+                mock(MultipartFile.class),
+                mock(MultipartFile.class),
+                mock(MultipartFile.class),
+                mock(MultipartFile.class)
+        );
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            productoController.guardarImagenes(1L, null, list);
+        });
+    }
+
+    @Test
+    void guardarImagenesShouldThrowExceptionWhenMainImageIsNotValidType() {
+        MultipartFile invalidFile = mock(MultipartFile.class);
+        when(invalidFile.isEmpty()).thenReturn(false);
+        when(invalidFile.getContentType()).thenReturn("application/pdf");
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            productoController.guardarImagenes(1L, invalidFile, null);
+        });
     }
 }

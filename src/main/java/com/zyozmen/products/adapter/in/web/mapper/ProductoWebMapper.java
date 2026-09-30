@@ -55,6 +55,8 @@ public class ProductoWebMapper {
                 .recentComments(toRecentCommentDTOList(producto.getRecentComments()))
                 .createdAt(producto.getCreatedAt())
                 .updatedAt(producto.getUpdatedAt())
+                .fotoPrincipal(producto.getFotoPrincipal())
+                .fotosSecundarias(producto.getFotosSecundarias())
                 .build();
     }
 
@@ -69,6 +71,7 @@ public class ProductoWebMapper {
                 .priceCurrency(producto.getPrice() == null ? null : producto.getPrice().getCurrency())
                 .averageRating(producto.getRanking() == null ? null : producto.getRanking().getAverageRating())
                 .totalReviews(producto.getRanking() == null ? null : producto.getRanking().getTotalReviews())
+                .fotoPrincipal(producto.getFotoPrincipal())
                 .build();
     }
 
