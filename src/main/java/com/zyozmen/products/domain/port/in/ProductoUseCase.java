@@ -39,7 +39,7 @@ public interface ProductoUseCase {
 
     Producto actualizar(Long id, Producto producto);
 
-    Producto guardarImagenes(Long idProducto, String fotoPrincipal, List<String> fotosSecundarias);
+    Producto guardarImagenes(Long idProducto, com.zyozmen.products.domain.model.Imagen fotoPrincipal, List<com.zyozmen.products.domain.model.Imagen> fotosSecundarias);
 
     void eliminar(Long id);
 

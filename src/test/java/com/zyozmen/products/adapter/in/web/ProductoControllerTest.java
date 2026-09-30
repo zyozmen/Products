@@ -294,22 +294,52 @@ class ProductoControllerTest {
         when(fotoPrincipal.isEmpty()).thenReturn(false);
         when(fotoPrincipal.getContentType()).thenReturn("image/png");
         when(fotoPrincipal.getBytes()).thenReturn(new byte[]{1, 2, 3});
+        when(fotoPrincipal.getOriginalFilename()).thenReturn("principal.png");
 
         MultipartFile fotoSecundaria = mock(MultipartFile.class);
         when(fotoSecundaria.isEmpty()).thenReturn(false);
         when(fotoSecundaria.getContentType()).thenReturn("image/jpeg");
         when(fotoSecundaria.getBytes()).thenReturn(new byte[]{4, 5, 6});
+        when(fotoSecundaria.getOriginalFilename()).thenReturn("secundario.jpg");
+
+        com.zyozmen.products.domain.model.Imagen princ = com.zyozmen.products.domain.model.Imagen.builder()
+                .nombre("principal.png")
+                .extension("png")
+                .filepart("AQID")
+                .build();
+        com.zyozmen.products.domain.model.Imagen sec = com.zyozmen.products.domain.model.Imagen.builder()
+                .nombre("secundario.jpg")
+                .extension("jpg")
+                .filepart("BBUF")
+                .build();
+        com.zyozmen.products.domain.model.Images imgsDomain = com.zyozmen.products.domain.model.Images.builder()
+                .fotoPrincipal(princ)
+                .fotosSecundarias(List.of(sec))
+                .build();
 
         Producto mockActualizado = Producto.builder()
                 .id("1")
-                .fotoPrincipal("data:image/png;base64,AQID")
-                .fotosSecundarias(List.of("data:image/jpeg;base64,BBUF"))
+                .images(imgsDomain)
+                .build();
+
+        com.zyozmen.products.adapter.in.web.dto.ImagenDTO princDTO = com.zyozmen.products.adapter.in.web.dto.ImagenDTO.builder()
+                .nombre("principal.png")
+                .extension("png")
+                .filepart("AQID")
+                .build();
+        com.zyozmen.products.adapter.in.web.dto.ImagenDTO secDTO = com.zyozmen.products.adapter.in.web.dto.ImagenDTO.builder()
+                .nombre("secundario.jpg")
+                .extension("jpg")
+                .filepart("BBUF")
+                .build();
+        com.zyozmen.products.adapter.in.web.dto.ImagesDTO imgsDTO = com.zyozmen.products.adapter.in.web.dto.ImagesDTO.builder()
+                .fotoPrincipal(princDTO)
+                .fotosSecundarias(List.of(secDTO))
                 .build();
 
         ProductoResponseDTO responseDTO = ProductoResponseDTO.builder()
                 .id("1")
-                .fotoPrincipal("data:image/png;base64,AQID")
-                .fotosSecundarias(List.of("data:image/jpeg;base64,BBUF"))
+                .images(imgsDTO)
                 .build();
 
         when(productoUseCase.guardarImagenes(eq(1L), any(), anyList())).thenReturn(mockActualizado);

@@ -198,66 +198,63 @@ public class ProductoController {
     public ResponseEntity<ProductoResponseDTO> guardarImagenes(
             @Parameter(description = "ID del producto", example = "1")
             @PathVariable Long idProducto,
-            @RequestParam(name = "fotoPrincipal", required = false) MultipartFile fotoPrincipal,
+            @RequestParam(name = "fotoPrincipal", required = true) MultipartFile fotoPrincipal,
             @RequestParam(name = "fotosSecundarias", required = false) List<MultipartFile> fotosSecundarias) {
 
-        String fotoPrincipalBase64 = validateAndConvertFotoPrincipal(fotoPrincipal);
-        List<String> fotosSecundariasBase64 = validateAndConvertFotosSecundarias(fotosSecundarias);
+        long count = (fotosSecundarias == null) ? 0 : fotosSecundarias.stream().filter(f -> f != null && !f.isEmpty()).count();
+        if (count > 5) {
+            throw new IllegalArgumentException("No se permiten más de 5 fotos secundarias.");
+        }
 
-        Producto actualizado = productoUseCase.guardarImagenes(idProducto, fotoPrincipalBase64, fotosSecundariasBase64);
+        com.zyozmen.products.domain.model.Imagen principal = convertToImagen(fotoPrincipal);
+
+        List<com.zyozmen.products.domain.model.Imagen> secundarias = new ArrayList<>();
+        if (fotosSecundarias != null) {
+            for (MultipartFile file : fotosSecundarias) {
+                if (file != null && !file.isEmpty()) {
+                    secundarias.add(convertToImagen(file));
+                }
+            }
+        }
+
+        Producto actualizado = productoUseCase.guardarImagenes(idProducto, principal, secundarias);
         return ResponseEntity.ok(productoWebMapper.toResponseDTO(actualizado));
     }
 
-    private String validateAndConvertFotoPrincipal(MultipartFile file) {
+    private com.zyozmen.products.domain.model.Imagen convertToImagen(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             return null;
         }
         String contentType = file.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
-            throw new IllegalArgumentException("La foto principal debe ser una imagen válida.");
+            throw new IllegalArgumentException("El archivo debe ser una imagen válida.");
         }
         try {
-            return convertToBase64DataUrl(file);
+            byte[] bytes = file.getBytes();
+            String base64 = Base64.getEncoder().encodeToString(bytes);
+            String nombre = file.getOriginalFilename();
+            if (nombre == null) {
+                nombre = "imagen";
+            }
+            return com.zyozmen.products.domain.model.Imagen.builder()
+                    .nombre(nombre)
+                    .extension(getExtension(file))
+                    .filepart(base64)
+                    .build();
         } catch (IOException e) {
-            throw new IllegalArgumentException("No se pudo leer el archivo de la foto principal.");
+            throw new IllegalArgumentException("No se pudo leer el archivo de imagen.");
         }
     }
 
-    private List<String> validateAndConvertFotosSecundarias(List<MultipartFile> files) {
-        if (files == null || files.isEmpty()) {
-            return List.of();
+    private String getExtension(MultipartFile file) {
+        String name = file.getOriginalFilename();
+        if (name != null && name.contains(".")) {
+            return name.substring(name.lastIndexOf(".") + 1).toLowerCase();
         }
-
-        long count = files.stream().filter(f -> f != null && !f.isEmpty()).count();
-        if (count > 5) {
-            throw new IllegalArgumentException("No se permiten más de 5 fotos secundarias.");
-        }
-
-        List<String> result = new ArrayList<>();
-        for (MultipartFile file : files) {
-            if (file == null || file.isEmpty()) {
-                continue;
-            }
-            String contentType = file.getContentType();
-            if (contentType == null || !contentType.startsWith("image/")) {
-                throw new IllegalArgumentException("Todas las fotos secundarias deben ser imágenes válidas.");
-            }
-            try {
-                result.add(convertToBase64DataUrl(file));
-            } catch (IOException e) {
-                throw new IllegalArgumentException("No se pudo leer uno de los archivos de fotos secundarias.");
-            }
-        }
-        return result;
-    }
-
-    private String convertToBase64DataUrl(MultipartFile file) throws IOException {
         String contentType = file.getContentType();
-        if (contentType == null) {
-            contentType = "image/jpeg";
+        if (contentType != null && contentType.contains("/")) {
+            return contentType.substring(contentType.indexOf("/") + 1);
         }
-        byte[] bytes = file.getBytes();
-        String base64 = Base64.getEncoder().encodeToString(bytes);
-        return "data:" + contentType + ";base64," + base64;
+        return "jpg";
     }
 }

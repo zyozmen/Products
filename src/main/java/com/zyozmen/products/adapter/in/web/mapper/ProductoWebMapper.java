@@ -13,6 +13,10 @@ import com.zyozmen.products.adapter.in.web.dto.PriceDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoListItemDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
+import com.zyozmen.products.adapter.in.web.dto.ImagenDTO;
+import com.zyozmen.products.adapter.in.web.dto.ImagesDTO;
+import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.domain.model.Images;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -55,8 +59,7 @@ public class ProductoWebMapper {
                 .recentComments(toRecentCommentDTOList(producto.getRecentComments()))
                 .createdAt(producto.getCreatedAt())
                 .updatedAt(producto.getUpdatedAt())
-                .fotoPrincipal(producto.getFotoPrincipal())
-                .fotosSecundarias(producto.getFotosSecundarias())
+                .images(toImagesDTO(producto.getImages()))
                 .build();
     }
 
@@ -71,7 +74,7 @@ public class ProductoWebMapper {
                 .priceCurrency(producto.getPrice() == null ? null : producto.getPrice().getCurrency())
                 .averageRating(producto.getRanking() == null ? null : producto.getRanking().getAverageRating())
                 .totalReviews(producto.getRanking() == null ? null : producto.getRanking().getTotalReviews())
-                .fotoPrincipal(producto.getFotoPrincipal())
+                .images(toImagesDTO(producto.getImages()))
                 .build();
     }
 
@@ -206,5 +209,27 @@ public class ProductoWebMapper {
                 .body(comment.getBody())
                 .createdAt(comment.getCreatedAt())
                 .build();
+    }
+
+    public ImagesDTO toImagesDTO(Images images) {
+        if (images == null) return null;
+        return ImagesDTO.builder()
+                .fotoPrincipal(toImagenDTO(images.getFotoPrincipal()))
+                .fotosSecundarias(toImagenDTOList(images.getFotosSecundarias()))
+                .build();
+    }
+
+    private ImagenDTO toImagenDTO(Imagen imagen) {
+        if (imagen == null) return null;
+        return ImagenDTO.builder()
+                .nombre(imagen.getNombre())
+                .extension(imagen.getExtension())
+                .filepart(imagen.getFilepart())
+                .build();
+    }
+
+    private List<ImagenDTO> toImagenDTOList(List<Imagen> list) {
+        if (list == null) return List.of();
+        return list.stream().map(this::toImagenDTO).toList();
     }
 }

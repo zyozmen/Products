@@ -111,17 +111,24 @@ public class ProductoService implements ProductoUseCase {
 
     @Override
     @Transactional
-    public Producto guardarImagenes(Long idProducto, String fotoPrincipal, List<String> fotosSecundarias) {
+    public Producto guardarImagenes(Long idProducto, com.zyozmen.products.domain.model.Imagen fotoPrincipal, List<com.zyozmen.products.domain.model.Imagen> fotosSecundarias) {
         Producto existente = productoRepositoryPort.findById(idProducto)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Producto no encontrado con ID: " + idProducto));
 
+        com.zyozmen.products.domain.model.Images images = existente.getImages();
+        if (images == null) {
+            images = new com.zyozmen.products.domain.model.Images();
+        }
+
         if (fotoPrincipal != null) {
-            existente.setFotoPrincipal(fotoPrincipal);
+            images.setFotoPrincipal(fotoPrincipal);
         }
         if (fotosSecundarias != null && !fotosSecundarias.isEmpty()) {
-            existente.setFotosSecundarias(fotosSecundarias);
+            images.setFotosSecundarias(fotosSecundarias);
         }
+
+        existente.setImages(images);
         existente.setUpdatedAt(Instant.now());
 
         return productoRepositoryPort.save(existente);

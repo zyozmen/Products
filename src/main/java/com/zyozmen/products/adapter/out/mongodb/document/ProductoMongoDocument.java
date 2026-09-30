@@ -69,9 +69,6 @@ public class ProductoMongoDocument {
     @Field("updated_at")
     private Instant updatedAt;
 
-    @Field("foto_principal")
-    private String fotoPrincipal;
-
-    @Field("fotos_secundarias")
-    private List<String> fotosSecundarias;
+    @Field("images")
+    private ImagesDocument images;
 }

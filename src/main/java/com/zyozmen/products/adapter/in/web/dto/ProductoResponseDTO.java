@@ -56,11 +56,7 @@ public class ProductoResponseDTO {
 	@Schema(description = "Fecha de última actualización del producto", example = "2026-06-17T13:00:00Z")
 	private Instant updatedAt;
 
-	@JsonProperty("foto_principal")
-	@Schema(description = "Foto principal del producto en formato Base64", example = "data:image/png;base64,...")
-	private String fotoPrincipal;
-
-	@JsonProperty("fotos_secundarias")
-	@Schema(description = "Listado de fotos secundarias en formato Base64 (máx 5)")
-	private List<String> fotosSecundarias;
+	@JsonProperty("images")
+	@Schema(description = "Imágenes del producto (foto principal y secundarias)")
+	private ImagesDTO images;
 }

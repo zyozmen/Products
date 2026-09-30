@@ -6,12 +6,16 @@ import com.zyozmen.products.adapter.out.mongodb.document.PriceDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProductoMongoDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.RankingDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.RatingDistributionDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ImagenDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ImagesDocument;
 import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Comment;
 import com.zyozmen.products.domain.model.Price;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.model.Ranking;
 import com.zyozmen.products.domain.model.RatingDistribution;
+import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.domain.model.Images;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.support.CompositeUriComponentsContributor;
 
@@ -44,8 +48,7 @@ public class ProductoMongoMapper {
                 .hasMoreComments(document.getHasMoreComments())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
-                .fotoPrincipal(document.getFotoPrincipal())
-                .fotosSecundarias(document.getFotosSecundarias())
+                .images(toImagesDomain(document.getImages()))
                 .build();
     }
 
@@ -64,8 +67,7 @@ public class ProductoMongoMapper {
                 .hasMoreComments(domain.getHasMoreComments())
                 .createdAt(domain.getCreatedAt()== null ? Instant.now(): domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt() == null ? Instant.now(): domain.getUpdatedAt())
-                .fotoPrincipal(domain.getFotoPrincipal())
-                .fotosSecundarias(domain.getFotosSecundarias())
+                .images(toImagesDocument(domain.getImages()))
                 .build();
     }
 
@@ -84,8 +86,7 @@ public class ProductoMongoMapper {
                 .hasMoreComments(domain.getHasMoreComments())
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
-                .fotoPrincipal(domain.getFotoPrincipal())
-                .fotosSecundarias(domain.getFotosSecundarias())
+                .images(toImagesDocument(domain.getImages()))
                 .build();
     }
 
@@ -227,5 +228,49 @@ public class ProductoMongoMapper {
                 .body(comment.getBody())
                 .createdAt(comment.getCreatedAt())
                 .build();
+    }
+
+    private Images toImagesDomain(ImagesDocument doc) {
+        if (doc == null) return null;
+        return Images.builder()
+                .fotoPrincipal(toImagenDomain(doc.getFotoPrincipal()))
+                .fotosSecundarias(toImagenDomainList(doc.getFotosSecundarias()))
+                .build();
+    }
+
+    private ImagesDocument toImagesDocument(Images domain) {
+        if (domain == null) return null;
+        return ImagesDocument.builder()
+                .fotoPrincipal(toImagenDocument(domain.getFotoPrincipal()))
+                .fotosSecundarias(toImagenDocumentList(domain.getFotosSecundarias()))
+                .build();
+    }
+
+    private Imagen toImagenDomain(ImagenDocument doc) {
+        if (doc == null) return null;
+        return Imagen.builder()
+                .nombre(doc.getNombre())
+                .extension(doc.getExtension())
+                .filepart(doc.getFilepart())
+                .build();
+    }
+
+    private ImagenDocument toImagenDocument(Imagen domain) {
+        if (domain == null) return null;
+        return ImagenDocument.builder()
+                .nombre(domain.getNombre())
+                .extension(domain.getExtension())
+                .filepart(domain.getFilepart())
+                .build();
+    }
+
+    private List<Imagen> toImagenDomainList(List<ImagenDocument> docs) {
+        if (docs == null) return List.of();
+        return docs.stream().map(this::toImagenDomain).toList();
+    }
+
+    private List<ImagenDocument> toImagenDocumentList(List<Imagen> domains) {
+        if (domains == null) return List.of();
+        return domains.stream().map(this::toImagenDocument).toList();
     }
 }

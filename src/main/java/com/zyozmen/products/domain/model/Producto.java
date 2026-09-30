@@ -24,8 +24,7 @@ public class Producto {
     private Boolean hasMoreComments;
     private Instant createdAt;
     private Instant updatedAt;
-    private String fotoPrincipal;
-    private List<String> fotosSecundarias;
+    private Images images;
 
     public Producto() {
     }
@@ -44,8 +43,7 @@ public class Producto {
         this.hasMoreComments = builder.hasMoreComments;
         this.createdAt = builder.createdAt;
         this.updatedAt = builder.updatedAt;
-        this.fotoPrincipal = builder.fotoPrincipal;
-        this.fotosSecundarias = builder.fotosSecundarias;
+        this.images = builder.images;
     }
 
     public static Builder builder() {
@@ -160,20 +158,12 @@ public class Producto {
         this.updatedAt = updatedAt;
     }
 
-    public String getFotoPrincipal() {
-        return fotoPrincipal;
+    public Images getImages() {
+        return images;
     }
 
-    public void setFotoPrincipal(String fotoPrincipal) {
-        this.fotoPrincipal = fotoPrincipal;
-    }
-
-    public List<String> getFotosSecundarias() {
-        return fotosSecundarias;
-    }
-
-    public void setFotosSecundarias(List<String> fotosSecundarias) {
-        this.fotosSecundarias = fotosSecundarias;
+    public void setImages(Images images) {
+        this.images = images;
     }
 
     // Legacy aliases kept temporarily to avoid breaking older request/service code.
@@ -231,14 +221,13 @@ public class Producto {
             && Objects.equals(hasMoreComments, producto.hasMoreComments)
             && Objects.equals(createdAt, producto.createdAt)
             && Objects.equals(updatedAt, producto.updatedAt)
-            && Objects.equals(fotoPrincipal, producto.fotoPrincipal)
-            && Objects.equals(fotosSecundarias, producto.fotosSecundarias);
+            && Objects.equals(images, producto.images);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(id, name, slug, description, sku, status, categories, price, ranking,
-            recentComments, hasMoreComments, createdAt, updatedAt, fotoPrincipal, fotosSecundarias);
+            recentComments, hasMoreComments, createdAt, updatedAt, images);
     }
 
     @Override
@@ -257,8 +246,7 @@ public class Producto {
             ", hasMoreComments=" + hasMoreComments +
             ", createdAt=" + createdAt +
             ", updatedAt=" + updatedAt +
-            ", fotoPrincipal='" + fotoPrincipal + '\'' +
-            ", fotosSecundarias=" + fotosSecundarias +
+            ", images=" + images +
                 '}';
     }
 
@@ -277,8 +265,7 @@ public class Producto {
         private Boolean hasMoreComments;
         private Instant createdAt;
         private Instant updatedAt;
-        private String fotoPrincipal;
-        private List<String> fotosSecundarias;
+        private Images images;
 
         public Builder id(String id) {
             this.id = id;
@@ -377,13 +364,8 @@ public class Producto {
             return this;
         }
 
-        public Builder fotoPrincipal(String fotoPrincipal) {
-            this.fotoPrincipal = fotoPrincipal;
-            return this;
-        }
-
-        public Builder fotosSecundarias(List<String> fotosSecundarias) {
-            this.fotosSecundarias = fotosSecundarias;
+        public Builder images(Images images) {
+            this.images = images;
             return this;
         }
 
