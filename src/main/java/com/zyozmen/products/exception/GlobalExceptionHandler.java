@@ -1,7 +1,12 @@
 package com.zyozmen.products.exception;
 
+import com.zyozmen.products.domain.exception.InvalidCredentialsException;
+import com.zyozmen.products.domain.exception.MainAdminProtectedException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.exception.ServiceUnavailableException;
+import com.zyozmen.products.domain.exception.UnderageRegistrationException;
+import com.zyozmen.products.domain.exception.UserAlreadyExistsException;
+import com.zyozmen.products.domain.exception.UserInactiveException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -51,6 +56,48 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+    }
+
+    @ExceptionHandler({UserAlreadyExistsException.class, UnderageRegistrationException.class,
+            MainAdminProtectedException.class})
+    public ResponseEntity<ErrorResponse> handleBadRequestDomainException(
+            RuntimeException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Bad Request")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCredentialsException(
+            InvalidCredentialsException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .error("Unauthorized")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
+    @ExceptionHandler(UserInactiveException.class)
+    public ResponseEntity<UserInactiveErrorResponse> handleUserInactiveException(
+            UserInactiveException ex) {
+
+        UserInactiveErrorResponse errorResponse = new UserInactiveErrorResponse("user_inactive", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
