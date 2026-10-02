@@ -32,4 +32,23 @@ public interface UserUseCase {
      * modificar al administrador principal del sistema.
      */
     User toggleEstado(String username);
+
+    /**
+     * Obtiene el perfil de un usuario por su username.
+     */
+    User obtenerPorUsername(String username);
+
+    /**
+     * Actualiza los datos de perfil (nombre, apellido, dirección, teléfono
+     * y, opcionalmente, contraseña) de un usuario. Solo se modifican los
+     * campos que vengan informados (no nulos/no en blanco); la contraseña,
+     * si se envía, se hashea antes de persistirse.
+     */
+    User actualizarPerfil(
+            String username,
+            String nombre,
+            String apellido,
+            String direccion,
+            String telefono,
+            String password);
 }

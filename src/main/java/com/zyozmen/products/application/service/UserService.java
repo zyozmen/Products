@@ -105,4 +105,45 @@ public class UserService implements UserUseCase {
 
         return userRepositoryPort.save(user);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public User obtenerPorUsername(String username) {
+        return userRepositoryPort.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario no encontrado: " + username));
+    }
+
+    @Override
+    @Transactional
+    public User actualizarPerfil(
+            String username,
+            String nombre,
+            String apellido,
+            String direccion,
+            String telefono,
+            String password) {
+
+        User user = userRepositoryPort.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario no encontrado: " + username));
+
+        if (nombre != null && !nombre.isBlank()) {
+            user.setNombre(nombre);
+        }
+        if (apellido != null && !apellido.isBlank()) {
+            user.setApellido(apellido);
+        }
+        if (direccion != null && !direccion.isBlank()) {
+            user.setDireccion(direccion);
+        }
+        if (telefono != null && !telefono.isBlank()) {
+            user.setTelefono(telefono);
+        }
+        if (password != null && !password.isBlank()) {
+            user.setPassword(passwordEncoder.encode(password));
+        }
+
+        return userRepositoryPort.save(user);
+    }
 }

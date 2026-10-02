@@ -229,4 +229,91 @@ class UserServiceTest {
 
         assertThat(result.getActive()).isTrue();
     }
+
+    @Test
+    void obtenerPorUsernameShouldReturnUserWhenFound() {
+        User storedUser = User.builder().username("juan123").build();
+        when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
+
+        User result = userService.obtenerPorUsername("juan123");
+
+        assertThat(result).isEqualTo(storedUser);
+    }
+
+    @Test
+    void obtenerPorUsernameShouldThrowWhenNotFound() {
+        when(userRepositoryPort.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.obtenerPorUsername("ghost"))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void actualizarPerfilShouldThrowWhenUserNotFound() {
+        when(userRepositoryPort.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.actualizarPerfil(
+                "ghost", "Nombre", "Apellido", "Direccion", "Telefono", "nueva-clave"))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(userRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void actualizarPerfilShouldUpdateOnlyInformedFields() {
+        User storedUser = User.builder()
+                .username("juan123")
+                .nombre("Juan")
+                .apellido("Pérez")
+                .direccion("Dirección vieja")
+                .telefono("3000000000")
+                .password("hashed-old")
+                .build();
+
+        when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
+        when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User result = userService.actualizarPerfil(
+                "juan123", "Juan Carlos", null, "Dirección nueva", null, null);
+
+        assertThat(result.getNombre()).isEqualTo("Juan Carlos");
+        assertThat(result.getApellido()).isEqualTo("Pérez");
+        assertThat(result.getDireccion()).isEqualTo("Dirección nueva");
+        assertThat(result.getTelefono()).isEqualTo("3000000000");
+        assertThat(result.getPassword()).isEqualTo("hashed-old");
+        verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    void actualizarPerfilShouldHashPasswordWhenProvided() {
+        User storedUser = User.builder().username("juan123").password("hashed-old").build();
+
+        when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
+        when(passwordEncoder.encode("nueva-clave")).thenReturn("hashed-new");
+        when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User result = userService.actualizarPerfil(
+                "juan123", null, null, null, null, "nueva-clave");
+
+        assertThat(result.getPassword()).isEqualTo("hashed-new");
+    }
+
+    @Test
+    void actualizarPerfilShouldIgnoreBlankFields() {
+        User storedUser = User.builder()
+                .username("juan123")
+                .nombre("Juan")
+                .password("hashed-old")
+                .build();
+
+        when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
+        when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User result = userService.actualizarPerfil(
+                "juan123", "   ", "", null, "", "   ");
+
+        assertThat(result.getNombre()).isEqualTo("Juan");
+        assertThat(result.getPassword()).isEqualTo("hashed-old");
+        verify(passwordEncoder, never()).encode(any());
+    }
 }

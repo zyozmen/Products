@@ -21,6 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * - CORS delegado a {@link WebConfig}.
  * - /api/auth/** público (registro y login).
  * - /api/admin/** restringido al rol ADMIN.
+ * - /api/users/** restringido a usuarios autenticados (perfil propio).
  * - Resto de endpoints (productos, swagger, actuator) públicos.
  */
 @Configuration
@@ -46,6 +47,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/users/**").authenticated()
                         .anyRequest().permitAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
