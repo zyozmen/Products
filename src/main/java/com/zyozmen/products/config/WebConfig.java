@@ -26,7 +26,7 @@ public class WebConfig implements WebMvcConfigurer {
         CorsRegistration registration = registry.addMapping("/**")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                .exposedHeaders("Authorization", "Content-Type")
+                .exposedHeaders("Authorization", "Content-Type", "X-Total-Count")
                 .allowCredentials(true)
                 .maxAge(3600);
 

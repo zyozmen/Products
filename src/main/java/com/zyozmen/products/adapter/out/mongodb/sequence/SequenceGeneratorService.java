@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 public class SequenceGeneratorService {
 
     public static final String PRODUCTO_SEQUENCE = "productos_sequence";
+    public static final String ORDER_SEQUENCE = "orders_sequence";
 
     private final MongoOperations mongoOperations;
 

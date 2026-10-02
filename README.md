@@ -209,6 +209,39 @@ Listar:
 curl "http://localhost:8080/api/productos"
 ```
 
+### 9.5 Órdenes
+Todas las rutas de órdenes requieren `Authorization: Bearer <JWT>`. El usuario propietario se toma del token; el cliente no puede indicar el `username` de la orden.
+
+- `POST /api/orders`: crea una orden. El backend valida que cada producto esté activo, recalcula los precios vigentes y el IVA del 16 %, y rechaza con `422` los valores enviados que no coincidan.
+- `GET /api/orders/mine`: lista las órdenes del usuario autenticado.
+- `GET /api/orders/{id}`: consulta una orden propia; una orden de otro usuario devuelve `404`.
+- `GET /api/admin/orders`: requiere rol `ADMIN`. Acepta `status`, `from`, `to`, `username`, `page` y `size`; las fechas son `YYYY-MM-DD`. Si se solicita paginación, responde con una lista plana y `X-Total-Count`.
+- `GET /api/admin/orders/{id}` y `PUT /api/admin/orders/{id}/status`: requieren rol `ADMIN`. Los estados válidos son `CREADA`, `PAGADA`, `DESPACHADA`, `ENTREGADA` y `CANCELADA`. Los cambios se auditan y las transiciones no permitidas responden `409`.
+
+Ejemplo de creación:
+```http
+POST /api/orders
+Authorization: Bearer <JWT>
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "12", "name": "Producto", "quantity": 2, "unitPrice": 15000, "lineTotal": 30000 }
+  ],
+  "delivery": {
+    "recipientName": "Juan Pérez",
+    "address": "Calle 10 # 20-30",
+    "addressComplement": "",
+    "contactPhone": "3001234567"
+  },
+  "subtotal": 30000,
+  "taxAmount": 4800,
+  "total": 34800
+}
+```
+
+En MongoDB, los ítems y el historial de estado se guardan embebidos en el documento de orden para que su escritura sea atómica. Las respuestas de error de estas rutas usan `{ "message": "..." }`.
+
 ## 10. Despliegue con Terraform y AWS
 El proyecto incluye una configuración base de Terraform para desplegar el servicio en Amazon ECS Fargate.
 
