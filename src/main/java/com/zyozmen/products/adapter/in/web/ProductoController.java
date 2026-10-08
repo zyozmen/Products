@@ -198,7 +198,7 @@ public class ProductoController {
     public ResponseEntity<ProductoResponseDTO> guardarImagenes(
             @Parameter(description = "ID del producto", example = "1")
             @PathVariable Long idProducto,
-            @RequestParam(name = "fotoPrincipal", required = true) MultipartFile fotoPrincipal,
+            @RequestParam(name = "fotoPrincipal", required = false) MultipartFile fotoPrincipal,
             @RequestParam(name = "fotosSecundarias", required = false) List<MultipartFile> fotosSecundarias) {
 
         long count = (fotosSecundarias == null) ? 0 : fotosSecundarias.stream().filter(f -> f != null && !f.isEmpty()).count();

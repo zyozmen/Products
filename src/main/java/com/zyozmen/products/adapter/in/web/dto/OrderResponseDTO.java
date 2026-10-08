@@ -12,8 +12,17 @@ public record OrderResponseDTO(
         Long id,
         String username,
         String status,
+        boolean pqr,
+        boolean cashOnDelivery,
+        BigDecimal cashAmount,
+        BigDecimal cardAmount,
+        String notes,
         Instant createdAt,
         Instant updatedAt,
+        Instant paidAt,
+        Instant packedAt,
+        Instant deliveredAt,
+        Instant cancelledAt,
         List<ItemResponse> items,
         DeliveryResponse delivery,
         BigDecimal subtotal,
@@ -22,7 +31,9 @@ public record OrderResponseDTO(
 
     public static OrderResponseDTO from(Order order) {
         return new OrderResponseDTO(order.getId(), order.getUsername(), order.getStatus().name(),
-                order.getCreatedAt(), order.getUpdatedAt(),
+                order.isPqr(), order.isCashOnDelivery(), order.getCashAmount(), order.getCardAmount(),
+                order.getNotes(), order.getCreatedAt(), order.getUpdatedAt(), order.getPaidAt(),
+                order.getPackedAt(), order.getDeliveredAt(), order.getCancelledAt(),
                 order.getItems().stream().map(OrderResponseDTO::toItem).toList(),
                 toDelivery(order.getDelivery()), order.getSubtotal(), order.getTaxAmount(), order.getTotal());
     }

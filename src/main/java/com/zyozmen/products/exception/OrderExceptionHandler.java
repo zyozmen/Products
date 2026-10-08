@@ -4,6 +4,7 @@ import com.zyozmen.products.adapter.in.web.AdminOrdersController;
 import com.zyozmen.products.adapter.in.web.OrdersController;
 import com.zyozmen.products.domain.exception.OrderConflictException;
 import com.zyozmen.products.domain.exception.OrderProductException;
+import com.zyozmen.products.domain.exception.OrderValidationException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -40,8 +41,8 @@ public class OrderExceptionHandler {
         return response(HttpStatus.BAD_REQUEST, "La solicitud contiene valores inválidos");
     }
 
-    @ExceptionHandler(OrderProductException.class)
-    public ResponseEntity<Map<String, String>> handleInvalidProduct(OrderProductException exception) {
+    @ExceptionHandler({OrderProductException.class, OrderValidationException.class})
+    public ResponseEntity<Map<String, String>> handleInvalidProduct(RuntimeException exception) {
         return response(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
     }
 

@@ -2,6 +2,7 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.exception.OrderConflictException;
 import com.zyozmen.products.domain.exception.OrderProductException;
+import com.zyozmen.products.domain.exception.OrderValidationException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.Order;
 import com.zyozmen.products.domain.model.OrderDelivery;
@@ -13,13 +14,18 @@ import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.OrderUseCase;
 import com.zyozmen.products.domain.port.out.OrderRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
+import com.zyozmen.products.domain.port.out.UserRepositoryPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,8 +45,173 @@ class OrderServiceTest {
     @Mock
     private ProductoRepositoryPort productoRepository;
 
+    @Mock
+    private UserRepositoryPort userRepository;
+
     @InjectMocks
     private OrderService orderService;
+
+    @Test
+    void createPqrForcesZeroTotalsAndPqrFlag() {
+        when(userRepository.existsByUsername("juan")).thenReturn(true);
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Order created = orderService.createPqr("juan",
+                List.of(new OrderUseCase.PqrItemRequest(null, "Reposición", 1)), null, "motivo");
+
+        assertThat(created.isPqr()).isTrue();
+        assertThat(created.getStatus()).isEqualTo(OrderStatus.CREADA);
+        assertThat(created.getTotal()).isEqualByComparingTo("0");
+        assertThat(created.getSubtotal()).isEqualByComparingTo("0");
+        assertThat(created.getTaxAmount()).isEqualByComparingTo("0");
+        assertThat(created.getItems().get(0).getUnitPrice()).isEqualByComparingTo("0");
+        assertThat(created.getNotes()).isEqualTo("motivo");
+    }
+
+    @Test
+    void createPqrRejectsUnknownUser() {
+        when(userRepository.existsByUsername("nadie")).thenReturn(false);
+
+        assertThatThrownBy(() -> orderService.createPqr("nadie",
+                List.of(new OrderUseCase.PqrItemRequest(null, "X", 1)), null, null))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void normalOrderCannotSkipPaymentToPacked() {
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order("juan", OrderStatus.CREADA)));
+
+        assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.EMPACADA, "admin"))
+                .isInstanceOf(OrderConflictException.class);
+    }
+
+    @Test
+    void pqrOrderGoesFromCreatedToPackedAndCannotBePaid() {
+        Order pqr = order("juan", OrderStatus.CREADA);
+        pqr.setPqr(true);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(pqr));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.PAGADA, "admin"))
+                .isInstanceOf(OrderConflictException.class);
+        Order packed = orderService.changeStatus(101L, OrderStatus.EMPACADA, "admin");
+
+        assertThat(packed.getStatus()).isEqualTo(OrderStatus.EMPACADA);
+        assertThat(packed.getPackedAt()).isNotNull();
+    }
+
+    @Test
+    void paidStoresCashOnDeliveryFlagAndTimestamp() {
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order("juan", OrderStatus.CREADA)));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Order paid = orderService.changeStatus(101L, OrderStatus.PAGADA, "admin",
+                new OrderUseCase.StatusChangeDetails(true, null, null, null));
+
+        assertThat(paid.isCashOnDelivery()).isTrue();
+        assertThat(paid.getPaidAt()).isNotNull();
+    }
+
+    @Test
+    void deliveredCashOnDeliveryRequiresPaymentDetail() {
+        Order packed = order("juan", OrderStatus.EMPACADA);
+        packed.setCashOnDelivery(true);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(packed));
+
+        assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.ENTREGADA, "admin"))
+                .isInstanceOf(OrderValidationException.class);
+    }
+
+    @Test
+    void deliveredIgnoresPaymentDetailForOrdersWithoutCashOnDelivery() {
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order("juan", OrderStatus.EMPACADA)));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Order delivered = orderService.changeStatus(101L, OrderStatus.ENTREGADA, "admin",
+                new OrderUseCase.StatusChangeDetails(null, new BigDecimal("30000"), new BigDecimal("1000"), null));
+
+        assertThat(delivered.getCashAmount()).isNull();
+        assertThat(delivered.getCardAmount()).isNull();
+        assertThat(delivered.getDeliveredAt()).isNotNull();
+    }
+
+    @Test
+    void deliveredAcceptsMatchingPaymentForCashOnDelivery() {
+        Order withDetail = order("juan", OrderStatus.EMPACADA);
+        withDetail.setCashOnDelivery(true);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(withDetail));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Order delivered = orderService.changeStatus(101L, OrderStatus.ENTREGADA, "admin",
+                new OrderUseCase.StatusChangeDetails(null, new BigDecimal("30000.00"),
+                        new BigDecimal("4800.00"), null));
+
+        assertThat(delivered.getCashAmount()).isEqualByComparingTo("30000");
+        assertThat(delivered.getCardAmount()).isEqualByComparingTo("4800");
+        assertThat(delivered.getDeliveredAt()).isNotNull();
+    }
+
+    @Test
+    void deliveredRejectsPaymentThatDoesNotMatchTotalForCashOnDelivery() {
+        Order cod = order("juan", OrderStatus.EMPACADA);
+        cod.setCashOnDelivery(true);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(cod));
+
+        assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.ENTREGADA, "admin",
+                new OrderUseCase.StatusChangeDetails(null, new BigDecimal("30000"), new BigDecimal("1000"), null)))
+                .isInstanceOf(OrderValidationException.class)
+                .hasMessageContaining("suma");
+    }
+
+    @Test
+    void reportWeekCoversMondayToMondayAndExcludesPqrFromPaid() {
+        Order delivered = order("juan", OrderStatus.ENTREGADA);
+        delivered.setCashAmount(new BigDecimal("20000.00"));
+        delivered.setCardAmount(new BigDecimal("10000.00"));
+        Order pqr = order("ana", OrderStatus.ENTREGADA);
+        pqr.setPqr(true);
+        pqr.setTotal(new BigDecimal("0.00"));
+        when(orderRepository.findAll(any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of(
+                delivered, pqr, order("a", OrderStatus.CANCELADA), order("b", OrderStatus.PAGADA),
+                order("c", OrderStatus.EMPACADA))));
+
+        // 2026-10-11 es domingo: su semana va del lunes 2026-10-05 al lunes 2026-10-12 (exclusivo).
+        OrderUseCase.OrderReport report = orderService.report(LocalDate.of(2026, 10, 11),
+                OrderUseCase.ReportPeriod.WEEK);
+
+        assertThat(report.from()).isEqualTo(LocalDate.of(2026, 10, 5));
+        assertThat(report.to()).isEqualTo(LocalDate.of(2026, 10, 12));
+        assertThat(report.totalOrders()).isEqualTo(5);
+        assertThat(report.paid().count()).isEqualTo(1);
+        assertThat(report.paid().total()).isEqualByComparingTo("34800");
+        assertThat(report.paid().cash()).isEqualByComparingTo("20000");
+        assertThat(report.paid().card()).isEqualByComparingTo("10000");
+        assertThat(report.paid().undetailed()).isEqualByComparingTo("4800");
+        assertThat(report.cancelled().count()).isEqualTo(1);
+        assertThat(report.toPack().count()).isEqualTo(1);
+        assertThat(report.toDeliver().count()).isEqualTo(1);
+        assertThat(report.pqr().count()).isEqualTo(1);
+
+        ArgumentCaptor<Instant> from = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> to = ArgumentCaptor.forClass(Instant.class);
+        verify(orderRepository).findAll(any(), from.capture(), to.capture(), any(), any());
+        assertThat(from.getValue()).isEqualTo(Instant.parse("2026-10-05T05:00:00Z"));
+        assertThat(to.getValue()).isEqualTo(Instant.parse("2026-10-12T05:00:00Z"));
+    }
+
+    @Test
+    void reportMonthAndDayRanges() {
+        when(orderRepository.findAll(any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+        OrderUseCase.OrderReport month = orderService.report(LocalDate.of(2026, 2, 17), OrderUseCase.ReportPeriod.MONTH);
+        OrderUseCase.OrderReport day = orderService.report(LocalDate.of(2026, 2, 17), OrderUseCase.ReportPeriod.DAY);
+
+        assertThat(month.from()).isEqualTo(LocalDate.of(2026, 2, 1));
+        assertThat(month.to()).isEqualTo(LocalDate.of(2026, 3, 1));
+        assertThat(day.from()).isEqualTo(LocalDate.of(2026, 2, 17));
+        assertThat(day.to()).isEqualTo(LocalDate.of(2026, 2, 18));
+    }
 
     @Test
     void createUsesCatalogPriceAndBuildsOrderForAuthenticatedUser() {

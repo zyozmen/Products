@@ -16,4 +16,5 @@ public class OrderStatusChange {
     private OrderStatus toStatus;
     private String changedBy;
     private Instant changedAt;
+    private String reason;
 }

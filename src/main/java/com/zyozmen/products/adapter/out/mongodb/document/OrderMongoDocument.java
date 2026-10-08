@@ -26,6 +26,16 @@ public class OrderMongoDocument {
     private String username;
     @Field("status")
     private String status;
+    @Field("pqr")
+    private boolean pqr;
+    @Field("cash_on_delivery")
+    private boolean cashOnDelivery;
+    @Field("cash_amount")
+    private BigDecimal cashAmount;
+    @Field("card_amount")
+    private BigDecimal cardAmount;
+    @Field("notes")
+    private String notes;
     @Field("subtotal")
     private BigDecimal subtotal;
     @Field("tax_amount")
@@ -42,6 +52,14 @@ public class OrderMongoDocument {
     private Instant createdAt;
     @Field("updated_at")
     private Instant updatedAt;
+    @Field("paid_at")
+    private Instant paidAt;
+    @Field("packed_at")
+    private Instant packedAt;
+    @Field("delivered_at")
+    private Instant deliveredAt;
+    @Field("cancelled_at")
+    private Instant cancelledAt;
     @Version
     private Long version;
 
@@ -90,5 +108,7 @@ public class OrderMongoDocument {
         private String changedBy;
         @Field("changed_at")
         private Instant changedAt;
+        @Field("reason")
+        private String reason;
     }
 }

@@ -17,6 +17,11 @@ public class Order {
     private Long id;
     private String username;
     private OrderStatus status;
+    private boolean pqr;
+    private boolean cashOnDelivery;
+    private BigDecimal cashAmount;
+    private BigDecimal cardAmount;
+    private String notes;
     private BigDecimal subtotal;
     private BigDecimal taxAmount;
     private BigDecimal total;
@@ -25,5 +30,9 @@ public class Order {
     private List<OrderStatusChange> statusHistory;
     private Instant createdAt;
     private Instant updatedAt;
+    private Instant paidAt;
+    private Instant packedAt;
+    private Instant deliveredAt;
+    private Instant cancelledAt;
     private Long version;
 }
