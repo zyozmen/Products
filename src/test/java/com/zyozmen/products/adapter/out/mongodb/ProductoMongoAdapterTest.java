@@ -81,9 +81,9 @@ class ProductoMongoAdapterTest {
         Pageable pageable = PageRequest.of(0, 10);
         ProductoMongoDocument document = ProductoMongoDocument.builder().id("2").name("Keyboard").build();
         Producto producto = Producto.builder().id("2").name("Keyboard").build();
-        Page<ProductoMongoDocument> page = new PageImpl<>(List.of(document), pageable, 1);
 
-        when(mongoRepository.findAll(pageable)).thenReturn(page);
+        when(mongoTemplate.count(any(Query.class), eq(ProductoMongoDocument.class))).thenReturn(1L);
+        when(mongoTemplate.find(any(Query.class), eq(ProductoMongoDocument.class))).thenReturn(List.of(document));
         when(mapper.toDomain(document)).thenReturn(producto);
 
         Page<Producto> result = adapter.findAll(pageable);
@@ -97,9 +97,8 @@ class ProductoMongoAdapterTest {
         Pageable pageable = PageRequest.of(0, 10);
         ProductoMongoDocument document = ProductoMongoDocument.builder().id("3").name("Mouse").build();
         Producto producto = Producto.builder().id("3").name("Mouse").build();
-        Page<ProductoMongoDocument> page = new PageImpl<>(List.of(document), pageable, 1);
-
-        when(mongoRepository.findByCategoriesCategoryIdIn(List.of(1L, 2L), pageable)).thenReturn(page);
+        when(mongoTemplate.count(any(Query.class), eq(ProductoMongoDocument.class))).thenReturn(1L);
+        when(mongoTemplate.find(any(Query.class), eq(ProductoMongoDocument.class))).thenReturn(List.of(document));
         when(mapper.toDomain(document)).thenReturn(producto);
 
         Page<Producto> result = adapter.findAllByCategoryIds(List.of(1L, 2L), pageable);

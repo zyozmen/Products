@@ -24,13 +24,26 @@ public interface ProductoRepositoryPort {
 
     Page<Producto> findAllByCategoryIds(List<Long> categoryIds, Pageable pageable);
 
-        Page<Producto> findAllFiltered(
+    /** Lista solo productos activos. */
+    default Page<Producto> findAllFiltered(
             List<Long> categoryIds,
             BigDecimal minPrice,
             BigDecimal maxPrice,
             BigDecimal minRating,
             BigDecimal maxRating,
             String name,
+            Pageable pageable) {
+        return findAllFiltered(categoryIds, minPrice, maxPrice, minRating, maxRating, name, false, pageable);
+    }
+
+    Page<Producto> findAllFiltered(
+            List<Long> categoryIds,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            BigDecimal minRating,
+            BigDecimal maxRating,
+            String name,
+            boolean includeInactive,
             Pageable pageable);
 
     Optional<Producto> findById(Long id);

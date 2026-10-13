@@ -144,6 +144,26 @@ class ProductoControllerTest {
     }
 
     @Test
+    void listarTodosAsAdminShouldIncludeInactiveProducts() {
+        Pageable pageable = PageRequest.of(0, 15);
+        Page<Producto> productoPage = new PageImpl<>(List.of(), pageable, 0);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "admin", null, List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+        try {
+            when(productoUseCase.listarTodosFiltrado(eq(List.of()), any(), any(), any(), any(), any(), eq(true), any(Pageable.class)))
+                    .thenReturn(productoPage);
+
+            productoController.listarTodos(0, 15, null, "desc", null, null, null, null, null, null);
+
+            verify(productoUseCase).listarTodosFiltrado(eq(List.of()), any(), any(), any(), any(), any(), eq(true), any(Pageable.class));
+            verify(productoUseCase, never()).listarTodos(any(Pageable.class));
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
     void listarTodosShouldUsePriceSortWhenRequested() {
         Producto producto = Producto.builder().id("4").name("Monitor").build();
         ProductoListItemDTO dto = ProductoListItemDTO.builder().id("4").name("Monitor").build();
@@ -245,6 +265,17 @@ class ProductoControllerTest {
         verify(productoWebMapper).toDomain(requestDTO);
         verify(productoUseCase).actualizar(9L, producto);
         verify(productoWebMapper).toResponseDTO(producto);
+    }
+
+    @Test
+    void actualizarWithInactiveStatusShouldDeleteProduct() {
+        ProductoRequestDTO requestDTO = ProductoRequestDTO.builder().name("Smartwatch").status("inactive").build();
+
+        ResponseEntity<ProductoResponseDTO> response = productoController.actualizar(9L, requestDTO);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(productoUseCase).eliminar(9L);
+        verify(productoUseCase, never()).actualizar(any(), any());
     }
 
     @Test

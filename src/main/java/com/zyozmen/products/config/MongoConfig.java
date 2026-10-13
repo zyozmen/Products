@@ -2,14 +2,18 @@ package com.zyozmen.products.config;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import org.bson.types.Decimal128;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriUtils;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 
 @Configuration
@@ -33,6 +37,23 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
     @Override
     protected String getDatabaseName() {
         return database;
+    }
+
+    // Persiste BigDecimal como Decimal128 (numérico) para permitir filtros y ordenamiento por rango.
+    @Override
+    protected void configureConverters(MongoCustomConversions.MongoConverterConfigurationAdapter adapter) {
+        adapter.registerConverter(new Converter<BigDecimal, Decimal128>() {
+            @Override
+            public Decimal128 convert(BigDecimal source) {
+                return new Decimal128(source);
+            }
+        });
+        adapter.registerConverter(new Converter<Decimal128, BigDecimal>() {
+            @Override
+            public BigDecimal convert(Decimal128 source) {
+                return source.bigDecimalValue();
+            }
+        });
     }
 
     @Override

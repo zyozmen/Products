@@ -127,13 +127,13 @@ class ProductoServiceTest {
         Producto producto = Producto.builder().id("2").name("Keyboard").build();
         Page<Producto> expectedPage = new PageImpl<>(List.of(producto), pageable, 1);
 
-        when(productoRepositoryPort.findAllFiltered(List.of(1L), BigDecimal.TEN, BigDecimal.valueOf(100), BigDecimal.ONE, BigDecimal.valueOf(5), "key", pageable))
+        when(productoRepositoryPort.findAllFiltered(List.of(1L), BigDecimal.TEN, BigDecimal.valueOf(100), BigDecimal.ONE, BigDecimal.valueOf(5), "key", false, pageable))
                 .thenReturn(expectedPage);
 
         Page<Producto> result = productoService.listarTodosFiltrado(List.of(1L), BigDecimal.TEN, BigDecimal.valueOf(100), BigDecimal.ONE, BigDecimal.valueOf(5), "key", pageable);
 
         assertThat(result.getContent()).containsExactly(producto);
-        verify(productoRepositoryPort).findAllFiltered(List.of(1L), BigDecimal.TEN, BigDecimal.valueOf(100), BigDecimal.ONE, BigDecimal.valueOf(5), "key", pageable);
+        verify(productoRepositoryPort).findAllFiltered(List.of(1L), BigDecimal.TEN, BigDecimal.valueOf(100), BigDecimal.ONE, BigDecimal.valueOf(5), "key", false, pageable);
     }
 
     @Test

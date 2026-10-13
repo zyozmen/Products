@@ -74,8 +74,16 @@ public class ProductoWebMapper {
                 .priceCurrency(producto.getPrice() == null ? null : producto.getPrice().getCurrency())
                 .averageRating(producto.getRanking() == null ? null : producto.getRanking().getAverageRating())
                 .totalReviews(producto.getRanking() == null ? null : producto.getRanking().getTotalReviews())
-                .images(toImagesDTO(producto.getImages()))
+                .status(producto.getStatus())
+                .images(toMainImageOnly(producto.getImages()))
                 .build();
+    }
+
+    private ImagesDTO toMainImageOnly(Images images) {
+        ImagesDTO dto = toImagesDTO(images);
+        if (dto == null) return null;
+        dto.setFotosSecundarias(null);
+        return dto;
     }
 
     private List<Long> toCategoryIdList(List<Category> categories) {

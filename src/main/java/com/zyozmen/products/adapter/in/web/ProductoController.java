@@ -22,6 +22,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -100,7 +102,10 @@ public class ProductoController {
         boolean hasNameFilter = name != null && !name.isBlank();
 
         Page<Producto> productos;
-        if (normalizedCategoryIds.isEmpty() && !hasPriceFilter && !hasRatingFilter && !hasNameFilter) {
+        if (isAdmin()) {
+            productos = productoUseCase.listarTodosFiltrado(
+                    normalizedCategoryIds, minPrice, maxPrice, minRating, maxRating, name, true, pageable);
+        } else if (normalizedCategoryIds.isEmpty() && !hasPriceFilter && !hasRatingFilter && !hasNameFilter) {
             productos = productoUseCase.listarTodos(pageable);
         } else if (!hasPriceFilter && !hasRatingFilter && !hasNameFilter) {
             productos = productoUseCase.listarTodosPorCategorias(normalizedCategoryIds, pageable);
@@ -117,6 +122,12 @@ public class ProductoController {
 
         Page<ProductoListItemDTO> response = productos.map(productoWebMapper::toListItemDTO);
         return ResponseEntity.ok(response);
+    }
+
+    private boolean isAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 
     @Operation(summary = "Obtener un producto por ID")
@@ -142,6 +153,7 @@ public class ProductoController {
 
     @Operation(summary = "Actualizar un producto existente")
     @ApiResponse(responseCode = "200", description = "Producto actualizado exitosamente")
+    @ApiResponse(responseCode = "204", description = "El producto se marcó como inactive y fue eliminado de la base de datos")
     @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos",
                      content = @Content(schema = @Schema(hidden = true)))
     @ApiResponse(responseCode = "404", description = "Producto no encontrado",
@@ -151,6 +163,10 @@ public class ProductoController {
             @Parameter(description = "ID del producto a actualizar", example = "1")
             @PathVariable Long id,
             @Valid @RequestBody ProductoRequestDTO requestDTO) {
+        if ("inactive".equalsIgnoreCase(requestDTO.getStatus())) {
+            productoUseCase.eliminar(id);
+            return ResponseEntity.noContent().build();
+        }
         Producto actualizado = productoUseCase.actualizar(id, productoWebMapper.toDomain(requestDTO));
         return ResponseEntity.ok(productoWebMapper.toResponseDTO(actualizado));
     }

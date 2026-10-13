@@ -47,6 +47,9 @@ public class ProductoListItemDTO {
     @Schema(description = "Total de reseñas", example = "128")
     private Integer totalReviews;
 
+    @Schema(description = "Estado del producto", example = "active")
+    private String status;
+
     @JsonProperty("images")
     @Schema(description = "Imágenes del producto")
     private ImagesDTO images;

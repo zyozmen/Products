@@ -56,6 +56,7 @@ public class ProductoService implements ProductoUseCase {
             BigDecimal minRating,
             BigDecimal maxRating,
             String name,
+            boolean includeInactive,
             Pageable pageable) {
         return productoRepositoryPort.findAllFiltered(
                 categoryIds,
@@ -64,6 +65,7 @@ public class ProductoService implements ProductoUseCase {
                 minRating,
                 maxRating,
                 name,
+                includeInactive,
                 pageable);
     }
 

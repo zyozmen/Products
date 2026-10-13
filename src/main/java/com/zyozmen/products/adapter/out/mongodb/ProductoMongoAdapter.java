@@ -8,10 +8,12 @@ import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
 import lombok.RequiredArgsConstructor;
+import org.bson.Document;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.MongoExpression;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -56,14 +58,12 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
 
     @Override
     public Page<Producto> findAll(Pageable pageable) {
-        return mongoRepository.findAll(pageable)
-                .map(mapper::toDomain);
+        return findAllFiltered(null, null, null, null, null, null, pageable);
     }
 
     @Override
     public Page<Producto> findAllByCategoryIds(List<Long> categoryIds, Pageable pageable) {
-        return mongoRepository.findByCategoriesCategoryIdIn(categoryIds, pageable)
-                .map(mapper::toDomain);
+        return findAllFiltered(categoryIds, null, null, null, null, null, pageable);
     }
 
     @Override
@@ -74,10 +74,14 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
             BigDecimal minRating,
             BigDecimal maxRating,
             String name,
+            boolean includeInactive,
             Pageable pageable) {
 
         Query query = new Query();
         List<Criteria> criteria = new ArrayList<>();
+        if (!includeInactive) {
+            criteria.add(Criteria.where("status").regex("^active$", "i"));
+        }
 
 
         addCategoryCriteria(categoryIds, criteria);
@@ -113,25 +117,29 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
     }
 
     private void addRatingCriteria(BigDecimal minRating, BigDecimal maxRating, List<Criteria> criteria) {
-
-            Criteria ratingCriteria = Criteria.where("ranking.average_rating");
-            if (minRating != null)
-                ratingCriteria.gte(minRating.doubleValue());
-            if (maxRating != null)
-                ratingCriteria.lte(maxRating.doubleValue());
-            criteria.add(ratingCriteria);
-
+        addNumericRangeCriteria("$ranking.average_rating", minRating, maxRating, criteria);
     }
 
     private void addPriceCriteria(BigDecimal minPrice, BigDecimal maxPrice, List<Criteria> criteria) {
-        if (minPrice != null || maxPrice != null) {
-            Criteria priceCriteria = Criteria.where("price.current");
-            if (minPrice != null)
-                priceCriteria.gte(minPrice.doubleValue());
-            if (maxPrice != null)
-                priceCriteria.lte(maxPrice.doubleValue());
-            criteria.add(priceCriteria);
+        addNumericRangeCriteria("$price.current", minPrice, maxPrice, criteria);
+    }
+
+    // BigDecimal se persiste como String por defecto en Spring Data MongoDB, por lo que
+    // un $gte/$lte numérico directo no encuentra coincidencias. $toDouble normaliza
+    // String, Double y Decimal128 antes de comparar.
+    private void addNumericRangeCriteria(String fieldPath, BigDecimal min, BigDecimal max, List<Criteria> criteria) {
+        if (min == null && max == null) {
+            return;
         }
+        List<Document> conditions = new ArrayList<>();
+        Document numericValue = new Document("$toDouble", fieldPath);
+        if (min != null) {
+            conditions.add(new Document("$gte", List.of(numericValue, min.doubleValue())));
+        }
+        if (max != null) {
+            conditions.add(new Document("$lte", List.of(numericValue, max.doubleValue())));
+        }
+        criteria.add(Criteria.expr(MongoExpression.create(new Document("$and", conditions).toJson())));
     }
 
     private void addCategoryCriteria(List<Long> categoryIds, List<Criteria> criteria) {
