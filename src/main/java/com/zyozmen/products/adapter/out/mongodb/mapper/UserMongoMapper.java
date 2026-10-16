@@ -24,6 +24,7 @@ public class UserMongoMapper {
                 .apellido(document.getApellido())
                 .direccion(document.getDireccion())
                 .telefono(document.getTelefono())
+                .email(document.getEmail())
                 .tipoIdentificacion(document.getTipoIdentificacion() != null
                         ? TipoIdentificacion.valueOf(document.getTipoIdentificacion())
                         : null)
@@ -50,6 +51,7 @@ public class UserMongoMapper {
                 .apellido(user.getApellido())
                 .direccion(user.getDireccion())
                 .telefono(user.getTelefono())
+                .email(user.getEmail())
                 .tipoIdentificacion(user.getTipoIdentificacion() != null
                         ? user.getTipoIdentificacion().name()
                         : null)

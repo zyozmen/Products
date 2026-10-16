@@ -1,227 +1,179 @@
 # Products API
 
-## 1. Resumen del proyecto
-Este proyecto implementa un microservicio REST para la gestión de productos (CRUD: crear, consultar, actualizar y eliminar), desarrollado como ejercicio académico con enfoque en arquitectura limpia (hexagonal), buenas prácticas de validación y resiliencia.
+Microservicio REST para la gestión de catálogo de productos, usuarios, órdenes de compra y sesiones de la plataforma **GrowShop**. Está construido con Java 21, Spring Boot 3 y MongoDB, siguiendo una arquitectura hexagonal (puertos y adaptadores).
 
-El sistema expone una API HTTP documentada con OpenAPI/Swagger y utiliza MongoDB para persistencia.
+## Tabla de contenido
+1. [Capacidades](#1-capacidades)
+2. [Stack tecnológico](#2-stack-tecnológico)
+3. [Arquitectura](#3-arquitectura)
+4. [Seguridad y gestión de sesión](#4-seguridad-y-gestión-de-sesión)
+5. [Configuración](#5-configuración)
+6. [Construcción y pruebas](#6-construcción-y-pruebas)
+7. [Ejecución](#7-ejecución)
+8. [Referencia de la API](#8-referencia-de-la-api)
+9. [Manejo de errores](#9-manejo-de-errores)
+10. [Despliegue](#10-despliegue)
+11. [Estructura del repositorio](#11-estructura-del-repositorio)
 
-## 2. Objetivo académico
-El propósito del proyecto es evidenciar la aplicación integrada de los siguientes conceptos:
+## 1. Capacidades
+- **Catálogo:** consulta, creación, actualización y eliminación de productos, categorías, productos destacados y carga de imágenes.
+- **Usuarios:** registro público, perfil propio y administración de cuentas (activar/inactivar).
+- **Autenticación y sesión:** login con JWT, renovación de token, cierre de sesión con revocación en servidor y control de inactividad parametrizable.
+- **Órdenes:** creación con validación de precios e IVA en backend, consulta por usuario, gestión administrativa con auditoría de estados, PQR y reportes.
+- **Operación:** documentación OpenAPI/Swagger, endpoints de Actuator, imagen Docker lista para producción.
 
-- Diseño por capas con separación de responsabilidades.
-- Arquitectura Hexagonal (puertos y adaptadores).
-- Desarrollo de APIs REST con Spring Boot.
-- Persistencia documental con Spring Data MongoDB.
-- Validación de datos de entrada.
-- Documentación técnica de API con OpenAPI.
-- Pruebas unitarias con el ecosistema de Spring Test.
+## 2. Stack tecnológico
+| Componente | Tecnología |
+|---|---|
+| Lenguaje / plataforma | Java 21, Spring Boot 3.3.5 |
+| Construcción | Maven (wrapper incluido) |
+| Persistencia | MongoDB (Spring Data MongoDB) |
+| Seguridad | Spring Security (stateless), JWT con jjwt 0.12.6, BCrypt |
+| Validación | Jakarta Validation |
+| Documentación | springdoc-openapi 2.5.0 (Swagger UI) |
+| Observabilidad | Spring Boot Actuator |
+| Calidad | JUnit 5, Mockito, JaCoCo (cobertura mínima de líneas 80 %), SonarQube |
 
-## 3. Stack tecnológico utilizado
-### 3.1 Lenguaje y plataforma
-- Java 21
-- Spring Boot 3.3.5
-- Maven (gestión de dependencias y construcción)
+## 3. Arquitectura
+El código sigue una arquitectura hexagonal bajo `com.zyozmen.products`:
 
-### 3.2 Frameworks y librerías principales
-- spring-boot-starter-web: construcción de endpoints REST.
-- spring-boot-starter-data-mongodb: acceso a datos con MongoDB.
-- spring-boot-starter-validation: validación con Jakarta Validation.
-- springdoc-openapi-starter-webmvc-ui 2.5.0: documentación OpenAPI y Swagger UI.
-- Lombok: reducción de código boilerplate.
-- spring-boot-starter-test: pruebas con JUnit 5 y Mockito.
+| Capa | Paquete | Responsabilidad |
+|---|---|---|
+| Dominio | `domain.model`, `domain.exception` | Modelos y excepciones de negocio, sin dependencias de framework. |
+| Puertos de entrada | `domain.port.in` | Casos de uso: `UserUseCase`, `ProductoUseCase`, `OrderUseCase`, `SessionUseCase`. |
+| Puertos de salida | `domain.port.out` | Contratos de persistencia: `UserRepositoryPort`, `ProductoRepositoryPort`, `OrderRepositoryPort`, `RevokedTokenRepositoryPort`. |
+| Aplicación | `application.service` | Implementación de los casos de uso. |
+| Adaptadores de entrada | `adapter.in.web` | Controladores REST, DTOs y mapeadores web. |
+| Adaptadores de salida | `adapter.out.mongodb` | Documentos, repositorios, mapeadores y adaptadores MongoDB. |
+| Seguridad | `security` | `JwtService` y `JwtAuthenticationFilter`. |
+| Transversal | `config`, `exception` | Seguridad, CORS, OpenAPI, MongoDB y manejo global de errores. |
 
-### 3.3 Base de datos
-- MongoDB
-- Base de datos objetivo: GrowShop.
+## 4. Seguridad y gestión de sesión
+La API es stateless y autentica con tokens JWT enviados en el encabezado `Authorization: Bearer <token>`.
 
-## 4. Arquitectura del proyecto
-La organización del código responde a una arquitectura hexagonal:
+- **Emisión:** el token se firma con HMAC y se emite con una vigencia de **1 hora** (`exp`). Incluye los claims `sub` (usuario), `role`, `iat` y `jti` (identificador único para revocación).
+- **Autorización:** los roles son `ADMIN` y `CLIENTE`. Las rutas `/api/admin/**` y las escrituras de `/api/productos/**` requieren `ADMIN`; `/api/orders/**` y `/api/users/**` requieren autenticación.
+- **Revocación:** al cerrar sesión o renovar, el `jti` se registra en la colección `revoked_tokens`. Un índice TTL elimina cada registro cuando el token habría expirado, por lo que la lista no crece indefinidamente.
+- **Inactividad:** el límite es parametrizable (`app.session.inactivity-timeout-minutes`, 15 minutos por defecto). Como el servidor no mantiene estado por sesión, el límite se aplica en la renovación: un token que no se renueva dentro de ese lapso ya no puede refrescarse. El cliente debe llamar a `/refresh` mientras haya actividad del usuario.
+- **Respuesta de sesión vencida:** cualquier token expirado, revocado o inactivo se rechaza con `401` y el cuerpo:
 
-- Capa de dominio (domain): entidades/modelos, puertos y excepciones del negocio.
-- Capa de aplicación (application): casos de uso y servicios de aplicación.
-- Adaptadores de entrada (adapter.in): API REST, DTOs y mapeadores web.
-- Configuración transversal (config/exception): OpenAPI, configuración de MongoDB y manejo global de errores.
-
-Esta estructura favorece desacoplamiento, mantenibilidad y testabilidad.
-
-## 5. Requisitos previos
-Para construir y ejecutar el proyecto localmente se requiere:
-
-- JDK 21.
-- Maven 3.9+.
-- MongoDB ejecutándose y accesible desde el host o desde la red Docker configurada.
-
-## 6. Configuración de entorno
-La aplicación usa configuración de MongoDB definida en application.properties y puede sobrescribirse al ejecutar la aplicación.
-
-### 6.1 MongoDB local / fallback
-Se mantiene un fallback local para que el proyecto pueda arrancar sin depender de una conexión Atlas en desarrollo inicial:
-
-```properties
-spring.data.mongodb.uri=${SPRING_DATA_MONGODB_URI:${MONGO_URI:mongodb://localhost:27017/GrowShop?authSource=admin}}
-spring.data.mongodb.database=${MONGO_DATABASE:GrowShop}
+```json
+{ "code": "SESSION_EXPIRED", "message": "Inactivity limit reached" }
 ```
 
-Esto evita que el proyecto falle al iniciar si la variable de entorno `SPRING_DATA_MONGODB_URI` no está definida.
+### Endpoints de sesión
+Disponibles en `/api/v1/auth` (también se mantiene el alias `/api/auth`).
 
-### 6.2 MongoDB Atlas
-Para una conexión real a Atlas, se debe definir la URI completa con usuario y contraseña reales:
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/v1/auth/register` | Registro público (requiere `email`). Siempre crea una cuenta activa con rol `CLIENTE` y envía un correo de bienvenida de forma asíncrona; un fallo de envío no afecta el registro. |
+| `POST` | `/api/v1/auth/login` | Autentica y retorna el JWT y el perfil del usuario. |
+| `POST` | `/api/v1/auth/refresh` | Valida el token actual (firma, expiración, revocación, inactividad, usuario activo), lo revoca y emite uno nuevo de 1 hora. |
+| `POST` | `/api/v1/auth/logout` | Revoca el token. Es idempotente. Responde `204`; con `{"reason":"INACTIVITY"}` responde `401 SESSION_EXPIRED` tras revocar. |
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"<password>"}'
+
+curl -X POST http://localhost:8080/api/v1/auth/refresh \
+  -H "Authorization: Bearer <token>"
+
+curl -X POST http://localhost:8080/api/v1/auth/logout \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"INACTIVITY"}'
+```
+
+## 5. Configuración
+Toda la configuración se define en `src/main/resources/application.properties` y se sobrescribe mediante variables de entorno.
+
+| Variable | Propiedad | Valor por defecto | Descripción |
+|---|---|---|---|
+| `PORT` | `server.port` | `8080` | Puerto HTTP. |
+| `SPRING_DATA_MONGODB_URI` | `spring.data.mongodb.uri` | URI local | Cadena de conexión a MongoDB. |
+| `MONGO_DATABASE` | `spring.data.mongodb.database` | `GrowShop` | Base de datos. |
+| `JWT_SECRET` | `app.jwt.secret` | clave de desarrollo | Clave de firma de los JWT. **Obligatoria en producción.** |
+| `JWT_EXPIRATION_MS` | `app.jwt.expiration-ms` | `3600000` (1 h) | Vigencia del token. |
+| `SESSION_INACTIVITY_TIMEOUT_MINUTES` | `app.session.inactivity-timeout-minutes` | `15` | Límite de inactividad para renovar sesión. |
+| `MAIL_USERNAME` | `spring.mail.username` / `app.mail.from` | `zonagreen9@gmail.com` | Cuenta SMTP y remitente de los correos. |
+| `MAIL_PASSWORD` | `spring.mail.password` | _(vacío)_ | App Password de Gmail (requiere verificación en 2 pasos). Nunca se versiona. |
+| `MAIL_ENABLED` | `app.mail.enabled` | `true` | Activa o desactiva el envío de correos. |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | `app.admin.*` | `admin` / `admin` | Administrador principal sembrado al arrancar. **Cambiar en producción.** |
+| `CORS_ALLOWED_ORIGINS` | `app.cors.allowed-origins` | `*` | Orígenes permitidos; restringir en producción. |
+| `LOG_LEVEL_MONGO_TEMPLATE`, `LOG_LEVEL_MONGO_COMMAND` | `logging.level.*` | `INFO` | Nivel de logs de MongoDB. `DEBUG` expone datos de las consultas. |
+
+### Gestión de secretos
+- Nunca versione credenciales, URIs con contraseña ni la clave `JWT_SECRET`.
+- En plataformas como Render, los *Secret Files* montados en `/etc/secrets` se cargan automáticamente como variables de entorno mediante `entrypoint.sh`.
+
+### Conexión a MongoDB
+Ejemplo para MongoDB Atlas (PowerShell):
 
 ```powershell
-$env:SPRING_DATA_MONGODB_URI="mongodb+srv://zyozgke1992_db_user:<PASSWORD_REAL>@products-db-cluster.9wjnrah.mongodb.net/GrowShop?retryWrites=true&w=majority&tls=true&authSource=admin&appName=Products-db-cluster"
-$env:MONGO_URI=$env:SPRING_DATA_MONGODB_URI
+$env:SPRING_DATA_MONGODB_URI="mongodb+srv://<usuario>:<password>@<cluster>.mongodb.net/GrowShop?retryWrites=true&w=majority"
 $env:MONGO_DATABASE="GrowShop"
 ```
 
-> Es importante no dejar placeholders como `<db_password>` o `db_password` en la URI. Si el valor no es válido, la app no podrá autenticar contra MongoDB.
+Sin variables definidas, la aplicación usa una instancia local en `localhost:27017`.
 
-### 6.3 CORS para desarrollo local
-Se agregó una configuración global de CORS para permitir peticiones del frontend durante pruebas locales:
-
-```java
-registry.addMapping("/**")
-    .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-    .allowedHeaders("*")
-    .allowCredentials(true)
-    .allowedOriginPatterns("http://localhost:[*]", "http://127.0.0.1:[*]");
-```
-
-Esto evita el bloqueo del navegador cuando se consume la API desde un proyecto frontend en `localhost`.
-
-## 7. Cambios recientes aplicados
-Se documentan aquí los ajustes realizados para dejar el proyecto operativo con Maven y pruebas locales:
-
-- Ajuste del fallback de MongoDB para que la app no falle si no hay conexión Atlas configurada.
-- Validación de URIs con placeholder y uso de `mongodb://localhost:27017/...` como valor por defecto en desarrollo.
-- Configuración global de CORS para aceptar peticiones desde frontend local en `localhost`.
-- Soporte explícito para `SPRING_DATA_MONGODB_URI` y `MONGO_URI` como variables de entorno principales.
-- Seguimiento de errores de autenticación MongoDB con mensajes más claros para depuración.
-
-## 8. Proceso de construcción
-### 8.1 Limpieza y compilación
-Desde la raíz del proyecto:
+## 6. Construcción y pruebas
+Requisitos: JDK 21 y una instancia de MongoDB accesible (Maven se ejecuta con el wrapper `mvnw`).
 
 ```bash
-mvn clean compile
+./mvnw clean compile     # compilación
+./mvnw test              # pruebas unitarias + reporte JaCoCo
+./mvnw clean package     # genera target/products-0.0.1-SNAPSHOT.jar
 ```
 
-Resultado esperado:
-- Resolución de dependencias.
-- Compilación de clases en target/classes.
+El reporte de cobertura se genera en `target/site/jacoco` y el build exige al menos 80 % de cobertura de líneas. Las clases de `dto`, `model`, `mapper`, `config` y la clase `Application` se excluyen del cálculo.
 
-### 8.2 Ejecución de pruebas
+## 7. Ejecución
 ```bash
-mvn test
-```
-
-Resultado esperado:
-- Ejecución de pruebas definidas en src/test/java.
-- Reportes en target/surefire-reports.
-
-### 8.3 Empaquetado
-```bash
-mvn clean package
-```
-
-Resultado esperado:
-- Generación del artefacto ejecutable en target/.
-
-## 9. Cómo usar el proyecto
-### 9.1 Ejecutar la aplicación
-Opción A (recomendada en desarrollo):
-
-```bash
-mvn spring-boot:run
-```
-
-Opción B (jar empaquetado):
-
-```bash
+./mvnw spring-boot:run
+# o con el artefacto empaquetado
 java -jar target/products-0.0.1-SNAPSHOT.jar
 ```
 
-La API queda disponible en:
-- http://localhost:8080
-
-También se puede construir y ejecutar el contenedor con Java 21:
+Con Docker (imagen multi-etapa sobre Eclipse Temurin 21, ejecutada con usuario sin privilegios):
 
 ```bash
 docker build -t products-api:local .
-docker run --rm -p 8080:8080 products-api:local
+docker run --rm -p 8080:8080 \
+  -e SPRING_DATA_MONGODB_URI="<uri>" \
+  -e JWT_SECRET="<secreto>" \
+  products-api:local
 ```
 
-### 9.2 Documentación interactiva
+Documentación interactiva:
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - OpenAPI JSON: http://localhost:8080/v3/api-docs
 
-### 9.3 Endpoints principales (CRUD)
-Base path: /api/productos
+## 8. Referencia de la API
+La especificación completa y actualizada está en Swagger UI. Resumen de rutas:
 
-1. Listar productos
-```http
-GET /api/productos
-```
+| Recurso | Ruta base | Acceso |
+|---|---|---|
+| Autenticación | `/api/v1/auth` | Público |
+| Productos (lectura) | `/api/productos` (`GET`, `/{id}`, `/featured`, `/categories`) | Público |
+| Productos (escritura) | `/api/productos` (`POST`, `PUT`, `DELETE`, `/{id}/images`) | `ADMIN` |
+| Perfil de usuario | `/api/users/profile` (`GET`, `PUT`) | Autenticado |
+| Órdenes del cliente | `/api/orders` (`POST`, `/mine`, `/{id}`) | Autenticado |
+| Administración de usuarios | `/api/admin/users` (`GET`, `/{username}/toggle-status`) | `ADMIN` |
+| Administración de órdenes | `/api/admin/orders` (listado, `/{id}`, `/{id}/status`, `/pqr`, `/report`) | `ADMIN` |
 
-2. Obtener producto por ID
-```http
-GET /api/productos/{id}
-```
-
-3. Crear producto
-```http
-POST /api/productos
-Content-Type: application/json
-
-{
-  "nombre": "Laptop Dell XPS 15",
-  "descripcion": "Procesador Intel Core i7, 16GB RAM",
-  "precio": 1299.99
-}
-```
-
-4. Actualizar producto
-```http
-PUT /api/productos/{id}
-Content-Type: application/json
-
-{
-  "nombre": "Laptop Dell XPS 15 (2026)",
-  "descripcion": "32GB RAM, SSD 1TB",
-  "precio": 1499.99
-}
-```
-
-5. Eliminar producto
-```http
-DELETE /api/productos/{id}
-```
-
-### 9.4 Ejemplos con curl
-Crear:
-```bash
-curl -X POST "http://localhost:8080/api/productos" \
-  -H "Content-Type: application/json" \
-  -d '{"nombre":"Teclado Mecanico","descripcion":"Switch Blue","precio":89.90}'
-```
-
-Listar:
-```bash
-curl "http://localhost:8080/api/productos"
-```
-
-### 9.5 Órdenes
-Todas las rutas de órdenes requieren `Authorization: Bearer <JWT>`. El usuario propietario se toma del token; el cliente no puede indicar el `username` de la orden.
-
-- `POST /api/orders`: crea una orden. El backend valida que cada producto esté activo, recalcula los precios vigentes y el IVA del 16 %, y rechaza con `422` los valores enviados que no coincidan.
-- `GET /api/orders/mine`: lista las órdenes del usuario autenticado.
-- `GET /api/orders/{id}`: consulta una orden propia; una orden de otro usuario devuelve `404`.
-- `GET /api/admin/orders`: requiere rol `ADMIN`. Acepta `status`, `from`, `to`, `username`, `page` y `size`; las fechas son `YYYY-MM-DD`. Si se solicita paginación, responde con una lista plana y `X-Total-Count`.
-- `GET /api/admin/orders/{id}` y `PUT /api/admin/orders/{id}/status`: requieren rol `ADMIN`. Los estados válidos son `CREADA`, `PAGADA`, `DESPACHADA`, `ENTREGADA` y `CANCELADA`. Los cambios se auditan y las transiciones no permitidas responden `409`.
+### Órdenes
+- El propietario de la orden se toma del token; el cliente no puede indicar el `username`.
+- `POST /api/orders` valida que cada producto esté activo, recalcula precios vigentes e IVA (16 %) y responde `422` si los valores enviados no coinciden.
+- Una orden de otro usuario responde `404`.
+- `GET /api/admin/orders` admite los filtros `status`, `from`, `to` (formato `YYYY-MM-DD`), `username`, `page` y `size`; con paginación devuelve una lista plana y el encabezado `X-Total-Count`.
+- Estados válidos: `CREADA`, `PAGADA`, `EMPACADA`, `ENTREGADA` y `CANCELADA`. Los cambios de estado se auditan y las transiciones no permitidas responden `409`.
+- Los ítems y el historial de estados se almacenan embebidos en el documento de la orden para garantizar escrituras atómicas.
 
 Ejemplo de creación:
 ```http
 POST /api/orders
-Authorization: Bearer <JWT>
+Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -240,215 +192,32 @@ Content-Type: application/json
 }
 ```
 
-En MongoDB, los ítems y el historial de estado se guardan embebidos en el documento de orden para que su escritura sea atómica. Las respuestas de error de estas rutas usan `{ "message": "..." }`.
+## 9. Manejo de errores
+Un manejador global normaliza las respuestas de error:
 
-## 10. Despliegue con Terraform y AWS
-El proyecto incluye una configuración base de Terraform para desplegar el servicio en Amazon ECS Fargate.
+| Código | Caso |
+|---|---|
+| `400` | Validación de entrada, reglas de negocio de registro y administrador protegido. |
+| `401` | Credenciales inválidas, o sesión vencida (`SESSION_EXPIRED`). |
+| `403` | Usuario inactivo (`user_inactive`) o rol insuficiente. |
+| `404` | Recurso no encontrado. |
+| `409` | Conflicto de estado en órdenes. |
+| `422` | Orden con precios o totales inconsistentes. |
+| `503` | Servicio o infraestructura no disponible. |
+| `500` | Error no controlado. |
 
-### 10.1 Recursos provisionados
-- Repositorio ECR para almacenar las imágenes Docker del servicio.
-- Política de ciclo de vida para eliminar imágenes sin tag y conservar solo las más recientes.
-- Cluster ECS, definición de tarea y servicio Fargate para ejecutar la aplicación.
-- Grupo de logs de CloudWatch, security group y rol de IAM para la ejecución de tareas.
-- Backend remoto en S3 con bloqueo en DynamoDB para guardar el estado de Terraform.
+## 10. Despliegue
+- La imagen Docker (`dockerfile`) compila el proyecto en una etapa y ejecuta únicamente el JAR en una imagen JRE 21, con `MaxRAMPercentage=75` y un usuario sin privilegios.
+- El `entrypoint.sh` carga los secretos montados en `/etc/secrets` antes de iniciar la aplicación, y la aplicación escucha en la variable `PORT` que inyecta la plataforma.
+- Verifique la salud del servicio mediante `/actuator/health`.
+- El análisis estático se integra con SonarQube (`sonar-maven-plugin`) usando el reporte de JaCoCo.
 
-### 10.2 Comandos de despliegue
-Desde la raíz del proyecto:
-
-```bash
-terraform init
-terraform validate
-terraform plan -var="image_tag=v1.0.0"
-terraform apply -var="image_tag=v1.0.0"
+## 11. Estructura del repositorio
+```text
+├── pom.xml                  Definición Maven y dependencias
+├── dockerfile               Imagen multi-etapa de producción
+├── entrypoint.sh            Carga de secretos y arranque
+├── src/main/java            Código fuente (hexagonal)
+├── src/main/resources       application.properties
+└── src/test/java            Pruebas unitarias
 ```
-
-> El valor `image_tag` indica qué versión de la imagen ECR se desplegará en ECS.
-
-## 11. Destrucción y limpieza
-Para eliminar la infraestructura creada por Terraform se puede ejecutar:
-
-```bash
-terraform destroy -auto-approve -var="image_tag=cleanup"
-```
-
-luego se puede usar el script de limpieza preparado para AWS:
-
-```bash
-## 7. Proceso de construcción
-### 7.1 Limpieza y compilación
-Desde la raíz del proyecto:
-
-```bash
-mvn clean compile
-```
-
-Resultado esperado:
-- Resolución de dependencias.
-- Compilación de clases en target/classes.
-
-### 7.2 Ejecución de pruebas
-```bash
-mvn test
-```
-
-Resultado esperado:
-- Ejecución de pruebas definidas en src/test/java.
-- Reportes en target/surefire-reports.
-
-### 7.3 Empaquetado
-```bash
-mvn clean package
-```
-
-Resultado esperado:
-- Generación del artefacto ejecutable en target/.
-
-## 8. Cómo usar el proyecto
-### 8.1 Ejecutar la aplicación
-Opción A (recomendada en desarrollo):
-
-```bash
-mvn spring-boot:run
-```
-
-Opción B (jar empaquetado):
-
-```bash
-java -jar target/products-0.0.1-SNAPSHOT.jar
-```
-
-La API queda disponible en:
-- http://localhost:8080
-
-También se puede construir y ejecutar el contenedor con Java 21:
-
-```bash
-docker build -t products-api:local .
-docker run --rm -p 8080:8080 products-api:local
-```
-
-### 8.2 Documentación interactiva
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- OpenAPI JSON: http://localhost:8080/v3/api-docs
-
-### 8.3 Endpoints principales (CRUD)
-Base path: /api/productos
-
-1. Listar productos
-```http
-GET /api/productos
-```
-
-2. Obtener producto por ID
-```http
-GET /api/productos/{id}
-```
-
-3. Crear producto
-```http
-POST /api/productos
-Content-Type: application/json
-
-{
-  "nombre": "Laptop Dell XPS 15",
-  "descripcion": "Procesador Intel Core i7, 16GB RAM",
-  "precio": 1299.99
-}
-```
-
-4. Actualizar producto
-```http
-PUT /api/productos/{id}
-Content-Type: application/json
-
-{
-  "nombre": "Laptop Dell XPS 15 (2026)",
-  "descripcion": "32GB RAM, SSD 1TB",
-  "precio": 1499.99
-}
-```
-
-5. Eliminar producto
-```http
-DELETE /api/productos/{id}
-```
-
-### 8.4 Ejemplos con curl
-Crear:
-```bash
-curl -X POST "http://localhost:8080/api/productos" \
-  -H "Content-Type: application/json" \
-  -d '{"nombre":"Teclado Mecanico","descripcion":"Switch Blue","precio":89.90}'
-```
-
-Listar:
-```bash
-curl "http://localhost:8080/api/productos"
-```
-
-## 9. Despliegue con Terraform y AWS
-El proyecto incluye una configuración base de Terraform para desplegar el servicio en Amazon ECS Fargate.
-
-### 9.1 Recursos provisionados
-- Repositorio ECR para almacenar las imágenes Docker del servicio.
-- Política de ciclo de vida para eliminar imágenes sin tag y conservar solo las más recientes.
-- Cluster ECS, definición de tarea y servicio Fargate para ejecutar la aplicación.
-- Grupo de logs de CloudWatch, security group y rol de IAM para la ejecución de tareas.
-- Backend remoto en S3 con bloqueo en DynamoDB para guardar el estado de Terraform.
-
-### 9.2 Comandos de despliegue
-Desde la raíz del proyecto:
-
-```bash
-terraform init
-terraform validate
-terraform plan -var="image_tag=v1.0.0"
-terraform apply -var="image_tag=v1.0.0"
-```
-
-> El valor `image_tag` indica qué versión de la imagen ECR se desplegará en ECS.
-
-## 10. Destrucción y limpieza
-Para eliminar la infraestructura creada por Terraform se puede ejecutar:
-
-```bash
-terraform destroy -auto-approve -var="image_tag=cleanup"
-```
-
-luego se puede usar el script de limpieza preparado para AWS:
-
-```bash
-bash ./cleanup-aws.sh
-```
-
-Este script elimina recursos remanentes como el servicio ECS, el cluster, el repositorio ECR, el security group, el grupo de logs y el estado remoto en S3. Se recomienda ejecutarlo con precaución si el bucket de Terraform contiene datos de importancia.
-
-## 11. Persistencia y ejecución
-La aplicación se conecta a MongoDB usando las propiedades `spring.data.mongodb.*` o una URI completa con `spring.data.mongodb.uri`.
-
-Para CI/CD, el proyecto queda alineado con Java 21 en estos puntos:
-- Maven compila con Java 21 definido en pom.xml.
-- Jenkins usa la herramienta JDK 21 y verifica la versión antes de ejecutar Maven.
-- Docker ejecuta la aplicación sobre una imagen base Eclipse Temurin 21.
-
-## 12. Manejo de errores
-La API cuenta con un manejador global de excepciones que normaliza respuestas HTTP para casos como:
-
-- Recurso no encontrado (404).
-- Errores de validación de entrada (400).
-- Servicio no disponible por resiliencia/infraestructura (503).
-- Errores no controlados (500).
-
-## 13. Estructura general del repositorio
-- pom.xml: definición del proyecto Maven y dependencias.
-- src/main/java: código fuente principal.
-- src/main/resources/application.properties: configuración de aplicación.
-- src/test/java: pruebas.
-- target/: artefactos y reportes generados por Maven.
-- main.tf y ecs.tf: infraestructura de Terraform para AWS.
-- cleanup-aws.sh: script para limpiar recursos AWS generados por la infraestructura.
-
-## 14. Conclusión
-El proyecto Products API constituye una implementación académica completa de un microservicio CRUD empresarial, integrando prácticas modernas de ingeniería de software en Java: arquitectura desacoplada, documentación automática, validaciones robustas y pruebas.
-
-Como resultado, el sistema no solo cumple con el objetivo funcional de gestión de productos, sino que también ofrece una base sólida para evolución, mantenimiento y despliegue en entornos reales.

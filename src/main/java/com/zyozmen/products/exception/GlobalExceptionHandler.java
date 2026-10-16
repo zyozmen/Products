@@ -4,6 +4,7 @@ import com.zyozmen.products.domain.exception.InvalidCredentialsException;
 import com.zyozmen.products.domain.exception.MainAdminProtectedException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.exception.ServiceUnavailableException;
+import com.zyozmen.products.domain.exception.SessionExpiredException;
 import com.zyozmen.products.domain.exception.UnderageRegistrationException;
 import com.zyozmen.products.domain.exception.UserAlreadyExistsException;
 import com.zyozmen.products.domain.exception.UserInactiveException;
@@ -89,6 +90,12 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
+    @ExceptionHandler(SessionExpiredException.class)
+    public ResponseEntity<SessionErrorResponse> handleSessionExpiredException(SessionExpiredException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new SessionErrorResponse(SessionExpiredException.CODE, ex.getMessage()));
     }
 
     @ExceptionHandler(UserInactiveException.class)

@@ -1,5 +1,6 @@
 package com.zyozmen.products.security;
 
+import com.zyozmen.products.domain.port.out.RevokedTokenRepositoryPort;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,11 +27,15 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    public static final String AUTH_ERROR_ATTRIBUTE = "auth.error";
+    public static final String SESSION_EXPIRED = "SESSION_EXPIRED";
 
     private final JwtService jwtService;
+    private final RevokedTokenRepositoryPort revokedTokenPort;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, RevokedTokenRepositoryPort revokedTokenPort) {
         this.jwtService = jwtService;
+        this.revokedTokenPort = revokedTokenPort;
     }
 
     @Override
@@ -44,7 +49,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
             String token = authHeader.substring(BEARER_PREFIX.length());
 
-            if (jwtService.isTokenValid(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (!jwtService.isTokenValid(token) || revokedTokenPort.isRevoked(jwtService.extractJti(token))) {
+                request.setAttribute(AUTH_ERROR_ATTRIBUTE, SESSION_EXPIRED);
+            } else if (SecurityContextHolder.getContext().getAuthentication() == null) {
                 String username = jwtService.extractUsername(token);
                 String role = jwtService.extractRole(token);
 

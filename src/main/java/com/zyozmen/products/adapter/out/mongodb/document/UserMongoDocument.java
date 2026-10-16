@@ -45,6 +45,9 @@ public class UserMongoDocument {
     @Field("telefono")
     private String telefono;
 
+    @Field("email")
+    private String email;
+
     @Field("tipo_identificacion")
     private String tipoIdentificacion;
 

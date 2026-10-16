@@ -23,6 +23,9 @@ class JwtAuthenticationFilterTest {
     private JwtService jwtService;
 
     @Mock
+    private com.zyozmen.products.domain.port.out.RevokedTokenRepositoryPort revokedTokenPort;
+
+    @Mock
     private HttpServletRequest request;
 
     @Mock
@@ -38,7 +41,7 @@ class JwtAuthenticationFilterTest {
 
     @Test
     void shouldSetAuthenticationWhenTokenIsValid() throws Exception {
-        JwtAuthenticationFilter filterUnderTest = new JwtAuthenticationFilter(jwtService);
+        JwtAuthenticationFilter filterUnderTest = new JwtAuthenticationFilter(jwtService, revokedTokenPort);
         when(request.getHeader("Authorization")).thenReturn("Bearer valid-token");
         when(jwtService.isTokenValid("valid-token")).thenReturn(true);
         when(jwtService.extractUsername("valid-token")).thenReturn("juan123");
@@ -57,7 +60,7 @@ class JwtAuthenticationFilterTest {
 
     @Test
     void shouldNotSetAuthenticationWhenNoAuthorizationHeader() throws Exception {
-        JwtAuthenticationFilter filterUnderTest = new JwtAuthenticationFilter(jwtService);
+        JwtAuthenticationFilter filterUnderTest = new JwtAuthenticationFilter(jwtService, revokedTokenPort);
         when(request.getHeader("Authorization")).thenReturn(null);
 
         filterUnderTest.doFilter(request, response, filterChain);
@@ -68,13 +71,29 @@ class JwtAuthenticationFilterTest {
 
     @Test
     void shouldNotSetAuthenticationWhenTokenIsInvalid() throws Exception {
-        JwtAuthenticationFilter filterUnderTest = new JwtAuthenticationFilter(jwtService);
+        JwtAuthenticationFilter filterUnderTest = new JwtAuthenticationFilter(jwtService, revokedTokenPort);
         when(request.getHeader("Authorization")).thenReturn("Bearer invalid-token");
         when(jwtService.isTokenValid("invalid-token")).thenReturn(false);
 
         filterUnderTest.doFilter(request, response, filterChain);
 
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(request).setAttribute(JwtAuthenticationFilter.AUTH_ERROR_ATTRIBUTE, "SESSION_EXPIRED");
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void shouldNotSetAuthenticationWhenTokenIsRevoked() throws Exception {
+        JwtAuthenticationFilter filterUnderTest = new JwtAuthenticationFilter(jwtService, revokedTokenPort);
+        when(request.getHeader("Authorization")).thenReturn("Bearer revoked-token");
+        when(jwtService.isTokenValid("revoked-token")).thenReturn(true);
+        when(jwtService.extractJti("revoked-token")).thenReturn("jti-1");
+        when(revokedTokenPort.isRevoked("jti-1")).thenReturn(true);
+
+        filterUnderTest.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(request).setAttribute(JwtAuthenticationFilter.AUTH_ERROR_ATTRIBUTE, "SESSION_EXPIRED");
         verify(filterChain).doFilter(request, response);
     }
 }

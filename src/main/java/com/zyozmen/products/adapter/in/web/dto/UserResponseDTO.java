@@ -28,6 +28,9 @@ public class UserResponseDTO {
     @Schema(description = "Teléfono", example = "3124567890")
     private String telefono;
 
+    @Schema(description = "Correo electrónico", example = "juan@example.com")
+    private String email;
+
     @Schema(description = "Tipo de documento de identificación", example = "CC")
     private String tipoIdentificacion;
 

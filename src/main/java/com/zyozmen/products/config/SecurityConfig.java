@@ -48,7 +48,13 @@ public class SecurityConfig {
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             response.setContentType("application/json");
                             response.setCharacterEncoding("UTF-8");
-                            response.getWriter().write("{\"message\":\"Autenticación requerida\"}");
+                            if (JwtAuthenticationFilter.SESSION_EXPIRED.equals(
+                                    request.getAttribute(JwtAuthenticationFilter.AUTH_ERROR_ATTRIBUTE))) {
+                                response.getWriter().write(
+                                        "{\"code\":\"SESSION_EXPIRED\",\"message\":\"Session expired\"}");
+                            } else {
+                                response.getWriter().write("{\"message\":\"Autenticación requerida\"}");
+                            }
                         })
                         .accessDeniedHandler((request, response, exception) -> {
                             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -58,7 +64,7 @@ public class SecurityConfig {
                         }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/v1/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

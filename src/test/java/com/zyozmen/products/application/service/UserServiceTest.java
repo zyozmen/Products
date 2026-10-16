@@ -10,6 +10,7 @@ import com.zyozmen.products.domain.model.AuthResult;
 import com.zyozmen.products.domain.model.Role;
 import com.zyozmen.products.domain.model.TipoIdentificacion;
 import com.zyozmen.products.domain.model.User;
+import com.zyozmen.products.domain.port.out.UserNotificationPort;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
 import com.zyozmen.products.security.JwtService;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +45,9 @@ class UserServiceTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private UserNotificationPort userNotificationPort;
 
     @InjectMocks
     private UserService userService;
@@ -85,6 +89,7 @@ class UserServiceTest {
         assertThat(captor.getValue().getRole()).isEqualTo(Role.CLIENTE);
         assertThat(captor.getValue().getActive()).isTrue();
         assertThat(result.getRole()).isEqualTo(Role.CLIENTE);
+        verify(userNotificationPort).sendWelcomeEmail(result);
     }
 
     @Test

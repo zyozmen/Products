@@ -25,6 +25,7 @@ public class UserWebMapper {
                 .apellido(dto.getApellido())
                 .direccion(dto.getDireccion())
                 .telefono(dto.getTelefono())
+                .email(dto.getEmail() != null ? dto.getEmail().trim() : null)
                 .tipoIdentificacion(dto.getTipoIdentificacion() != null
                         ? TipoIdentificacion.valueOf(dto.getTipoIdentificacion())
                         : null)
@@ -43,6 +44,7 @@ public class UserWebMapper {
                 .apellido(user.getApellido())
                 .direccion(user.getDireccion())
                 .telefono(user.getTelefono())
+                .email(user.getEmail())
                 .tipoIdentificacion(user.getTipoIdentificacion() != null
                         ? user.getTipoIdentificacion().name()
                         : null)

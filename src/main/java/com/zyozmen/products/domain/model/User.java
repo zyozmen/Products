@@ -19,6 +19,7 @@ public class User {
     private String apellido;
     private String direccion;
     private String telefono;
+    private String email;
     private TipoIdentificacion tipoIdentificacion;
     private String numeroIdentificacion;
     private Boolean mayorDeEdad;
@@ -36,6 +37,7 @@ public class User {
         this.apellido = builder.apellido;
         this.direccion = builder.direccion;
         this.telefono = builder.telefono;
+        this.email = builder.email;
         this.tipoIdentificacion = builder.tipoIdentificacion;
         this.numeroIdentificacion = builder.numeroIdentificacion;
         this.mayorDeEdad = builder.mayorDeEdad;
@@ -103,6 +105,14 @@ public class User {
         this.telefono = telefono;
     }
 
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
     public TipoIdentificacion getTipoIdentificacion() {
         return tipoIdentificacion;
     }
@@ -155,6 +165,7 @@ public class User {
                 && Objects.equals(apellido, user.apellido)
                 && Objects.equals(direccion, user.direccion)
                 && Objects.equals(telefono, user.telefono)
+                && Objects.equals(email, user.email)
                 && tipoIdentificacion == user.tipoIdentificacion
                 && Objects.equals(numeroIdentificacion, user.numeroIdentificacion)
                 && Objects.equals(mayorDeEdad, user.mayorDeEdad)
@@ -164,7 +175,7 @@ public class User {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, username, password, nombre, apellido, direccion, telefono,
+        return Objects.hash(id, username, password, nombre, apellido, direccion, telefono, email,
                 tipoIdentificacion, numeroIdentificacion, mayorDeEdad, active, role);
     }
 
@@ -177,6 +188,7 @@ public class User {
                 ", apellido='" + apellido + '\'' +
                 ", direccion='" + direccion + '\'' +
                 ", telefono='" + telefono + '\'' +
+                ", email='" + email + '\'' +
                 ", tipoIdentificacion=" + tipoIdentificacion +
                 ", numeroIdentificacion='" + numeroIdentificacion + '\'' +
                 ", mayorDeEdad=" + mayorDeEdad +
@@ -194,6 +206,7 @@ public class User {
         private String apellido;
         private String direccion;
         private String telefono;
+        private String email;
         private TipoIdentificacion tipoIdentificacion;
         private String numeroIdentificacion;
         private Boolean mayorDeEdad;
@@ -232,6 +245,11 @@ public class User {
 
         public Builder telefono(String telefono) {
             this.telefono = telefono;
+            return this;
+        }
+
+        public Builder email(String email) {
+            this.email = email;
             return this;
         }
 

@@ -10,6 +10,7 @@ import com.zyozmen.products.domain.model.AuthResult;
 import com.zyozmen.products.domain.model.Role;
 import com.zyozmen.products.domain.model.User;
 import com.zyozmen.products.domain.port.in.UserUseCase;
+import com.zyozmen.products.domain.port.out.UserNotificationPort;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
 import com.zyozmen.products.security.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class UserService implements UserUseCase {
     private final UserRepositoryPort userRepositoryPort;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final UserNotificationPort userNotificationPort;
 
     @Value("${app.admin.username:admin}")
     private String mainAdminUsername;
@@ -61,7 +63,9 @@ public class UserService implements UserUseCase {
         user.setRole(Role.CLIENTE);
         user.setActive(true);
 
-        return userRepositoryPort.save(user);
+        User saved = userRepositoryPort.save(user);
+        userNotificationPort.sendWelcomeEmail(saved);
+        return saved;
     }
 
     @Override

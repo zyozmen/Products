@@ -8,7 +8,11 @@ import com.zyozmen.products.adapter.in.web.mapper.UserWebMapper;
 import com.zyozmen.products.domain.model.AuthResult;
 import com.zyozmen.products.domain.model.Role;
 import com.zyozmen.products.domain.model.User;
+import com.zyozmen.products.domain.port.in.SessionUseCase;
 import com.zyozmen.products.domain.port.in.UserUseCase;
+import com.zyozmen.products.adapter.in.web.dto.LogoutRequestDTO;
+import com.zyozmen.products.domain.exception.SessionExpiredException;
+import com.zyozmen.products.domain.model.LogoutReason;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,6 +22,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,6 +34,9 @@ class AuthControllerTest {
 
     @Mock
     private UserWebMapper userWebMapper;
+
+    @Mock
+    private SessionUseCase sessionUseCase;
 
     @InjectMocks
     private AuthController authController;
@@ -74,5 +83,42 @@ class AuthControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(responseDTO);
+    }
+
+    @Test
+    void refreshShouldReturnNewToken() {
+        AuthResult authResult = new AuthResult("new-token", User.builder().username("juan123").build());
+        LoginResponseDTO responseDTO = LoginResponseDTO.builder().token("new-token").build();
+        when(sessionUseCase.refresh("old")).thenReturn(authResult);
+        when(userWebMapper.toLoginResponseDTO(authResult)).thenReturn(responseDTO);
+
+        ResponseEntity<LoginResponseDTO> response = authController.refresh("Bearer old");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(responseDTO);
+    }
+
+    @Test
+    void refreshWithoutBearerHeaderShouldDelegateNullToken() {
+        when(sessionUseCase.refresh(null)).thenThrow(new SessionExpiredException("Session expired"));
+
+        assertThatThrownBy(() -> authController.refresh(null))
+                .isInstanceOf(SessionExpiredException.class);
+    }
+
+    @Test
+    void logoutByUserShouldReturn204() {
+        ResponseEntity<Void> response = authController.logout("Bearer t", null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(sessionUseCase).logout("t", LogoutReason.USER);
+    }
+
+    @Test
+    void logoutByInactivityShouldRevokeAndRaiseSessionExpired() {
+        assertThatThrownBy(() -> authController.logout("Bearer t", new LogoutRequestDTO(LogoutReason.INACTIVITY)))
+                .isInstanceOf(SessionExpiredException.class)
+                .hasMessage("Inactivity limit reached");
+        verify(sessionUseCase).logout("t", LogoutReason.INACTIVITY);
     }
 }
