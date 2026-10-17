@@ -1,10 +1,12 @@
 package com.zyozmen.products.adapter.out.mail;
 
 import com.zyozmen.products.domain.model.User;
+import jakarta.mail.Session;
+import jakarta.mail.internet.MimeMessage;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,10 +16,16 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class SmtpUserNotificationAdapterTest {
 
     private final JavaMailSender mailSender = mock(JavaMailSender.class);
+
+    @BeforeEach
+    void setUp() {
+        when(mailSender.createMimeMessage()).thenAnswer(inv -> new MimeMessage((Session) null));
+    }
 
     private User user(String email) {
         return User.builder().username("juan123").nombre("Juan").email(email).build();
@@ -28,16 +36,17 @@ class SmtpUserNotificationAdapterTest {
     }
 
     @Test
-    void sendsWelcomeEmailFromConfiguredSender() {
+    void sendsWelcomeEmailFromConfiguredSender() throws Exception {
         adapter(true).sendWelcomeEmail(user("juan@example.com"));
 
-        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(captor.capture());
-        SimpleMailMessage message = captor.getValue();
-        assertThat(message.getFrom()).isEqualTo("zonagreen9@gmail.com");
-        assertThat(message.getTo()).containsExactly("juan@example.com");
+        MimeMessage message = captor.getValue();
+        assertThat(message.getFrom()[0].toString()).isEqualTo("zonagreen9@gmail.com");
+        assertThat(message.getAllRecipients()[0].toString()).isEqualTo("juan@example.com");
         assertThat(message.getSubject()).isEqualTo("Bienvenido");
-        assertThat(message.getText()).contains("Juan").contains("juan123");
+        message.saveChanges();
+        assertThat(message.getContentType()).contains("text/html");
     }
 
     @Test
@@ -47,12 +56,12 @@ class SmtpUserNotificationAdapterTest {
         adapter(true).sendWelcomeEmail(user(null));
         adapter(true).sendWelcomeEmail(null);
 
-        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+        verify(mailSender, never()).send(any(MimeMessage.class));
     }
 
     @Test
     void swallowsMailFailures() {
-        doThrow(new MailSendException("smtp down")).when(mailSender).send(any(SimpleMailMessage.class));
+        doThrow(new MailSendException("smtp down")).when(mailSender).send(any(MimeMessage.class));
 
         assertThatCode(() -> adapter(true).sendWelcomeEmail(user("juan@example.com")))
                 .doesNotThrowAnyException();

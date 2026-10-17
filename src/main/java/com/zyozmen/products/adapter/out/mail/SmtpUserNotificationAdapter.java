@@ -2,13 +2,19 @@ package com.zyozmen.products.adapter.out.mail;
 
 import com.zyozmen.products.domain.model.User;
 import com.zyozmen.products.domain.port.out.UserNotificationPort;
+import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Adaptador de salida SMTP para notificaciones a usuarios.
@@ -19,6 +25,8 @@ import org.springframework.stereotype.Component;
 public class SmtpUserNotificationAdapter implements UserNotificationPort {
 
     private static final Logger log = LoggerFactory.getLogger(SmtpUserNotificationAdapter.class);
+
+    private static final Resource TEMPLATE = new ClassPathResource("email/email_template.html");
 
     private final JavaMailSender mailSender;
     private final boolean enabled;
@@ -43,11 +51,12 @@ public class SmtpUserNotificationAdapter implements UserNotificationPort {
             return;
         }
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(from);
-            message.setTo(user.getEmail());
-            message.setSubject(subject);
-            message.setText(buildBody(user));
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, StandardCharsets.UTF_8.name());
+            helper.setFrom(from);
+            helper.setTo(user.getEmail());
+            helper.setSubject(subject);
+            helper.setText(buildBody(), true);
             mailSender.send(message);
         } catch (Exception ex) {
             log.warn("No se pudo enviar el correo de bienvenida al usuario {}: {}",
@@ -55,12 +64,7 @@ public class SmtpUserNotificationAdapter implements UserNotificationPort {
         }
     }
 
-    private String buildBody(User user) {
-        return "Hola " + user.getNombre() + ",\n\n"
-                + "Tu cuenta en GrowShop fue creada exitosamente con el usuario \""
-                + user.getUsername() + "\".\n\n"
-                + "Ya puedes iniciar sesión y explorar nuestro catálogo.\n\n"
-                + "Si no realizaste este registro, ignora este mensaje o contáctanos.\n\n"
-                + "Equipo GrowShop";
+    private String buildBody() throws IOException {
+        return TEMPLATE.getContentAsString(StandardCharsets.UTF_8);
     }
 }

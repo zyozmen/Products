@@ -27,7 +27,7 @@ public class JwtService {
             @Value("${app.jwt.expiration-ms:3600000}") long expirationMillis) {
         String effectiveSecret = (secret == null || secret.isBlank())
                 ? "change-this-default-development-only-secret-key-please-0123456789"
-                : secret;
+                : secret.trim();
         this.signingKey = Keys.hmacShaKeyFor(effectiveSecret.getBytes(StandardCharsets.UTF_8));
         this.expirationMillis = expirationMillis;
     }
