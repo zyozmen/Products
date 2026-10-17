@@ -53,7 +53,9 @@ public class SmtpUserNotificationAdapter implements UserNotificationPort {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, StandardCharsets.UTF_8.name());
-            helper.setFrom(from);
+            if (from != null && !from.isBlank()) {
+                helper.setFrom(from.trim());
+            }
             helper.setTo(user.getEmail());
             helper.setSubject(subject);
             helper.setText(buildBody(), true);
