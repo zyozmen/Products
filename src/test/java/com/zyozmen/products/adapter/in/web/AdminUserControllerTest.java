@@ -1,8 +1,10 @@
 package com.zyozmen.products.adapter.in.web;
 
+import com.zyozmen.products.adapter.in.web.dto.UpdateUserStateRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.UserResponseDTO;
 import com.zyozmen.products.adapter.in.web.mapper.UserWebMapper;
 import com.zyozmen.products.domain.model.User;
+import com.zyozmen.products.domain.model.UserState;
 import com.zyozmen.products.domain.port.in.UserUseCase;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,14 +46,15 @@ class AdminUserControllerTest {
     }
 
     @Test
-    void toggleStatusShouldReturnUpdatedUser() {
-        User toggledUser = User.builder().username("juan123").active(false).build();
-        UserResponseDTO dto = UserResponseDTO.builder().username("juan123").active(false).build();
+    void cambiarEstadoShouldReturnUpdatedUser() {
+        User updated = User.builder().username("juan123").state(UserState.ACTIVO).build();
+        UserResponseDTO dto = UserResponseDTO.builder().username("juan123").state("ACTIVO").build();
 
-        when(userUseCase.toggleEstado("juan123")).thenReturn(toggledUser);
-        when(userWebMapper.toResponseDTO(toggledUser)).thenReturn(dto);
+        when(userUseCase.cambiarEstado("juan123", UserState.ACTIVO)).thenReturn(updated);
+        when(userWebMapper.toResponseDTO(updated)).thenReturn(dto);
 
-        ResponseEntity<UserResponseDTO> response = adminUserController.toggleStatus("juan123");
+        ResponseEntity<UserResponseDTO> response = adminUserController.cambiarEstado(
+                "juan123", UpdateUserStateRequestDTO.builder().state(UserState.ACTIVO).build());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(dto);

@@ -162,4 +162,14 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().message())
                 .isEqualTo("El usuario está inactivo. Por favor contacte al administrador");
     }
+
+    @Test
+    void handleUserPendingApprovalExceptionShouldReturn403() {
+        ResponseEntity<UserInactiveErrorResponse> response = handler.handleUserPendingApprovalException(
+                new com.zyozmen.products.domain.exception.UserPendingApprovalException("pendiente"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().error()).isEqualTo("user_pending_approval");
+        assertThat(response.getBody().message()).isEqualTo("pendiente");
+    }
 }

@@ -40,7 +40,7 @@ class SessionServiceTest {
     @Test
     void refreshShouldIssueNewTokenAndRevokeOldOne() {
         Instant exp = Instant.now().plusSeconds(1800);
-        User user = User.builder().username("juan").role(Role.CLIENTE).active(true).build();
+        User user = User.builder().username("juan").role(Role.CLIENTE).state(com.zyozmen.products.domain.model.UserState.ACTIVO).build();
         when(jwtService.isTokenValid("old")).thenReturn(true);
         when(jwtService.extractJti("old")).thenReturn("jti");
         when(revokedTokenPort.isRevoked("jti")).thenReturn(false);
@@ -94,7 +94,7 @@ class SessionServiceTest {
 
     @Test
     void refreshShouldFailWhenUserIsInactive() {
-        User user = User.builder().username("juan").role(Role.CLIENTE).active(false).build();
+        User user = User.builder().username("juan").role(Role.CLIENTE).state(com.zyozmen.products.domain.model.UserState.INACTIVO).build();
         when(jwtService.isTokenValid("t")).thenReturn(true);
         when(jwtService.extractJti("t")).thenReturn("jti");
         when(revokedTokenPort.isRevoked("jti")).thenReturn(false);

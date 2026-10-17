@@ -45,6 +45,7 @@ public class UserMongoDocument {
     @Field("telefono")
     private String telefono;
 
+    @Indexed(unique = true, sparse = true)
     @Field("email")
     private String email;
 
@@ -57,6 +58,10 @@ public class UserMongoDocument {
     @Field("mayor_de_edad")
     private Boolean mayorDeEdad;
 
+    @Field("state")
+    private String state;
+
+    // Campo heredado (antes "active"): solo lectura para migrar documentos antiguos.
     @Field("active")
     private Boolean active;
 

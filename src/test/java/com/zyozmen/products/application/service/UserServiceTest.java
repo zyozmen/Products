@@ -10,6 +10,8 @@ import com.zyozmen.products.domain.model.AuthResult;
 import com.zyozmen.products.domain.model.Role;
 import com.zyozmen.products.domain.model.TipoIdentificacion;
 import com.zyozmen.products.domain.model.User;
+import com.zyozmen.products.domain.model.UserState;
+import com.zyozmen.products.domain.exception.UserPendingApprovalException;
 import com.zyozmen.products.domain.port.out.UserNotificationPort;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
 import com.zyozmen.products.security.JwtService;
@@ -64,7 +66,7 @@ class UserServiceTest {
                 .nombre("Juan")
                 .apellido("Pérez")
                 .direccion("Calle 45 # 12-34")
-                .telefono("3124567890")
+                .telefono("3124567890").email("Juan@Example.com")
                 .tipoIdentificacion(TipoIdentificacion.CC)
                 .numeroIdentificacion("1018234567")
                 .mayorDeEdad(true)
@@ -72,7 +74,7 @@ class UserServiceTest {
     }
 
     @Test
-    void registrarShouldHashPasswordAndForceRoleClienteAndActive() {
+    void registrarShouldHashPasswordAndForceRoleClienteAndStatePendiente() {
         User request = buildClienteRegistration();
         when(userRepositoryPort.existsByUsername("juan123")).thenReturn(false);
         when(userRepositoryPort.existsByTipoIdentificacionAndNumeroIdentificacion(
@@ -87,7 +89,7 @@ class UserServiceTest {
 
         assertThat(captor.getValue().getPassword()).isEqualTo("hashed-password");
         assertThat(captor.getValue().getRole()).isEqualTo(Role.CLIENTE);
-        assertThat(captor.getValue().getActive()).isTrue();
+        assertThat(captor.getValue().getState()).isEqualTo(UserState.PENDIENTE);
         assertThat(result.getRole()).isEqualTo(Role.CLIENTE);
         verify(userNotificationPort).sendWelcomeEmail(result);
     }
@@ -100,6 +102,34 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.registrar(request))
                 .isInstanceOf(UserAlreadyExistsException.class)
                 .hasMessageContaining("nombre de usuario ya está registrado");
+
+        verify(userRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void registrarShouldThrowWhenEmailAlreadyExists() {
+        User request = buildClienteRegistration();
+        when(userRepositoryPort.existsByUsername("juan123")).thenReturn(false);
+        when(userRepositoryPort.existsByEmail("juan@example.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> userService.registrar(request))
+                .isInstanceOf(UserAlreadyExistsException.class)
+                .hasMessageContaining("correo electrónico");
+
+        verify(userRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void registrarShouldThrowUserInactiveWhenEmailBelongsToInactiveAccount() {
+        User request = buildClienteRegistration();
+        when(userRepositoryPort.existsByUsername("juan123")).thenReturn(false);
+        when(userRepositoryPort.existsByEmail("juan@example.com")).thenReturn(true);
+        when(userRepositoryPort.findByEmail("juan@example.com"))
+                .thenReturn(Optional.of(User.builder().state(UserState.INACTIVO).build()));
+
+        assertThatThrownBy(() -> userService.registrar(request))
+                .isInstanceOf(UserInactiveException.class)
+                .hasMessageContaining("cuenta inactiva");
 
         verify(userRepositoryPort, never()).save(any());
     }
@@ -138,14 +168,14 @@ class UserServiceTest {
                 .username("juan123")
                 .password("hashed-password")
                 .role(Role.CLIENTE)
-                .active(true)
+                .state(UserState.ACTIVO)
                 .build();
 
-        when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
+        when(userRepositoryPort.findByEmail("juan@example.com")).thenReturn(Optional.of(storedUser));
         when(passwordEncoder.matches("raw-password", "hashed-password")).thenReturn(true);
         when(jwtService.generateToken("juan123", "CLIENTE")).thenReturn("jwt-token");
 
-        AuthResult result = userService.login("juan123", "raw-password");
+        AuthResult result = userService.login("juan@example.com", "raw-password");
 
         assertThat(result.getToken()).isEqualTo("jwt-token");
         assertThat(result.getUser()).isEqualTo(storedUser);
@@ -153,9 +183,9 @@ class UserServiceTest {
 
     @Test
     void loginShouldThrowInvalidCredentialsWhenUserNotFound() {
-        when(userRepositoryPort.findByUsername("ghost")).thenReturn(Optional.empty());
+        when(userRepositoryPort.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.login("ghost", "whatever"))
+        assertThatThrownBy(() -> userService.login("ghost@example.com", "whatever"))
                 .isInstanceOf(InvalidCredentialsException.class);
     }
 
@@ -164,13 +194,13 @@ class UserServiceTest {
         User storedUser = User.builder()
                 .username("juan123")
                 .password("hashed-password")
-                .active(true)
+                .state(UserState.ACTIVO)
                 .build();
 
-        when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
+        when(userRepositoryPort.findByEmail("juan@example.com")).thenReturn(Optional.of(storedUser));
         when(passwordEncoder.matches("wrong-password", "hashed-password")).thenReturn(false);
 
-        assertThatThrownBy(() -> userService.login("juan123", "wrong-password"))
+        assertThatThrownBy(() -> userService.login("juan@example.com", "wrong-password"))
                 .isInstanceOf(InvalidCredentialsException.class);
     }
 
@@ -179,13 +209,13 @@ class UserServiceTest {
         User storedUser = User.builder()
                 .username("juan123")
                 .password("hashed-password")
-                .active(false)
+                .state(UserState.INACTIVO)
                 .build();
 
-        when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
+        when(userRepositoryPort.findByEmail("juan@example.com")).thenReturn(Optional.of(storedUser));
         when(passwordEncoder.matches("raw-password", "hashed-password")).thenReturn(true);
 
-        assertThatThrownBy(() -> userService.login("juan123", "raw-password"))
+        assertThatThrownBy(() -> userService.login("juan@example.com", "raw-password"))
                 .isInstanceOf(UserInactiveException.class);
     }
 
@@ -200,39 +230,59 @@ class UserServiceTest {
     }
 
     @Test
-    void toggleEstadoShouldThrowWhenTargetingMainAdmin() {
-        assertThatThrownBy(() -> userService.toggleEstado("admin"))
+    void cambiarEstadoShouldThrowWhenTargetingMainAdmin() {
+        assertThatThrownBy(() -> userService.cambiarEstado("admin", UserState.INACTIVO))
                 .isInstanceOf(MainAdminProtectedException.class);
     }
 
     @Test
-    void toggleEstadoShouldThrowWhenUserNotFound() {
+    void cambiarEstadoShouldThrowWhenStateIsNull() {
+        assertThatThrownBy(() -> userService.cambiarEstado("juan123", null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void loginShouldThrowPendingApprovalWhenAccountIsPendiente() {
+        User storedUser = User.builder()
+                .username("juan123")
+                .password("hashed-password")
+                .state(UserState.PENDIENTE)
+                .build();
+        when(userRepositoryPort.findByEmail("juan@example.com")).thenReturn(Optional.of(storedUser));
+        when(passwordEncoder.matches("raw-password", "hashed-password")).thenReturn(true);
+
+        assertThatThrownBy(() -> userService.login("juan@example.com", "raw-password"))
+                .isInstanceOf(UserPendingApprovalException.class)
+                .hasMessageContaining("pendiente de aprobación");
+    }
+
+    @Test
+    void cambiarEstadoShouldThrowWhenUserNotFound() {
         when(userRepositoryPort.findByUsername("ghost")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.toggleEstado("ghost"))
+        assertThatThrownBy(() -> userService.cambiarEstado("ghost", UserState.ACTIVO))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
-    void toggleEstadoShouldFlipActiveFromTrueToFalse() {
-        User storedUser = User.builder().username("juan123").active(true).build();
+    void cambiarEstadoShouldApproveUserFromPendienteToActivo() {
+        User storedUser = User.builder().username("juan123").state(UserState.PENDIENTE).build();
         when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
         when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        User result = userService.toggleEstado("juan123");
+        User result = userService.cambiarEstado("juan123", UserState.ACTIVO);
 
-        assertThat(result.getActive()).isFalse();
+        assertThat(result.getState()).isEqualTo(UserState.ACTIVO);
     }
 
     @Test
-    void toggleEstadoShouldFlipActiveFromFalseToTrue() {
-        User storedUser = User.builder().username("juan123").active(false).build();
+    void cambiarEstadoShouldAllowInactivatingUser() {
+        User storedUser = User.builder().username("juan123").state(UserState.ACTIVO).build();
         when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
         when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        User result = userService.toggleEstado("juan123");
-
-        assertThat(result.getActive()).isTrue();
+        assertThat(userService.cambiarEstado("juan123", UserState.INACTIVO).getState())
+                .isEqualTo(UserState.INACTIVO);
     }
 
     @Test

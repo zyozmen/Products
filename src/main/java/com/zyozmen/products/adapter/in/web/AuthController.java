@@ -57,7 +57,7 @@ public class AuthController {
     @ApiResponse(responseCode = "200", description = "Login exitoso, retorna token JWT y perfil")
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDTO> login(@Valid @RequestBody LoginRequestDTO request) {
-        AuthResult authResult = userUseCase.login(request.getUsername(), request.getPassword());
+        AuthResult authResult = userUseCase.login(request.getEmail(), request.getPassword());
         return ResponseEntity.ok(userWebMapper.toLoginResponseDTO(authResult));
     }
 

@@ -8,6 +8,7 @@ import com.zyozmen.products.domain.exception.SessionExpiredException;
 import com.zyozmen.products.domain.exception.UnderageRegistrationException;
 import com.zyozmen.products.domain.exception.UserAlreadyExistsException;
 import com.zyozmen.products.domain.exception.UserInactiveException;
+import com.zyozmen.products.domain.exception.UserPendingApprovalException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -96,6 +97,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<SessionErrorResponse> handleSessionExpiredException(SessionExpiredException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new SessionErrorResponse(SessionExpiredException.CODE, ex.getMessage()));
+    }
+
+    @ExceptionHandler(UserPendingApprovalException.class)
+    public ResponseEntity<UserInactiveErrorResponse> handleUserPendingApprovalException(
+            UserPendingApprovalException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new UserInactiveErrorResponse("user_pending_approval", ex.getMessage()));
     }
 
     @ExceptionHandler(UserInactiveException.class)

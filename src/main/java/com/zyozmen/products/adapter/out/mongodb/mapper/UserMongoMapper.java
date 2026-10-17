@@ -4,6 +4,7 @@ import com.zyozmen.products.adapter.out.mongodb.document.UserMongoDocument;
 import com.zyozmen.products.domain.model.Role;
 import com.zyozmen.products.domain.model.TipoIdentificacion;
 import com.zyozmen.products.domain.model.User;
+import com.zyozmen.products.domain.model.UserState;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,7 +31,7 @@ public class UserMongoMapper {
                         : null)
                 .numeroIdentificacion(document.getNumeroIdentificacion())
                 .mayorDeEdad(document.getMayorDeEdad())
-                .active(document.getActive())
+                .state(resolveState(document))
                 .role(document.getRole() != null ? Role.valueOf(document.getRole()) : null)
                 .build();
     }
@@ -57,8 +58,18 @@ public class UserMongoMapper {
                         : null)
                 .numeroIdentificacion(user.getNumeroIdentificacion())
                 .mayorDeEdad(user.getMayorDeEdad())
-                .active(user.getActive())
+                .state(user.getState() != null ? user.getState().name() : null)
                 .role(user.getRole() != null ? user.getRole().name() : null)
                 .build();
+    }
+
+    private UserState resolveState(UserMongoDocument document) {
+        if (document.getState() != null) {
+            return UserState.valueOf(document.getState());
+        }
+        if (document.getActive() != null) {
+            return document.getActive() ? UserState.ACTIVO : UserState.INACTIVO;
+        }
+        return null;
     }
 }

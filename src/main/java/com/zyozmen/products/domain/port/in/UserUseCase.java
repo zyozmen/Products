@@ -2,6 +2,7 @@ package com.zyozmen.products.domain.port.in;
 
 import com.zyozmen.products.domain.model.AuthResult;
 import com.zyozmen.products.domain.model.User;
+import com.zyozmen.products.domain.model.UserState;
 
 import java.util.List;
 
@@ -12,15 +13,15 @@ import java.util.List;
 public interface UserUseCase {
 
     /**
-     * Registra un nuevo usuario. Fuerza role=cliente y active=true,
-     * sin importar lo enviado en la petición.
+     * Registra un nuevo usuario. Fuerza role=cliente y state=PENDIENTE
+     * (a la espera de aprobación de acceso), sin importar lo enviado.
      */
     User registrar(User user);
 
     /**
-     * Autentica un usuario y genera un token de sesión (JWT).
+     * Autentica un usuario por correo electrónico y genera un token de sesión (JWT).
      */
-    AuthResult login(String username, String password);
+    AuthResult login(String email, String password);
 
     /**
      * Lista todos los usuarios del sistema (uso administrativo).
@@ -28,10 +29,10 @@ public interface UserUseCase {
     List<User> listarUsuarios();
 
     /**
-     * Alterna (activa/inactiva) el estado de un usuario. No permite
-     * modificar al administrador principal del sistema.
+     * Cambia el estado (ACTIVO, INACTIVO, PENDIENTE) de un usuario. Operación
+     * exclusiva del rol ADMIN; no permite modificar al administrador principal.
      */
-    User toggleEstado(String username);
+    User cambiarEstado(String username, UserState nuevoEstado);
 
     /**
      * Obtiene el perfil de un usuario por su username.

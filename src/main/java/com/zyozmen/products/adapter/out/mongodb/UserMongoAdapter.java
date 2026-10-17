@@ -28,6 +28,16 @@ public class UserMongoAdapter implements UserRepositoryPort {
     }
 
     @Override
+    public boolean existsByEmail(String email) {
+        return mongoRepository.existsByEmail(email);
+    }
+
+    @Override
+    public Optional<User> findByEmail(String email) {
+        return mongoRepository.findByEmail(email).map(mapper::toDomain);
+    }
+
+    @Override
     public boolean existsByTipoIdentificacionAndNumeroIdentificacion(
             TipoIdentificacion tipoIdentificacion, String numeroIdentificacion) {
         if (tipoIdentificacion == null || numeroIdentificacion == null) {

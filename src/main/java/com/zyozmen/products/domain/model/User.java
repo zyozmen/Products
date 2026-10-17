@@ -23,7 +23,7 @@ public class User {
     private TipoIdentificacion tipoIdentificacion;
     private String numeroIdentificacion;
     private Boolean mayorDeEdad;
-    private Boolean active;
+    private UserState state;
     private Role role;
 
     public User() {
@@ -41,7 +41,7 @@ public class User {
         this.tipoIdentificacion = builder.tipoIdentificacion;
         this.numeroIdentificacion = builder.numeroIdentificacion;
         this.mayorDeEdad = builder.mayorDeEdad;
-        this.active = builder.active;
+        this.state = builder.state;
         this.role = builder.role;
     }
 
@@ -137,12 +137,12 @@ public class User {
         this.mayorDeEdad = mayorDeEdad;
     }
 
-    public Boolean getActive() {
-        return active;
+    public UserState getState() {
+        return state;
     }
 
-    public void setActive(Boolean active) {
-        this.active = active;
+    public void setState(UserState state) {
+        this.state = state;
     }
 
     public Role getRole() {
@@ -169,14 +169,14 @@ public class User {
                 && tipoIdentificacion == user.tipoIdentificacion
                 && Objects.equals(numeroIdentificacion, user.numeroIdentificacion)
                 && Objects.equals(mayorDeEdad, user.mayorDeEdad)
-                && Objects.equals(active, user.active)
+                && Objects.equals(state, user.state)
                 && role == user.role;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(id, username, password, nombre, apellido, direccion, telefono, email,
-                tipoIdentificacion, numeroIdentificacion, mayorDeEdad, active, role);
+                tipoIdentificacion, numeroIdentificacion, mayorDeEdad, state, role);
     }
 
     @Override
@@ -192,7 +192,7 @@ public class User {
                 ", tipoIdentificacion=" + tipoIdentificacion +
                 ", numeroIdentificacion='" + numeroIdentificacion + '\'' +
                 ", mayorDeEdad=" + mayorDeEdad +
-                ", active=" + active +
+                ", state=" + state +
                 ", role=" + role +
                 '}';
     }
@@ -210,7 +210,7 @@ public class User {
         private TipoIdentificacion tipoIdentificacion;
         private String numeroIdentificacion;
         private Boolean mayorDeEdad;
-        private Boolean active;
+        private UserState state;
         private Role role;
 
         public Builder id(String id) {
@@ -268,8 +268,8 @@ public class User {
             return this;
         }
 
-        public Builder active(Boolean active) {
-            this.active = active;
+        public Builder state(UserState state) {
+            this.state = state;
             return this;
         }
 

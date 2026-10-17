@@ -17,7 +17,7 @@ Microservicio REST para la gestión de catálogo de productos, usuarios, órdene
 
 ## 1. Capacidades
 - **Catálogo:** consulta, creación, actualización y eliminación de productos, categorías, productos destacados y carga de imágenes.
-- **Usuarios:** registro público, perfil propio y administración de cuentas (activar/inactivar).
+- **Usuarios:** registro público (cuenta en estado `PENDIENTE` hasta aprobación), perfil propio y administración de estados (`ACTIVO`, `INACTIVO`, `PENDIENTE`) exclusiva del rol `ADMIN`.
 - **Autenticación y sesión:** login con JWT, renovación de token, cierre de sesión con revocación en servidor y control de inactividad parametrizable.
 - **Órdenes:** creación con validación de precios e IVA en backend, consulta por usuario, gestión administrativa con auditoría de estados, PQR y reportes.
 - **Operación:** documentación OpenAPI/Swagger, endpoints de Actuator, imagen Docker lista para producción.
@@ -66,15 +66,15 @@ Disponibles en `/api/v1/auth` (también se mantiene el alias `/api/auth`).
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/api/v1/auth/register` | Registro público (requiere `email`). Siempre crea una cuenta activa con rol `CLIENTE` y envía un correo de bienvenida de forma asíncrona; un fallo de envío no afecta el registro. |
-| `POST` | `/api/v1/auth/login` | Autentica y retorna el JWT y el perfil del usuario. |
+| `POST` | `/api/v1/auth/register` | Registro público (requiere `email`). Siempre crea una cuenta con rol `CLIENTE` en estado `PENDIENTE` y envía un correo de bienvenida de forma asíncrona; un fallo de envío no afecta el registro. |
+| `POST` | `/api/v1/auth/login` | Autentica por **correo electrónico** y contraseña; retorna el JWT y el perfil del usuario. |
 | `POST` | `/api/v1/auth/refresh` | Valida el token actual (firma, expiración, revocación, inactividad, usuario activo), lo revoca y emite uno nuevo de 1 hora. |
 | `POST` | `/api/v1/auth/logout` | Revoca el token. Es idempotente. Responde `204`; con `{"reason":"INACTIVITY"}` responde `401 SESSION_EXPIRED` tras revocar. |
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"<password>"}'
+  -d '{"email":"zyozmen@gmail.com","password":"<password>"}'
 
 curl -X POST http://localhost:8080/api/v1/auth/refresh \
   -H "Authorization: Bearer <token>"
@@ -99,7 +99,7 @@ Toda la configuración se define en `src/main/resources/application.properties` 
 | `MAIL_USERNAME` | `spring.mail.username` / `app.mail.from` | `zonagreen9@gmail.com` | Cuenta SMTP y remitente de los correos. |
 | `MAIL_PASSWORD` | `spring.mail.password` | _(vacío)_ | App Password de Gmail (requiere verificación en 2 pasos). Nunca se versiona. |
 | `MAIL_ENABLED` | `app.mail.enabled` | `true` | Activa o desactiva el envío de correos. |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | `app.admin.*` | `admin` / `admin` | Administrador principal sembrado al arrancar. **Cambiar en producción.** |
+| `ADMIN_USERNAME` | `app.admin.username` | `zyozmen` | Username del administrador principal (protegido contra inactivación). El usuario ya no se siembra: se inserta manualmente en la colección `Users`. |
 | `CORS_ALLOWED_ORIGINS` | `app.cors.allowed-origins` | `*` | Orígenes permitidos; restringir en producción. |
 | `LOG_LEVEL_MONGO_TEMPLATE`, `LOG_LEVEL_MONGO_COMMAND` | `logging.level.*` | `INFO` | Nivel de logs de MongoDB. `DEBUG` expone datos de las consultas. |
 
@@ -159,7 +159,7 @@ La especificación completa y actualizada está en Swagger UI. Resumen de rutas:
 | Productos (escritura) | `/api/productos` (`POST`, `PUT`, `DELETE`, `/{id}/images`) | `ADMIN` |
 | Perfil de usuario | `/api/users/profile` (`GET`, `PUT`) | Autenticado |
 | Órdenes del cliente | `/api/orders` (`POST`, `/mine`, `/{id}`) | Autenticado |
-| Administración de usuarios | `/api/admin/users` (`GET`, `/{username}/toggle-status`) | `ADMIN` |
+| Administración de usuarios | `/api/admin/users` (`GET`, `PUT /{username}/state` con `{"state":"ACTIVO"}`) | `ADMIN` |
 | Administración de órdenes | `/api/admin/orders` (listado, `/{id}`, `/{id}/status`, `/pqr`, `/report`) | `ADMIN` |
 
 ### Órdenes
@@ -199,7 +199,7 @@ Un manejador global normaliza las respuestas de error:
 |---|---|
 | `400` | Validación de entrada, reglas de negocio de registro y administrador protegido. |
 | `401` | Credenciales inválidas, o sesión vencida (`SESSION_EXPIRED`). |
-| `403` | Usuario inactivo (`user_inactive`) o rol insuficiente. |
+| `403` | Usuario pendiente de aprobación (`user_pending_approval`), usuario inactivo (`user_inactive`) o rol insuficiente. |
 | `404` | Recurso no encontrado. |
 | `409` | Conflicto de estado en órdenes. |
 | `422` | Orden con precios o totales inconsistentes. |

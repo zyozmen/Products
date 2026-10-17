@@ -13,7 +13,11 @@ public interface UserMongoRepository extends MongoRepository<UserMongoDocument, 
 
     boolean existsByUsername(String username);
 
+    boolean existsByEmail(String email);
+
     boolean existsByTipoIdentificacionAndNumeroIdentificacion(String tipoIdentificacion, String numeroIdentificacion);
 
     Optional<UserMongoDocument> findByUsername(String username);
+
+    Optional<UserMongoDocument> findByEmail(String email);
 }

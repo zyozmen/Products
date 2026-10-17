@@ -40,6 +40,6 @@ public class UserResponseDTO {
     @Schema(description = "Rol del usuario", example = "cliente")
     private String role;
 
-    @Schema(description = "Indica si la cuenta está activa", example = "true")
-    private Boolean active;
+    @Schema(description = "Estado de la cuenta", example = "ACTIVO", allowableValues = {"ACTIVO", "INACTIVO", "PENDIENTE"})
+    private String state;
 }

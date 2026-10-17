@@ -13,11 +13,15 @@ public interface UserRepositoryPort {
 
     boolean existsByUsername(String username);
 
+    boolean existsByEmail(String email);
+
     boolean existsByTipoIdentificacionAndNumeroIdentificacion(
             com.zyozmen.products.domain.model.TipoIdentificacion tipoIdentificacion,
             String numeroIdentificacion);
 
     Optional<User> findByUsername(String username);
+
+    Optional<User> findByEmail(String email);
 
     User save(User user);
 

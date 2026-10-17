@@ -4,6 +4,7 @@ import com.zyozmen.products.domain.exception.SessionExpiredException;
 import com.zyozmen.products.domain.model.AuthResult;
 import com.zyozmen.products.domain.model.LogoutReason;
 import com.zyozmen.products.domain.model.User;
+import com.zyozmen.products.domain.model.UserState;
 import com.zyozmen.products.domain.port.in.SessionUseCase;
 import com.zyozmen.products.domain.port.out.RevokedTokenRepositoryPort;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
@@ -60,7 +61,7 @@ public class SessionService implements SessionUseCase {
         }
 
         User user = userRepositoryPort.findByUsername(jwtService.extractUsername(token))
-                .filter(u -> Boolean.TRUE.equals(u.getActive()))
+                .filter(u -> u.getState() == UserState.ACTIVO)
                 .orElseThrow(() -> new SessionExpiredException(MSG_EXPIRED));
 
         revokedTokenPort.revoke(tokenId, jwtService.extractExpiration(token));

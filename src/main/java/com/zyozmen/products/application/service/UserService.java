@@ -6,9 +6,11 @@ import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.exception.UnderageRegistrationException;
 import com.zyozmen.products.domain.exception.UserAlreadyExistsException;
 import com.zyozmen.products.domain.exception.UserInactiveException;
+import com.zyozmen.products.domain.exception.UserPendingApprovalException;
 import com.zyozmen.products.domain.model.AuthResult;
 import com.zyozmen.products.domain.model.Role;
 import com.zyozmen.products.domain.model.User;
+import com.zyozmen.products.domain.model.UserState;
 import com.zyozmen.products.domain.port.in.UserUseCase;
 import com.zyozmen.products.domain.port.out.UserNotificationPort;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
@@ -36,7 +38,7 @@ public class UserService implements UserUseCase {
     private final JwtService jwtService;
     private final UserNotificationPort userNotificationPort;
 
-    @Value("${app.admin.username:admin}")
+    @Value("${app.admin.username:zyozmen}")
     private String mainAdminUsername;
 
     @Override
@@ -44,6 +46,20 @@ public class UserService implements UserUseCase {
     public User registrar(User user) {
         if (userRepositoryPort.existsByUsername(user.getUsername())) {
             throw new UserAlreadyExistsException("El nombre de usuario ya está registrado");
+        }
+
+        String email = user.getEmail() == null ? null : user.getEmail().trim().toLowerCase();
+        user.setEmail(email);
+        if (email != null && userRepositoryPort.existsByEmail(email)) {
+            boolean existingInactive = userRepositoryPort.findByEmail(email)
+                    .map(existing -> existing.getState() == UserState.INACTIVO)
+                    .orElse(false);
+            if (existingInactive) {
+                throw new UserInactiveException(
+                        "Ya existe una cuenta inactiva con ese correo electrónico. "
+                                + "Por favor contacte al administrador");
+            }
+            throw new UserAlreadyExistsException("Ya existe un usuario registrado con ese correo electrónico");
         }
 
         if (userRepositoryPort.existsByTipoIdentificacionAndNumeroIdentificacion(
@@ -58,10 +74,9 @@ public class UserService implements UserUseCase {
         }
 
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        // Independiente de lo recibido en el payload, todo registro público
-        // queda forzado a rol cliente y cuenta activa.
+        // Independiente de lo recibido en el payload, todo registro público queda forzado a rol cliente y pendiente de aprobación.
         user.setRole(Role.CLIENTE);
-        user.setActive(true);
+        user.setState(UserState.PENDIENTE);
 
         User saved = userRepositoryPort.save(user);
         userNotificationPort.sendWelcomeEmail(saved);
@@ -70,15 +85,22 @@ public class UserService implements UserUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public AuthResult login(String username, String password) {
-        User user = userRepositoryPort.findByUsername(username)
+    public AuthResult login(String email, String password) {
+        String normalizedEmail = email == null ? null : email.trim().toLowerCase();
+        User user = userRepositoryPort.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new InvalidCredentialsException("Credenciales inválidas"));
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
             throw new InvalidCredentialsException("Credenciales inválidas");
         }
 
-        if (!Boolean.TRUE.equals(user.getActive())) {
+        if (user.getState() == UserState.PENDIENTE) {
+            throw new UserPendingApprovalException(
+                    "Tu cuenta está pendiente de aprobación por un administrador. "
+                            + "No puedes iniciar sesión hasta que tu acceso sea aprobado");
+        }
+
+        if (user.getState() != UserState.ACTIVO) {
             throw new UserInactiveException(
                     "El usuario está inactivo. Por favor contacte al administrador");
         }
@@ -95,17 +117,20 @@ public class UserService implements UserUseCase {
 
     @Override
     @Transactional
-    public User toggleEstado(String username) {
+    public User cambiarEstado(String username, UserState nuevoEstado) {
+        if (nuevoEstado == null) {
+            throw new IllegalArgumentException("El estado es obligatorio");
+        }
         if (mainAdminUsername.equals(username)) {
             throw new MainAdminProtectedException(
-                    "No se puede inactivar/activar al administrador principal del sistema");
+                    "No se puede modificar el estado del administrador principal del sistema");
         }
 
         User user = userRepositoryPort.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario no encontrado: " + username));
 
-        user.setActive(!Boolean.TRUE.equals(user.getActive()));
+        user.setState(nuevoEstado);
 
         return userRepositoryPort.save(user);
     }

@@ -56,7 +56,7 @@ class AuthControllerTest {
                 .build();
 
         User domainRequest = User.builder().username("juan123").build();
-        User savedUser = User.builder().username("juan123").role(Role.CLIENTE).active(true).build();
+        User savedUser = User.builder().username("juan123").role(Role.CLIENTE).state(com.zyozmen.products.domain.model.UserState.ACTIVO).build();
         UserResponseDTO responseDTO = UserResponseDTO.builder().username("juan123").role("cliente").build();
 
         when(userWebMapper.toDomain(request)).thenReturn(domainRequest);
@@ -71,12 +71,12 @@ class AuthControllerTest {
 
     @Test
     void loginShouldReturn200WithTokenAndUser() {
-        LoginRequestDTO request = LoginRequestDTO.builder().username("juan123").password("secret").build();
+        LoginRequestDTO request = LoginRequestDTO.builder().email("juan@example.com").password("secret").build();
         User user = User.builder().username("juan123").build();
         AuthResult authResult = new AuthResult("jwt-token", user);
         LoginResponseDTO responseDTO = LoginResponseDTO.builder().token("jwt-token").build();
 
-        when(userUseCase.login("juan123", "secret")).thenReturn(authResult);
+        when(userUseCase.login("juan@example.com", "secret")).thenReturn(authResult);
         when(userWebMapper.toLoginResponseDTO(authResult)).thenReturn(responseDTO);
 
         ResponseEntity<LoginResponseDTO> response = authController.login(request);

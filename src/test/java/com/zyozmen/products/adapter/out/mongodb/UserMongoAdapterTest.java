@@ -39,6 +39,24 @@ class UserMongoAdapterTest {
     }
 
     @Test
+    void existsByEmailShouldDelegateToRepository() {
+        when(mongoRepository.existsByEmail("juan@example.com")).thenReturn(true);
+
+        assertThat(adapter.existsByEmail("juan@example.com")).isTrue();
+    }
+
+    @Test
+    void findByEmailShouldMapDocumentToDomain() {
+        UserMongoDocument document = UserMongoDocument.builder().id("1").email("juan@example.com").build();
+        User domainUser = User.builder().id("1").email("juan@example.com").build();
+
+        when(mongoRepository.findByEmail("juan@example.com")).thenReturn(Optional.of(document));
+        when(mapper.toDomain(document)).thenReturn(domainUser);
+
+        assertThat(adapter.findByEmail("juan@example.com")).contains(domainUser);
+    }
+
+    @Test
     void existsByTipoIdentificacionAndNumeroIdentificacionShouldReturnFalseWhenArgsNull() {
         assertThat(adapter.existsByTipoIdentificacionAndNumeroIdentificacion(null, "123")).isFalse();
         assertThat(adapter.existsByTipoIdentificacionAndNumeroIdentificacion(TipoIdentificacion.CC, null)).isFalse();
