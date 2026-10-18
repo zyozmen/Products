@@ -1,5 +1,6 @@
 package com.zyozmen.products.exception;
 
+import com.zyozmen.products.domain.exception.BusinessRuleException;
 import com.zyozmen.products.domain.exception.InvalidCredentialsException;
 import com.zyozmen.products.domain.exception.MainAdminProtectedException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
@@ -10,6 +11,7 @@ import com.zyozmen.products.domain.exception.UserAlreadyExistsException;
 import com.zyozmen.products.domain.exception.UserInactiveException;
 import com.zyozmen.products.domain.exception.UserPendingApprovalException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -136,6 +138,38 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessRuleException(
+            BusinessRuleException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.UNPROCESSABLE_ENTITY.value())
+                .error("Unprocessable Entity")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(errorResponse);
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockingException(
+            OptimisticLockingFailureException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.CONFLICT.value())
+                .error("Conflict")
+                .message("El recurso fue modificado por otra solicitud; vuelve a intentarlo")
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

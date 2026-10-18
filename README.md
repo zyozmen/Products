@@ -20,6 +20,7 @@ Microservicio REST para la gestión de catálogo de productos, usuarios, órdene
 - **Usuarios:** registro público (cuenta en estado `PENDIENTE` hasta aprobación), perfil propio y administración de estados (`ACTIVO`, `INACTIVO`, `PENDIENTE`) exclusiva del rol `ADMIN`.
 - **Autenticación y sesión:** login con JWT, renovación de token, cierre de sesión con revocación en servidor y control de inactividad parametrizable.
 - **Órdenes:** creación con validación de precios e IVA en backend, consulta por usuario, gestión administrativa con auditoría de estados, PQR y reportes.
+- **Proveedores y saldos (HU-01):** alta de proveedores, recepción de lotes con cálculo de costo y abono inicial opcional, abonos posteriores, saldos transaccionales y evaluación de la liquidación diaria con tope de pago.
 - **Operación:** documentación OpenAPI/Swagger, endpoints de Actuator, imagen Docker lista para producción.
 
 ## 2. Stack tecnológico
@@ -40,8 +41,8 @@ El código sigue una arquitectura hexagonal bajo `com.zyozmen.products`:
 | Capa | Paquete | Responsabilidad |
 |---|---|---|
 | Dominio | `domain.model`, `domain.exception` | Modelos y excepciones de negocio, sin dependencias de framework. |
-| Puertos de entrada | `domain.port.in` | Casos de uso: `UserUseCase`, `ProductoUseCase`, `OrderUseCase`, `SessionUseCase`. |
-| Puertos de salida | `domain.port.out` | Contratos de persistencia: `UserRepositoryPort`, `ProductoRepositoryPort`, `OrderRepositoryPort`, `RevokedTokenRepositoryPort`. |
+| Puertos de entrada | `domain.port.in` | Casos de uso: `UserUseCase`, `ProductoUseCase`, `OrderUseCase`, `SessionUseCase`, `ProveedorUseCase`, `LiquidacionUseCase`. |
+| Puertos de salida | `domain.port.out` | Contratos de persistencia: `UserRepositoryPort`, `ProductoRepositoryPort`, `OrderRepositoryPort`, `RevokedTokenRepositoryPort`, `ProveedorRepositoryPort`, `LoteRepositoryPort`, `TransaccionProveedorRepositoryPort`. |
 | Aplicación | `application.service` | Implementación de los casos de uso. |
 | Adaptadores de entrada | `adapter.in.web` | Controladores REST, DTOs y mapeadores web. |
 | Adaptadores de salida | `adapter.out.mongodb` | Documentos, repositorios, mapeadores y adaptadores MongoDB. |
@@ -52,7 +53,7 @@ El código sigue una arquitectura hexagonal bajo `com.zyozmen.products`:
 La API es stateless y autentica con tokens JWT enviados en el encabezado `Authorization: Bearer <token>`.
 
 - **Emisión:** el token se firma con HMAC y se emite con una vigencia de **1 hora** (`exp`). Incluye los claims `sub` (usuario), `role`, `iat` y `jti` (identificador único para revocación).
-- **Autorización:** los roles son `ADMIN` y `CLIENTE`. Las rutas `/api/admin/**` y las escrituras de `/api/productos/**` requieren `ADMIN`; `/api/orders/**` y `/api/users/**` requieren autenticación.
+- **Autorización:** los roles son `ADMIN` y `CLIENTE`. Las rutas `/api/admin/**` y las escrituras de `/api/productos/**` y todo `/api/proveedores/**`, `/api/lotes/**` y `/api/liquidaciones/**` requieren `ADMIN`; `/api/orders/**` y `/api/users/**` requieren autenticación.
 - **Revocación:** al cerrar sesión o renovar, el `jti` se registra en la colección `revoked_tokens`. Un índice TTL elimina cada registro cuando el token habría expirado, por lo que la lista no crece indefinidamente.
 - **Inactividad:** el límite es parametrizable (`app.session.inactivity-timeout-minutes`, 15 minutos por defecto). Como el servidor no mantiene estado por sesión, el límite se aplica en la renovación: un token que no se renueva dentro de ese lapso ya no puede refrescarse. El cliente debe llamar a `/refresh` mientras haya actividad del usuario.
 - **Respuesta de sesión vencida:** cualquier token expirado, revocado o inactivo se rechaza con `401` y el cuerpo:
@@ -117,6 +118,8 @@ $env:MONGO_DATABASE="GrowShop"
 
 Sin variables definidas, la aplicación usa una instancia local en `localhost:27017`.
 
+> **Transacciones:** el módulo de proveedores usa `@Transactional` con `MongoTransactionManager` (definido en `MongoConfig`), que exige un **replica set** (MongoDB Atlas lo cumple). Un MongoDB local *standalone* fallará en esas operaciones; arránquelo como replica set de un solo nodo.
+
 ## 6. Construcción y pruebas
 Requisitos: JDK 21 y una instancia de MongoDB accesible (Maven se ejecuta con el wrapper `mvnw`).
 
@@ -161,6 +164,9 @@ La especificación completa y actualizada está en Swagger UI. Resumen de rutas:
 | Órdenes del cliente | `/api/orders` (`POST`, `/mine`, `/{id}`) | Autenticado |
 | Administración de usuarios | `/api/admin/users` (`GET`, `PUT /{username}/state` con `{"state":"ACTIVO"}`) | `ADMIN` |
 | Administración de órdenes | `/api/admin/orders` (listado, `/{id}`, `/{id}/status`, `/pqr`, `/report`) | `ADMIN` |
+| Proveedores | `/api/proveedores` (`POST`, `GET /{id}`, `POST /{id}/pagos`) | `ADMIN` |
+| Lotes | `/api/lotes` (`POST`) | `ADMIN` |
+| Liquidaciones | `/api/liquidaciones/procesar-evento` (`POST`) | `ADMIN` |
 
 ### Órdenes
 - El propietario de la orden se toma del token; el cliente no puede indicar el `username`.
@@ -192,6 +198,14 @@ Content-Type: application/json
 }
 ```
 
+### Proveedores, lotes y liquidación (HU-01)
+Colecciones MongoDB: `proveedores`, `lotes` y `transacciones_proveedor`. Los montos son `BigDecimal` con 2 decimales y se guardan como `Decimal128`. La guía detallada para el frontend (campos, validaciones, ejemplos y tipos TypeScript) está en [docs/proveedores-api-frontend.md](docs/proveedores-api-frontend.md).
+
+- **Crear proveedor** (`POST /api/proveedores`): inicia `totalDeuda`, `totalPagado` y `saldoPendiente` en `0.00`, estado `ACTIVO`; el NIT es único (`422` si se repite).
+- **Recibir lote** (`POST /api/lotes`): `costoTotalLote = Σ(cantidadUnidades × costoUnitario)`; suma ese costo a `totalDeuda` y registra una transacción `DEUDA_LOTE`. Si hay `abonoInicial > 0` valida que sea `<= costoTotalLote`, lo suma a `totalPagado` y registra `ABONO_INICIAL`. `saldoPendiente = max(0, totalDeuda - totalPagado)`. El lote queda `PENDIENTE`, `PAGO_PARCIAL` o `PAGADO_TOTAL` (saldo del lote en cero). Todo ocurre en una transacción.
+- **Registrar pago** (`POST /api/proveedores/{id}/pagos`): abono a un lote (`loteId`) o, si se omite, a los lotes pendientes del más antiguo al más reciente. Tipos permitidos: `ABONO` (por defecto), `PAGO_CORTESIA`, `AJUSTE_PQR`. No puede superar el saldo del proveedor ni del lote.
+- **Procesar evento** (`POST /api/liquidaciones/procesar-evento`): evalúa si una venta/PQR acumula a la liquidación diaria sin modificar saldos ni inventario. Si el lote o el proveedor no tienen saldo pendiente devuelve `acumulaLiquidacion=false` y `montoLiquidable=0.00` (tope de pago); en caso contrario limita el monto al menor saldo. `descontarStock` siempre es `true`: el descuento de inventario lo ejecuta quien invoca el servicio.
+
 ## 9. Manejo de errores
 Un manejador global normaliza las respuestas de error:
 
@@ -201,8 +215,8 @@ Un manejador global normaliza las respuestas de error:
 | `401` | Credenciales inválidas, o sesión vencida (`SESSION_EXPIRED`). |
 | `403` | Usuario pendiente de aprobación (`user_pending_approval`), usuario inactivo (`user_inactive`) o rol insuficiente. |
 | `404` | Recurso no encontrado. |
-| `409` | Conflicto de estado en órdenes. |
-| `422` | Orden con precios o totales inconsistentes. |
+| `409` | Conflicto de estado en órdenes o modificación concurrente (bloqueo optimista). |
+| `422` | Orden con precios o totales inconsistentes, o regla financiera de proveedores violada (NIT/lote duplicado, abono mayor al costo o al saldo, proveedor inactivo). |
 | `503` | Servicio o infraestructura no disponible. |
 | `500` | Error no controlado. |
 
@@ -219,5 +233,6 @@ Un manejador global normaliza las respuestas de error:
 ├── entrypoint.sh            Carga de secretos y arranque
 ├── src/main/java            Código fuente (hexagonal)
 ├── src/main/resources       application.properties
-└── src/test/java            Pruebas unitarias
+├── src/test/java            Pruebas unitarias (incl. ProveedorServiceTest y LiquidacionServiceTest)
+└── docs/                    Documentación (guía de la API de proveedores para frontend)
 ```

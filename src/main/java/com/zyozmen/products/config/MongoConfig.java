@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.mongodb.MongoDatabaseFactory;
+import org.springframework.data.mongodb.MongoTransactionManager;
 import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
@@ -116,6 +118,12 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
             }
         }
         return normalized.toString();
+    }
+
+    // Habilita @Transactional sobre MongoDB (requiere replica set, p. ej. Atlas).
+    @Bean
+    public MongoTransactionManager transactionManager(MongoDatabaseFactory databaseFactory) {
+        return new MongoTransactionManager(databaseFactory);
     }
 
     @Bean
