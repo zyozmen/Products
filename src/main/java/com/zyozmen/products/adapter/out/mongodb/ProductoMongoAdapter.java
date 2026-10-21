@@ -144,7 +144,10 @@ public class ProductoMongoAdapter implements ProductoRepositoryPort {
 
     private void addCategoryCriteria(List<Long> categoryIds, List<Criteria> criteria) {
         if (categoryIds != null && !categoryIds.isEmpty()) {
-            criteria.add(Criteria.where("categories.category_id").in(categoryIds));
+            criteria.add(new Criteria().orOperator(
+                    Criteria.where("categoryId").in(categoryIds),
+                    new Criteria().andOperator(Criteria.where("categoryId").is(null),
+                            Criteria.where("categories.category_id").in(categoryIds))));
         }
     }
 

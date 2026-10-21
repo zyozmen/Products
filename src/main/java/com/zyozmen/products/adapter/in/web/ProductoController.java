@@ -7,6 +7,8 @@ import com.zyozmen.products.adapter.in.web.dto.ProductoListItemDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
 import com.zyozmen.products.adapter.in.web.mapper.ProductoWebMapper;
+import com.zyozmen.products.adapter.in.web.mapper.CategoryWebMapper;
+import com.zyozmen.products.domain.port.in.CategoryUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -27,10 +29,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
@@ -47,13 +47,16 @@ import java.util.Objects;
  * nunca de la implementación concreta del servicio.
  */
 @RestController
-@RequestMapping("/api/productos")
+@RequestMapping({"/api/productos", "/api/v1/products"})
 @RequiredArgsConstructor
 @Tag(name = "Productos", description = "API para gestión de productos")
 public class ProductoController {
 
     private final ProductoUseCase productoUseCase;
     private final ProductoWebMapper productoWebMapper;
+    private final ImageUploadService imageUploadService;
+    private final CategoryUseCase categoryUseCase;
+    private final CategoryWebMapper categoryWebMapper;
 
     @Operation(summary = "Listar todos los productos")
     @ApiResponse(responseCode = "200", description = "Lista de productos obtenida exitosamente")
@@ -122,6 +125,25 @@ public class ProductoController {
 
         Page<ProductoListItemDTO> response = productos.map(productoWebMapper::toListItemDTO);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping(params = "categoryId")
+    public ResponseEntity<Page<ProductoListItemDTO>> listarPorCategoria(
+            @RequestParam Long categoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size,
+            @RequestParam(name = "sort_by", required = false) String sortBy,
+            @RequestParam(name = "sort_dir", defaultValue = "desc") String sortDir,
+            @RequestParam(name = "min_price", required = false) BigDecimal minPrice,
+            @RequestParam(name = "max_price", required = false) BigDecimal maxPrice,
+            @RequestParam(name = "min_rating", required = false) BigDecimal minRating,
+            @RequestParam(name = "max_rating", required = false) BigDecimal maxRating,
+            @RequestParam(required = false) String name) {
+        if (categoryId <= 0) {
+            throw new IllegalArgumentException("categoryId debe ser positivo");
+        }
+        return listarTodos(page, size, sortBy, sortDir, minPrice, maxPrice, minRating, maxRating,
+                name, List.of(categoryId));
     }
 
     private boolean isAdmin() {
@@ -206,71 +228,29 @@ public class ProductoController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Almacenar imágenes de un producto (foto principal y hasta 5 secundarias)")
+    @Operation(summary = "Almacenar imagenes de producto o categoria segun target (PRODUCT por defecto)")
     @ApiResponse(responseCode = "200", description = "Imágenes guardadas exitosamente")
     @ApiResponse(responseCode = "400", description = "Límite de imágenes excedido o tipo de archivo inválido")
     @ApiResponse(responseCode = "404", description = "Producto no encontrado")
     @PostMapping(value = "/{idProducto}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ProductoResponseDTO> guardarImagenes(
-            @Parameter(description = "ID del producto", example = "1")
+    public ResponseEntity<?> guardarImagenesPorDestino(
             @PathVariable Long idProducto,
             @RequestParam(name = "fotoPrincipal", required = false) MultipartFile fotoPrincipal,
-            @RequestParam(name = "fotosSecundarias", required = false) List<MultipartFile> fotosSecundarias) {
-
-        long count = (fotosSecundarias == null) ? 0 : fotosSecundarias.stream().filter(f -> f != null && !f.isEmpty()).count();
-        if (count > 5) {
-            throw new IllegalArgumentException("No se permiten más de 5 fotos secundarias.");
+            @RequestParam(name = "fotosSecundarias", required = false) List<MultipartFile> fotosSecundarias,
+            @RequestParam(defaultValue = "PRODUCT") ImageUploadService.Target target) {
+        if (target == ImageUploadService.Target.CATEGORY) {
+            var images = imageUploadService.prepare(target, fotoPrincipal, fotosSecundarias);
+            return ResponseEntity.ok(categoryWebMapper.toResponse(
+                    categoryUseCase.saveImage(idProducto, images.getFotoPrincipal())));
         }
+        return guardarImagenes(idProducto, fotoPrincipal, fotosSecundarias);
+    }
 
-        com.zyozmen.products.domain.model.Imagen principal = convertToImagen(fotoPrincipal);
+    public ResponseEntity<ProductoResponseDTO> guardarImagenes(
+            Long idProducto, MultipartFile fotoPrincipal, List<MultipartFile> fotosSecundarias) {
 
-        List<com.zyozmen.products.domain.model.Imagen> secundarias = new ArrayList<>();
-        if (fotosSecundarias != null) {
-            for (MultipartFile file : fotosSecundarias) {
-                if (file != null && !file.isEmpty()) {
-                    secundarias.add(convertToImagen(file));
-                }
-            }
-        }
-
-        Producto actualizado = productoUseCase.guardarImagenes(idProducto, principal, secundarias);
+        var images = imageUploadService.prepare(ImageUploadService.Target.PRODUCT, fotoPrincipal, fotosSecundarias);
+        Producto actualizado = productoUseCase.guardarImagenes(idProducto, images.getFotoPrincipal(), images.getFotosSecundarias());
         return ResponseEntity.ok(productoWebMapper.toResponseDTO(actualizado));
-    }
-
-    private com.zyozmen.products.domain.model.Imagen convertToImagen(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            return null;
-        }
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw new IllegalArgumentException("El archivo debe ser una imagen válida.");
-        }
-        try {
-            byte[] bytes = file.getBytes();
-            String base64 = Base64.getEncoder().encodeToString(bytes);
-            String nombre = file.getOriginalFilename();
-            if (nombre == null) {
-                nombre = "imagen";
-            }
-            return com.zyozmen.products.domain.model.Imagen.builder()
-                    .nombre(nombre)
-                    .extension(getExtension(file))
-                    .filepart(base64)
-                    .build();
-        } catch (IOException e) {
-            throw new IllegalArgumentException("No se pudo leer el archivo de imagen.");
-        }
-    }
-
-    private String getExtension(MultipartFile file) {
-        String name = file.getOriginalFilename();
-        if (name != null && name.contains(".")) {
-            return name.substring(name.lastIndexOf(".") + 1).toLowerCase();
-        }
-        String contentType = file.getContentType();
-        if (contentType != null && contentType.contains("/")) {
-            return contentType.substring(contentType.indexOf("/") + 1);
-        }
-        return "jpg";
     }
 }

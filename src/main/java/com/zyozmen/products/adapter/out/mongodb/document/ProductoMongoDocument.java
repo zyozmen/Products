@@ -51,6 +51,9 @@ public class ProductoMongoDocument {
     @Field("categories")
     private List<CategoryDocument> categories;
 
+    @Field("categoryId")
+    private Long categoryId;
+
     @Field("price")
     private PriceDocument price;
 

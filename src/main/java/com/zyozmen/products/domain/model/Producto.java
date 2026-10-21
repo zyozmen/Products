@@ -18,6 +18,7 @@ public class Producto {
     private String sku;
     private String status;
     private List<Category> categories;
+    private Long categoryId;
     private Price price;
     private Ranking ranking;
     private List<Comment> recentComments;
@@ -37,6 +38,7 @@ public class Producto {
         this.sku = builder.sku;
         this.status = builder.status;
         this.categories = builder.categories;
+        this.categoryId = builder.categoryId;
         this.price = builder.price;
         this.ranking = builder.ranking;
         this.recentComments = builder.recentComments;
@@ -104,6 +106,14 @@ public class Producto {
 
     public List<Category> getCategories() {
         return categories;
+    }
+
+    public Long getCategoryId() {
+        return categoryId;
+    }
+
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
     }
 
     public void setCategories(List<Category> categories) {
@@ -215,6 +225,7 @@ public class Producto {
             && Objects.equals(sku, producto.sku)
             && Objects.equals(status, producto.status)
             && Objects.equals(categories, producto.categories)
+            && Objects.equals(categoryId, producto.categoryId)
             && Objects.equals(price, producto.price)
             && Objects.equals(ranking, producto.ranking)
             && Objects.equals(recentComments, producto.recentComments)
@@ -226,7 +237,7 @@ public class Producto {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, slug, description, sku, status, categories, price, ranking,
+        return Objects.hash(id, name, slug, description, sku, status, categories, categoryId, price, ranking,
             recentComments, hasMoreComments, createdAt, updatedAt, images);
     }
 
@@ -240,6 +251,7 @@ public class Producto {
             ", sku='" + sku + '\'' +
             ", status='" + status + '\'' +
             ", categories=" + categories +
+            ", categoryId=" + categoryId +
             ", price=" + price +
             ", ranking=" + ranking +
             ", recentComments=" + recentComments +
@@ -259,6 +271,7 @@ public class Producto {
         private String sku;
         private String status;
         private List<Category> categories;
+        private Long categoryId;
         private Price price;
         private Ranking ranking;
         private List<Comment> recentComments;
@@ -304,6 +317,11 @@ public class Producto {
 
         public Builder categories(List<Category> categories) {
             this.categories = categories;
+            return this;
+        }
+
+        public Builder categoryId(Long categoryId) {
+            this.categoryId = categoryId;
             return this;
         }
 

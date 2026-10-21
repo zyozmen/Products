@@ -41,8 +41,8 @@ El código sigue una arquitectura hexagonal bajo `com.zyozmen.products`:
 | Capa | Paquete | Responsabilidad |
 |---|---|---|
 | Dominio | `domain.model`, `domain.exception` | Modelos y excepciones de negocio, sin dependencias de framework. |
-| Puertos de entrada | `domain.port.in` | Casos de uso: `UserUseCase`, `ProductoUseCase`, `OrderUseCase`, `SessionUseCase`, `ProveedorUseCase`, `LiquidacionUseCase`. |
-| Puertos de salida | `domain.port.out` | Contratos de persistencia: `UserRepositoryPort`, `ProductoRepositoryPort`, `OrderRepositoryPort`, `RevokedTokenRepositoryPort`, `ProveedorRepositoryPort`, `LoteRepositoryPort`, `TransaccionProveedorRepositoryPort`. |
+| Puertos de entrada | `domain.port.in` | Casos de uso: `UserUseCase`, `ProductoUseCase`, `CategoryUseCase`, `OrderUseCase`, `SessionUseCase`, `ProveedorUseCase`, `LiquidacionUseCase`. |
+| Puertos de salida | `domain.port.out` | Contratos de persistencia: `UserRepositoryPort`, `ProductoRepositoryPort`, `CategoryRepositoryPort`, `OrderRepositoryPort`, `RevokedTokenRepositoryPort`, `ProveedorRepositoryPort`, `LoteRepositoryPort`, `TransaccionProveedorRepositoryPort`. |
 | Aplicación | `application.service` | Implementación de los casos de uso. |
 | Adaptadores de entrada | `adapter.in.web` | Controladores REST, DTOs y mapeadores web. |
 | Adaptadores de salida | `adapter.out.mongodb` | Documentos, repositorios, mapeadores y adaptadores MongoDB. |
@@ -159,8 +159,11 @@ La especificación completa y actualizada está en Swagger UI. Resumen de rutas:
 | Recurso | Ruta base | Acceso |
 |---|---|---|
 | Autenticación | `/api/v1/auth` | Público |
-| Productos (lectura) | `/api/productos` (`GET`, `/{id}`, `/featured`, `/categories`) | Público |
-| Productos (escritura) | `/api/productos` (`POST`, `PUT`, `DELETE`, `/{id}/images`) | `ADMIN` |
+| Productos (lectura) | `/api/productos` y `/api/v1/products` (`GET`, `/{id}`, `/featured`, `/categories`) | Público |
+| Productos (escritura) | `/api/productos` y `/api/v1/products` (`POST`, `PUT`, `DELETE`, `/{id}/images`) | `ADMIN` |
+| Categorías (lectura) | `/api/v1/categories` (`GET`, `/{id}`, `/{id}/image`) | Público |
+| Categorías (escritura) | `/api/v1/categories` (`POST`, `PUT /{id}`) | `ADMIN` |
+| Carga unificada de imágenes | `POST /api/v1/images/{id}?target=PRODUCT\|CATEGORY` | `ADMIN` |
 | Perfil de usuario | `/api/users/profile` (`GET`, `PUT`) | Autenticado |
 | Órdenes del cliente | `/api/orders` (`POST`, `/mine`, `/{id}`) | Autenticado |
 | Administración de usuarios | `/api/admin/users` (`GET`, `PUT /{username}/state` con `{"state":"ACTIVO"}`) | `ADMIN` |
@@ -168,6 +171,54 @@ La especificación completa y actualizada está en Swagger UI. Resumen de rutas:
 | Proveedores | `/api/proveedores` (`POST`, `GET /{id}`, `POST /{id}/pagos`) | `ADMIN` |
 | Lotes | `/api/lotes` (`POST`) | `ADMIN` |
 | Liquidaciones | `/api/liquidaciones/procesar-evento` (`POST`) | `ADMIN` |
+
+### Categorías, referencias e imágenes
+- Las categorías se crean de forma independiente de los productos. `POST /api/v1/categories` acepta JSON con `name` obligatorio (hasta 100 caracteres), `description` opcional (hasta 1000) e `imageUrl` opcional (URL HTTP/HTTPS de hasta 2048 caracteres). `PUT /api/v1/categories/{id}` usa el mismo contrato.
+- Se almacenan en `categories` mediante `CatalogCategoryDocument`; no se modifica el tipo `CategoryDocument` usado por las categorías embebidas históricas. El campo Java `categoryId` es un `Long` generado atómicamente con `categories_sequence` y se persiste como `_id` numérico de MongoDB. La respuesta lo expone como `id`. `createdAt` y `updatedAt` son `LocalDateTime` en UTC.
+- El nombre se guarda sin espacios al inicio o al final y tiene un índice único (sensible a mayúsculas/minúsculas). Un duplicado devuelve `409`. Al arrancar se aseguran ese índice y el índice de `Products.categoryId`; un fallo de creación no se oculta.
+- Los productos siguen en **`Products`**, sin cambiar los IDs ni retirar las rutas existentes. En creación/edición se puede enviar `"categoryId": 7`: el servicio verifica que exista antes de guardar (`404` si no existe). No se duplica el nombre de la categoría en esta nueva referencia. Si se omite en edición, se conserva la referencia existente.
+- `GET /api/v1/products?categoryId=7` (también `/api/productos?categoryId=7`) filtra por la referencia numérica y admite los filtros y paginación habituales (`page`, `size`, `sort_by`, `sort_dir`, `min_price`, `max_price`, `min_rating`, `max_rating`, `name`). Las respuestas de detalle y catálogo incluyen `categoryId`; el resumen también conserva `category_ids`.
+- Por compatibilidad se mantiene la lectura de `categories.category_id` en documentos históricos que todavía no tienen `categoryId`. No se ejecuta una migración automática: antes de asociar datos históricos con el catálogo nuevo, deben reconciliarse los IDs numéricos existentes. `GET /api/productos/categories` y su alias devuelven ahora las categorías de la colección independiente, incluso sin productos; `slug` y `products_count` históricos no se calculan en esa respuesta.
+- La carga sigue guardando Base64 en MongoDB, sin filesystem ni proveedor externo. `POST /api/v1/images/{id}` recibe `multipart/form-data` con `target=PRODUCT` o `target=CATEGORY`, `fotoPrincipal` y `fotosSecundarias`. El destino indica si `{id}` es un ID de producto o de categoría. La ruta existente `POST /api/productos/{id}/images` admite el mismo parámetro, con `PRODUCT` por defecto.
+- Para productos se admite una principal y hasta 5 secundarias. Para categorías se exige la principal y **se ignoran las secundarias sin procesarlas**. Se aceptan extensiones PNG, JPG/JPEG y WebP con MIME correspondiente, hasta **2 MiB (2 097 152 bytes) por imagen**. El límite HTTP total es 13 MiB. Los archivos inválidos devuelven `400`; si el contenedor rechaza el tamaño multipart, devuelve `413`.
+- Al cargar una categoría se devuelve `imageUrl: "/api/v1/categories/{id}/image"`, una ruta pública relativa al origen de la API que entrega los bytes y MIME de la principal. La respuesta JSON no incluye el Base64. En una edición sin `imageUrl` se conserva la imagen anterior; una URL externa nueva reemplaza la imagen almacenada.
+
+Ejemplo (requiere autenticación `ADMIN`):
+```http
+POST /api/v1/categories
+Content-Type: application/json
+
+{
+  "name": "Audio",
+  "description": "Parlantes y auriculares",
+  "imageUrl": "https://cdn.example.com/audio.webp"
+}
+```
+
+Respuesta `201`:
+```json
+{ "id": 7, "name": "Audio", "description": "Parlantes y auriculares", "imageUrl": "https://cdn.example.com/audio.webp" }
+```
+
+Para asignar una imagen local a esa categoría, enviar `POST /api/v1/images/7` con los campos multipart `target=CATEGORY` y `fotoPrincipal=@audio.webp`.
+
+#### Especificación de imágenes de categorías
+
+| Característica | Especificación |
+|---|---|
+| Cantidad | Una imagen principal por categoría; las secundarias se ignoran. |
+| Tamaño máximo permitido | **2 MiB (2 097 152 bytes)** por archivo. |
+| Formatos permitidos | **WebP**, **JPG/JPEG** y **PNG**, con MIME correspondiente: `image/webp`, `image/jpeg` o `image/png`. |
+| Formato recomendado | **WebP** para reducir el peso; JPG para fotografías o PNG cuando se necesite compresión sin pérdida. |
+| Proporción recomendada | **1:1 (cuadrada)**, con el contenido principal centrado y margen para recortes. |
+| Resolución recomendada | **800 × 800 píxeles**, sin ampliar imágenes de menor resolución. |
+| Calidad de exportación recomendada | **80–85 % para WebP o JPG**, ajustándola si aparecen artefactos visibles. PNG usa compresión sin pérdida, no un porcentaje de calidad equivalente. |
+| Peso objetivo recomendado | **Hasta 200 KB**, siempre que se conserve una buena apariencia; no es un límite del servicio. |
+| Color recomendado | **sRGB**, para mantener una apariencia consistente en navegadores. |
+
+**Validaciones actuales:** el servicio comprueba extensión, MIME y tamaño del archivo. No comprueba dimensiones, proporción, calidad visual ni contenido real mediante decodificación. Las recomendaciones de resolución, calidad y peso objetivo son criterios de preparación, no restricciones del backend.
+
+El backend no redimensiona, recomprime ni mejora las imágenes: almacena los bytes recibidos como Base64 y los entrega sin modificar su calidad. La imagen debe prepararse antes de cargarla. Estos límites de carga no verifican imágenes externas indicadas mediante `imageUrl`.
 
 ### Órdenes
 - El propietario de la orden se toma del token; el cliente no puede indicar el `username`.
@@ -216,7 +267,8 @@ Un manejador global normaliza las respuestas de error:
 | `401` | Credenciales inválidas, o sesión vencida (`SESSION_EXPIRED`). |
 | `403` | Usuario pendiente de aprobación (`user_pending_approval`), usuario inactivo (`user_inactive`) o rol insuficiente. |
 | `404` | Recurso no encontrado. |
-| `409` | Conflicto de estado en órdenes o modificación concurrente (bloqueo optimista). |
+| `409` | Conflicto de estado en órdenes, modificación concurrente (bloqueo optimista) o clave única duplicada (por ejemplo, nombre de categoría). |
+| `413` | Imagen o solicitud multipart superior al límite permitido. |
 | `422` | Orden con precios o totales inconsistentes, o regla financiera de proveedores violada (NIT/lote duplicado, abono mayor al costo o al saldo, proveedor inactivo). |
 | `503` | Servicio o infraestructura no disponible. |
 | `500` | Error no controlado. |

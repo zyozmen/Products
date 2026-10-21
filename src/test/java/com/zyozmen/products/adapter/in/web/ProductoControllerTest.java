@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -44,6 +45,9 @@ class ProductoControllerTest {
 
     @Mock
     private ProductoWebMapper productoWebMapper;
+
+    @Spy
+    private ImageUploadService imageUploadService = new ImageUploadService();
 
     @InjectMocks
     private ProductoController productoController;
@@ -402,6 +406,7 @@ class ProductoControllerTest {
     void guardarImagenesShouldThrowExceptionWhenMainImageIsNotValidType() {
         MultipartFile invalidFile = mock(MultipartFile.class);
         when(invalidFile.isEmpty()).thenReturn(false);
+        when(invalidFile.getOriginalFilename()).thenReturn("invalid.jpg");
         when(invalidFile.getContentType()).thenReturn("application/pdf");
 
         assertThrows(IllegalArgumentException.class, () -> {

@@ -38,6 +38,8 @@ public class ProductoResponseDTO {
 	@Schema(description = "Listado de categorías asociadas")
 	private List<CategoryDTO> categories;
 
+	private Long categoryId;
+
 	@Schema(description = "Información de precio")
 	private PriceDTO price;
 

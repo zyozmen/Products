@@ -11,6 +11,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -37,12 +38,12 @@ class SequenceGeneratorServiceTest {
     }
 
     @Test
-    void shouldReturnOneWhenCounterIsNull() {
+    void shouldFailWhenCounterIsNullInsteadOfReusingAnId() {
         when(mongoOperations.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(SequenceDocument.class)))
                 .thenReturn(null);
 
-        long result = service.nextSequence(SequenceGeneratorService.PRODUCTO_SEQUENCE);
-
-        assertThat(result).isEqualTo(1L);
+        assertThatThrownBy(() -> service.nextSequence(SequenceGeneratorService.PRODUCTO_SEQUENCE))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(SequenceGeneratorService.PRODUCTO_SEQUENCE);
     }
 }

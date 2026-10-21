@@ -2,6 +2,8 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.Category;
+import com.zyozmen.products.domain.model.CatalogCategory;
+import com.zyozmen.products.domain.port.out.CategoryRepositoryPort;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,6 +33,9 @@ class ProductoServiceTest {
 
     @Mock
     private ProductoRepositoryPort productoRepositoryPort;
+
+    @Mock
+    private CategoryRepositoryPort categoryRepositoryPort;
 
     @InjectMocks
     private ProductoService productoService;
@@ -178,12 +186,69 @@ class ProductoServiceTest {
 
     @Test
     void listarCategoriasShouldReturnRepositoryCategories() {
-        Category category = Category.builder().categoryId(1L).name("Audio").slug("audio").build();
-        when(productoRepositoryPort.findAllCategories()).thenReturn(List.of(category));
+        Category category = Category.builder().categoryId(1L).name("Audio").build();
+        when(categoryRepositoryPort.findAll()).thenReturn(List.of(
+                CatalogCategory.builder().categoryId(1L).name("Audio").build()));
 
         List<Category> result = productoService.listarCategorias();
 
         assertThat(result).containsExactly(category);
-        verify(productoRepositoryPort).findAllCategories();
+        verify(categoryRepositoryPort).findAll();
+    }
+
+    @Test
+    void createValidatesCategoryReferenceBeforeSaving() {
+        Producto product = Producto.builder().categoryId(4L).build();
+        when(categoryRepositoryPort.findById(4L)).thenReturn(Optional.of(
+                CatalogCategory.builder().categoryId(4L).name("Audio").build()));
+        when(productoRepositoryPort.save(product)).thenReturn(product);
+
+        assertThat(productoService.crear(product).getCategoryId()).isEqualTo(4L);
+        verify(categoryRepositoryPort).findById(4L);
+    }
+
+    @Test
+    void createRejectsUnknownCategoryWithoutSaving() {
+        Producto product = Producto.builder().categoryId(99L).build();
+        when(categoryRepositoryPort.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> productoService.crear(product))
+                .isInstanceOf(ResourceNotFoundException.class).hasMessageContaining("99");
+        verifyNoInteractions(productoRepositoryPort);
+    }
+
+    @Test
+    void updateChangesCategoryReferenceAfterValidation() {
+        Producto existing = Producto.builder().id(10L).categoryId(1L).build();
+        when(productoRepositoryPort.findById(10L)).thenReturn(Optional.of(existing));
+        when(categoryRepositoryPort.findById(2L)).thenReturn(Optional.of(
+                CatalogCategory.builder().categoryId(2L).build()));
+        when(productoRepositoryPort.save(existing)).thenReturn(existing);
+
+        assertThat(productoService.actualizar(10L, Producto.builder().categoryId(2L).build()).getCategoryId())
+                .isEqualTo(2L);
+    }
+
+    @Test
+    void updatePreservesCategoryWhenReferenceIsOmitted() {
+        Producto existing = Producto.builder().id(10L).categoryId(1L).build();
+        when(productoRepositoryPort.findById(10L)).thenReturn(Optional.of(existing));
+        when(productoRepositoryPort.save(existing)).thenReturn(existing);
+
+        assertThat(productoService.actualizar(10L, Producto.builder().name("Updated").build()).getCategoryId())
+                .isEqualTo(1L);
+        verifyNoInteractions(categoryRepositoryPort);
+    }
+
+    @Test
+    void updateRejectsUnknownCategoryWithoutChangingExistingProduct() {
+        Producto existing = Producto.builder().id(10L).categoryId(1L).build();
+        when(productoRepositoryPort.findById(10L)).thenReturn(Optional.of(existing));
+        when(categoryRepositoryPort.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> productoService.actualizar(10L, Producto.builder().categoryId(99L).build()))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(existing.getCategoryId()).isEqualTo(1L);
+        verify(productoRepositoryPort, never()).save(any());
     }
 }

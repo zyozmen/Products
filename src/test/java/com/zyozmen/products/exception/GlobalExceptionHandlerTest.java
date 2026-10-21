@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.List;
 
@@ -24,6 +25,18 @@ import static org.mockito.Mockito.when;
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+    @Test
+    void multipartLimitFailureReturns413() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/v1/images/7");
+
+        var response = handler.handleMaxUploadSizeException(new MaxUploadSizeExceededException(2L * 1024 * 1024), request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).contains("2 MB", "13 MB");
+    }
 
     @Test
     void handleServiceUnavailableExceptionShouldReturn503Response() {

@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
+import org.bson.Document;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -47,6 +49,22 @@ class ProductoMongoAdapterTest {
 
     @InjectMocks
     private ProductoMongoAdapter adapter;
+
+    @Test
+    void categoryFilterPrefersReferenceAndOnlyFallsBackForLegacyDocuments() {
+        when(mongoTemplate.count(any(Query.class), eq(ProductoMongoDocument.class))).thenReturn(0L);
+        when(mongoTemplate.find(any(Query.class), eq(ProductoMongoDocument.class))).thenReturn(List.of());
+
+        adapter.findAllByCategoryIds(List.of(7L), PageRequest.of(0, 10));
+
+        var captor = ArgumentCaptor.forClass(Query.class);
+        verify(mongoTemplate).count(captor.capture(), eq(ProductoMongoDocument.class));
+        List<Document> conditions = captor.getValue().getQueryObject().getList("$and", Document.class);
+        assertThat(conditions).contains(new Document("$or", List.of(
+                new Document("categoryId", new Document("$in", List.of(7L))),
+                new Document("$and", List.of(new Document("categoryId", null),
+                        new Document("categories.category_id", new Document("$in", List.of(7L))))))));
+    }
 
     @Test
     void findAllShouldReturnMappedProducts() {

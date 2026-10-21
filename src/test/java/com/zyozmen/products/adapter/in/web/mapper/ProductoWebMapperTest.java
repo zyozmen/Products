@@ -25,6 +25,16 @@ class ProductoWebMapperTest {
     private final ProductoWebMapper mapper = new ProductoWebMapper();
 
     @Test
+    void categoryReferenceIsMappedInRequestsAndBothResponseShapes() {
+        Producto product = mapper.toDomain(ProductoRequestDTO.builder().name("Audio").categoryId(7L).build());
+
+        assertThat(product.getCategoryId()).isEqualTo(7L);
+        assertThat(mapper.toResponseDTO(product).getCategoryId()).isEqualTo(7L);
+        assertThat(mapper.toListItemDTO(product).getCategoryId()).isEqualTo(7L);
+        assertThat(mapper.toListItemDTO(product).getCategoryIds()).containsExactly(7L);
+    }
+
+    @Test
     void toDomainShouldMapRequestDtoToDomainModel() {
         ProductoRequestDTO dto = ProductoRequestDTO.builder()
                 .id("1")
