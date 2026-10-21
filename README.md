@@ -127,9 +127,10 @@ Requisitos: JDK 21 y una instancia de MongoDB accesible (Maven se ejecuta con el
 ./mvnw clean compile     # compilación
 ./mvnw test              # pruebas unitarias + reporte JaCoCo
 ./mvnw clean package     # genera target/products-0.0.1-SNAPSHOT.jar
+./mvnw clean verify      # pruebas + reporte + validación del mínimo de cobertura
 ```
 
-El reporte de cobertura se genera en `target/site/jacoco` y el build exige al menos 80 % de cobertura de líneas. Las clases de `dto`, `model`, `mapper`, `config` y la clase `Application` se excluyen del cálculo.
+El reporte de cobertura se genera en `target/site/jacoco` y la fase `verify` exige al menos 80 % de cobertura de líneas. `test` y `package` no ejecutan la regla `jacoco-check`; para validar el umbral localmente o en CI se debe ejecutar `./mvnw clean verify` (en Windows: `.\mvnw.cmd clean verify`). Las clases de `dto`, `model`, `mapper`, `config` y la clase `Application` se excluyen del cálculo.
 
 ## 7. Ejecución
 ```bash
