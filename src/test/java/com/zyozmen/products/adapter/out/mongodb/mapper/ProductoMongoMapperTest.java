@@ -26,6 +26,15 @@ class ProductoMongoMapperTest {
     private final ProductoMongoMapper mapper = new ProductoMongoMapper(null);
 
     @Test
+    void categoryReferenceSurvivesCreateUpdateAndReadMapping() {
+        Producto product = Producto.builder().id(1L).categoryId(7L).build();
+
+        assertThat(mapper.toDocument(product).getCategoryId()).isEqualTo(7L);
+        assertThat(mapper.toDocument(product, "existing-id").getCategoryId()).isEqualTo(7L);
+        assertThat(mapper.toDomain(mapper.toDocument(product)).getCategoryId()).isEqualTo(7L);
+    }
+
+    @Test
     void toDomainShouldMapDocumentToDomainModel() {
         ProductoMongoDocument document = ProductoMongoDocument.builder()
                 .id("mongo-id")

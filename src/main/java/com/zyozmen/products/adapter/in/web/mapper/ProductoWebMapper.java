@@ -13,6 +13,10 @@ import com.zyozmen.products.adapter.in.web.dto.PriceDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoListItemDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
+import com.zyozmen.products.adapter.in.web.dto.ImagenDTO;
+import com.zyozmen.products.adapter.in.web.dto.ImagesDTO;
+import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.domain.model.Images;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -34,6 +38,7 @@ public class ProductoWebMapper {
                 .sku(dto.getSku())
                 .status(dto.getStatus())
                 .categories(toCategoryDomainList(dto.getCategories()))
+                .categoryId(dto.getCategoryId())
                 .price(toPriceDomain(dto.getPrice()))
                 .ranking(toRankingDomain(dto.getRanking()))
                 .recentComments(toCommentDomainList(dto.getRecentComments()))
@@ -50,11 +55,13 @@ public class ProductoWebMapper {
                 .sku(producto.getSku())
                 .status(producto.getStatus())
                 .categories(toCategoryDTOList(producto.getCategories()))
+                .categoryId(producto.getCategoryId())
                 .price(toPriceDTO(producto.getPrice()))
                 .ranking(toRankingDTO(producto.getRanking()))
                 .recentComments(toRecentCommentDTOList(producto.getRecentComments()))
                 .createdAt(producto.getCreatedAt())
                 .updatedAt(producto.getUpdatedAt())
+                .images(toImagesDTO(producto.getImages()))
                 .build();
     }
 
@@ -63,13 +70,24 @@ public class ProductoWebMapper {
         return ProductoListItemDTO.builder()
                 .id(producto.getId())
                 .name(producto.getName())
-                .categoryIds(toCategoryIdList(producto.getCategories()))
+                .categoryIds(producto.getCategoryId() == null ? toCategoryIdList(producto.getCategories())
+                        : List.of(producto.getCategoryId()))
+                .categoryId(producto.getCategoryId())
                 .currentPrice(producto.getPrice() == null ? null : producto.getPrice().getCurrent())
                 .originalPrice(producto.getPrice() == null ? null : producto.getPrice().getOriginal())
                 .priceCurrency(producto.getPrice() == null ? null : producto.getPrice().getCurrency())
                 .averageRating(producto.getRanking() == null ? null : producto.getRanking().getAverageRating())
                 .totalReviews(producto.getRanking() == null ? null : producto.getRanking().getTotalReviews())
+                .status(producto.getStatus())
+                .images(toMainImageOnly(producto.getImages()))
                 .build();
+    }
+
+    private ImagesDTO toMainImageOnly(Images images) {
+        ImagesDTO dto = toImagesDTO(images);
+        if (dto == null) return null;
+        dto.setFotosSecundarias(null);
+        return dto;
     }
 
     private List<Long> toCategoryIdList(List<Category> categories) {
@@ -203,5 +221,27 @@ public class ProductoWebMapper {
                 .body(comment.getBody())
                 .createdAt(comment.getCreatedAt())
                 .build();
+    }
+
+    public ImagesDTO toImagesDTO(Images images) {
+        if (images == null) return null;
+        return ImagesDTO.builder()
+                .fotoPrincipal(toImagenDTO(images.getFotoPrincipal()))
+                .fotosSecundarias(toImagenDTOList(images.getFotosSecundarias()))
+                .build();
+    }
+
+    private ImagenDTO toImagenDTO(Imagen imagen) {
+        if (imagen == null) return null;
+        return ImagenDTO.builder()
+                .nombre(imagen.getNombre())
+                .extension(imagen.getExtension())
+                .filepart(imagen.getFilepart())
+                .build();
+    }
+
+    private List<ImagenDTO> toImagenDTOList(List<Imagen> list) {
+        if (list == null) return List.of();
+        return list.stream().map(this::toImagenDTO).toList();
     }
 }

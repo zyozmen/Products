@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -20,14 +21,18 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,6 +45,9 @@ class ProductoControllerTest {
 
     @Mock
     private ProductoWebMapper productoWebMapper;
+
+    @Spy
+    private ImageUploadService imageUploadService = new ImageUploadService();
 
     @InjectMocks
     private ProductoController productoController;
@@ -137,6 +145,26 @@ class ProductoControllerTest {
         verify(productoUseCase).listarTodosFiltrado(eq(List.of(1L, 2L)), eq(BigDecimal.valueOf(100)), eq(BigDecimal.valueOf(500)), eq(BigDecimal.valueOf(3.5)), eq(BigDecimal.valueOf(5.0)), eq("head"), any(Pageable.class));
         verify(productoUseCase, never()).listarTodos(any(Pageable.class));
         verify(productoUseCase, never()).listarTodosPorCategorias(anyList(), any(Pageable.class));
+    }
+
+    @Test
+    void listarTodosAsAdminShouldIncludeInactiveProducts() {
+        Pageable pageable = PageRequest.of(0, 15);
+        Page<Producto> productoPage = new PageImpl<>(List.of(), pageable, 0);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "admin", null, List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+        try {
+            when(productoUseCase.listarTodosFiltrado(eq(List.of()), any(), any(), any(), any(), any(), eq(true), any(Pageable.class)))
+                    .thenReturn(productoPage);
+
+            productoController.listarTodos(0, 15, null, "desc", null, null, null, null, null, null);
+
+            verify(productoUseCase).listarTodosFiltrado(eq(List.of()), any(), any(), any(), any(), any(), eq(true), any(Pageable.class));
+            verify(productoUseCase, never()).listarTodos(any(Pageable.class));
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
     }
 
     @Test
@@ -244,6 +272,17 @@ class ProductoControllerTest {
     }
 
     @Test
+    void actualizarWithInactiveStatusShouldDeleteProduct() {
+        ProductoRequestDTO requestDTO = ProductoRequestDTO.builder().name("Smartwatch").status("inactive").build();
+
+        ResponseEntity<ProductoResponseDTO> response = productoController.actualizar(9L, requestDTO);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(productoUseCase).eliminar(9L);
+        verify(productoUseCase, never()).actualizar(any(), any());
+    }
+
+    @Test
     void eliminarShouldDelegateAndReturnNoContent() {
         ResponseEntity<Void> response = productoController.eliminar(10L);
 
@@ -282,5 +321,96 @@ class ProductoControllerTest {
         assertThat(response.getBody()).containsExactly(categoryDTO);
         verify(productoUseCase).listarCategorias();
         verify(productoWebMapper).toCategoryDTO(category);
+    }
+
+    @Test
+    void guardarImagenesWithValidDataShouldSaveAndReturnMappedResponse() throws IOException {
+        MultipartFile fotoPrincipal = mock(MultipartFile.class);
+        when(fotoPrincipal.isEmpty()).thenReturn(false);
+        when(fotoPrincipal.getContentType()).thenReturn("image/png");
+        when(fotoPrincipal.getBytes()).thenReturn(new byte[]{1, 2, 3});
+        when(fotoPrincipal.getOriginalFilename()).thenReturn("principal.png");
+
+        MultipartFile fotoSecundaria = mock(MultipartFile.class);
+        when(fotoSecundaria.isEmpty()).thenReturn(false);
+        when(fotoSecundaria.getContentType()).thenReturn("image/jpeg");
+        when(fotoSecundaria.getBytes()).thenReturn(new byte[]{4, 5, 6});
+        when(fotoSecundaria.getOriginalFilename()).thenReturn("secundario.jpg");
+
+        com.zyozmen.products.domain.model.Imagen princ = com.zyozmen.products.domain.model.Imagen.builder()
+                .nombre("principal.png")
+                .extension("png")
+                .filepart("AQID")
+                .build();
+        com.zyozmen.products.domain.model.Imagen sec = com.zyozmen.products.domain.model.Imagen.builder()
+                .nombre("secundario.jpg")
+                .extension("jpg")
+                .filepart("BBUF")
+                .build();
+        com.zyozmen.products.domain.model.Images imgsDomain = com.zyozmen.products.domain.model.Images.builder()
+                .fotoPrincipal(princ)
+                .fotosSecundarias(List.of(sec))
+                .build();
+
+        Producto mockActualizado = Producto.builder()
+                .id("1")
+                .images(imgsDomain)
+                .build();
+
+        com.zyozmen.products.adapter.in.web.dto.ImagenDTO princDTO = com.zyozmen.products.adapter.in.web.dto.ImagenDTO.builder()
+                .nombre("principal.png")
+                .extension("png")
+                .filepart("AQID")
+                .build();
+        com.zyozmen.products.adapter.in.web.dto.ImagenDTO secDTO = com.zyozmen.products.adapter.in.web.dto.ImagenDTO.builder()
+                .nombre("secundario.jpg")
+                .extension("jpg")
+                .filepart("BBUF")
+                .build();
+        com.zyozmen.products.adapter.in.web.dto.ImagesDTO imgsDTO = com.zyozmen.products.adapter.in.web.dto.ImagesDTO.builder()
+                .fotoPrincipal(princDTO)
+                .fotosSecundarias(List.of(secDTO))
+                .build();
+
+        ProductoResponseDTO responseDTO = ProductoResponseDTO.builder()
+                .id("1")
+                .images(imgsDTO)
+                .build();
+
+        when(productoUseCase.guardarImagenes(eq(1L), any(), anyList())).thenReturn(mockActualizado);
+        when(productoWebMapper.toResponseDTO(mockActualizado)).thenReturn(responseDTO);
+
+        ResponseEntity<ProductoResponseDTO> response = productoController.guardarImagenes(1L, fotoPrincipal, List.of(fotoSecundaria));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(responseDTO);
+    }
+
+    @Test
+    void guardarImagenesShouldThrowExceptionWhenSecondaryImagesExceedFive() {
+        List<MultipartFile> list = List.of(
+                mock(MultipartFile.class),
+                mock(MultipartFile.class),
+                mock(MultipartFile.class),
+                mock(MultipartFile.class),
+                mock(MultipartFile.class),
+                mock(MultipartFile.class)
+        );
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            productoController.guardarImagenes(1L, null, list);
+        });
+    }
+
+    @Test
+    void guardarImagenesShouldThrowExceptionWhenMainImageIsNotValidType() {
+        MultipartFile invalidFile = mock(MultipartFile.class);
+        when(invalidFile.isEmpty()).thenReturn(false);
+        when(invalidFile.getOriginalFilename()).thenReturn("invalid.jpg");
+        when(invalidFile.getContentType()).thenReturn("application/pdf");
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            productoController.guardarImagenes(1L, invalidFile, null);
+        });
     }
 }

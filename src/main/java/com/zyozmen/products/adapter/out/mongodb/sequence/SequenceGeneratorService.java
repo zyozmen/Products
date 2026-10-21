@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 public class SequenceGeneratorService {
 
     public static final String PRODUCTO_SEQUENCE = "productos_sequence";
+    public static final String ORDER_SEQUENCE = "orders_sequence";
+    public static final String CATEGORY_SEQUENCE = "categories_sequence";
 
     private final MongoOperations mongoOperations;
 
@@ -39,6 +41,9 @@ public class SequenceGeneratorService {
         SequenceDocument counter = mongoOperations.findAndModify(
                 query, update, options, SequenceDocument.class);
 
-        return counter != null ? counter.getSeq() : 1L;
+        if (counter == null) {
+            throw new IllegalStateException("No se pudo generar el siguiente ID para " + sequenceName);
+        }
+        return counter.getSeq();
     }
 }

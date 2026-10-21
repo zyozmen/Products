@@ -5,6 +5,7 @@ import com.zyozmen.products.domain.model.Category;
 import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.ProductoUseCase;
 import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
+import com.zyozmen.products.domain.port.out.CategoryRepositoryPort;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.data.domain.Page;
@@ -28,6 +29,7 @@ import java.util.List;
 public class ProductoService implements ProductoUseCase {
 
     private final ProductoRepositoryPort productoRepositoryPort;
+    private final CategoryRepositoryPort categoryRepositoryPort;
 
     @Override
     @Transactional(readOnly = true)
@@ -56,6 +58,7 @@ public class ProductoService implements ProductoUseCase {
             BigDecimal minRating,
             BigDecimal maxRating,
             String name,
+            boolean includeInactive,
             Pageable pageable) {
         return productoRepositoryPort.findAllFiltered(
                 categoryIds,
@@ -64,6 +67,7 @@ public class ProductoService implements ProductoUseCase {
                 minRating,
                 maxRating,
                 name,
+                includeInactive,
                 pageable);
     }
 
@@ -78,7 +82,7 @@ public class ProductoService implements ProductoUseCase {
     @Override
     @Transactional
     public Producto crear(Producto producto) {
-
+        validateCategory(producto.getCategoryId());
         producto.setCreatedAt(Instant.now());
         producto.setUpdatedAt(Instant.now());
         return productoRepositoryPort.save(producto);
@@ -92,6 +96,10 @@ public class ProductoService implements ProductoUseCase {
                         "Producto no encontrado con ID: " + id));
 
         // Keep path id as source of truth while updating every other field.
+        if (producto.getCategoryId() != null) {
+            validateCategory(producto.getCategoryId());
+            existente.setCategoryId(producto.getCategoryId());
+        }
         existente.setId(id);
         existente.setName(producto.getName());
         existente.setSlug(producto.getSlug());
@@ -104,6 +112,31 @@ public class ProductoService implements ProductoUseCase {
         existente.setRecentComments(producto.getRecentComments());
         existente.setHasMoreComments(producto.getHasMoreComments());
         existente.setCreatedAt(producto.getCreatedAt());
+        existente.setUpdatedAt(Instant.now());
+
+        return productoRepositoryPort.save(existente);
+    }
+
+    @Override
+    @Transactional
+    public Producto guardarImagenes(Long idProducto, com.zyozmen.products.domain.model.Imagen fotoPrincipal, List<com.zyozmen.products.domain.model.Imagen> fotosSecundarias) {
+        Producto existente = productoRepositoryPort.findById(idProducto)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Producto no encontrado con ID: " + idProducto));
+
+        com.zyozmen.products.domain.model.Images images = existente.getImages();
+        if (images == null) {
+            images = new com.zyozmen.products.domain.model.Images();
+        }
+
+        if (fotoPrincipal != null) {
+            images.setFotoPrincipal(fotoPrincipal);
+        }
+        if (fotosSecundarias != null && !fotosSecundarias.isEmpty()) {
+            images.setFotosSecundarias(fotosSecundarias);
+        }
+
+        existente.setImages(images);
         existente.setUpdatedAt(Instant.now());
 
         return productoRepositoryPort.save(existente);
@@ -125,6 +158,14 @@ public class ProductoService implements ProductoUseCase {
 
     @Override
     public List<Category> listarCategorias() {
-        return productoRepositoryPort.findAllCategories();
+        return categoryRepositoryPort.findAll().stream()
+                .map(category -> Category.builder().categoryId(category.getCategoryId()).name(category.getName()).build())
+                .toList();
+    }
+
+    private void validateCategory(Long categoryId) {
+        if (categoryId != null && categoryRepositoryPort.findById(categoryId).isEmpty()) {
+            throw new ResourceNotFoundException("Categoria no encontrada con ID: " + categoryId);
+        }
     }
 }

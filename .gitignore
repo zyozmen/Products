@@ -109,6 +109,8 @@ desktop.ini
 .env
 .env.local
 .env.*.local
+*.env
+atlas-credentials.env
 application-local.properties
 application-local.yml
 application-secret.properties

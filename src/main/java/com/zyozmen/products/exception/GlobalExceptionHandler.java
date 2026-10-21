@@ -1,19 +1,30 @@
 package com.zyozmen.products.exception;
 
+import com.zyozmen.products.domain.exception.BusinessRuleException;
+import com.zyozmen.products.domain.exception.InvalidCredentialsException;
+import com.zyozmen.products.domain.exception.MainAdminProtectedException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.exception.ServiceUnavailableException;
+import com.zyozmen.products.domain.exception.SessionExpiredException;
+import com.zyozmen.products.domain.exception.UnderageRegistrationException;
+import com.zyozmen.products.domain.exception.UserAlreadyExistsException;
+import com.zyozmen.products.domain.exception.UserInactiveException;
+import com.zyozmen.products.domain.exception.UserPendingApprovalException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Manejador global de excepciones (adaptador de infraestructura web).
@@ -21,6 +32,33 @@ import java.util.stream.Collectors;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSizeException(
+            MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(ErrorResponse.builder()
+                .status(HttpStatus.PAYLOAD_TOO_LARGE.value()).error("Payload Too Large")
+                .message("Cada imagen admite hasta 2 MB y la solicitud hasta 13 MB")
+                .path(request.getRequestURI()).timestamp(LocalDateTime.now(ZoneId.of("UTC"))).build());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleArgumentTypeMismatch(
+            MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(ErrorResponse.builder()
+                .status(HttpStatus.BAD_REQUEST.value()).error("Bad Request")
+                .message("Valor invalido para el parametro: " + ex.getName())
+                .path(request.getRequestURI()).timestamp(LocalDateTime.now(ZoneId.of("UTC"))).build());
+    }
+
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateKeyException(
+            DuplicateKeyException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.builder()
+                .status(HttpStatus.CONFLICT.value()).error("Conflict")
+                .message("Ya existe un registro con ese valor unico")
+                .path(request.getRequestURI()).timestamp(LocalDateTime.now(ZoneId.of("UTC"))).build());
+    }
 
     @ExceptionHandler(ServiceUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleServiceUnavailableException(
@@ -54,6 +92,61 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
     }
 
+    @ExceptionHandler({UserAlreadyExistsException.class, UnderageRegistrationException.class,
+            MainAdminProtectedException.class})
+    public ResponseEntity<ErrorResponse> handleBadRequestDomainException(
+            RuntimeException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Bad Request")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCredentialsException(
+            InvalidCredentialsException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .error("Unauthorized")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
+
+    @ExceptionHandler(SessionExpiredException.class)
+    public ResponseEntity<SessionErrorResponse> handleSessionExpiredException(SessionExpiredException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new SessionErrorResponse(SessionExpiredException.CODE, ex.getMessage()));
+    }
+
+    @ExceptionHandler(UserPendingApprovalException.class)
+    public ResponseEntity<UserInactiveErrorResponse> handleUserPendingApprovalException(
+            UserPendingApprovalException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new UserInactiveErrorResponse("user_pending_approval", ex.getMessage()));
+    }
+
+    @ExceptionHandler(UserInactiveException.class)
+    public ResponseEntity<UserInactiveErrorResponse> handleUserInactiveException(
+            UserInactiveException ex) {
+
+        UserInactiveErrorResponse errorResponse = new UserInactiveErrorResponse("user_inactive", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(
             MethodArgumentNotValidException ex,
@@ -72,6 +165,54 @@ public class GlobalExceptionHandler {
                 .path(request.getRequestURI())
                 .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
                 .validationErrors(validationErrors)
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessRuleException(
+            BusinessRuleException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.UNPROCESSABLE_ENTITY.value())
+                .error("Unprocessable Entity")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(errorResponse);
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockingException(
+            OptimisticLockingFailureException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.CONFLICT.value())
+                .error("Conflict")
+                .message("El recurso fue modificado por otra solicitud; vuelve a intentarlo")
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
+            IllegalArgumentException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Bad Request")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC")))
                 .build();
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);

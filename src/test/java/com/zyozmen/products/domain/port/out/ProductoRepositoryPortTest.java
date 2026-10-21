@@ -44,8 +44,6 @@ class ProductoRepositoryPortTest {
         Producto producto = Producto.builder().id("1").build();
 
         when(productoMongoRepository.findAll()).thenReturn(List.of());
-        when(productoMongoRepository.findAll(Pageable.unpaged())).thenReturn(new PageImpl<>(List.of(), Pageable.unpaged(), 0));
-        when(productoMongoRepository.findByCategoriesCategoryIdIn(List.of(1L), Pageable.unpaged())).thenReturn(new PageImpl<>(List.of(), Pageable.unpaged(), 0));
         when(productoMongoRepository.findById("1")).thenReturn(Optional.empty());
         when(productoMongoRepository.existsById("1")).thenReturn(false);
         when(productoMongoRepository.findDistinctCategories()).thenReturn(List.of());

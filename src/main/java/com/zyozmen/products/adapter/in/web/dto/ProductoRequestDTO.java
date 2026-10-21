@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -44,6 +45,9 @@ public class ProductoRequestDTO {
     @NotEmpty(message = "El producto debe tener al menos una categoría")
     @Schema(description = "Listado de categorías asociadas; debe contener al menos una categoría")
     private List<CategoryDTO> categories;
+
+    @Positive
+    private Long categoryId;
 
     @NotNull(message = "La estructura de precio del producto es obligatoria")
     @Schema(description = "Información de precio")

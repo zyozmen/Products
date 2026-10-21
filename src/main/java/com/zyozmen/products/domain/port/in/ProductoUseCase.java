@@ -24,13 +24,26 @@ public interface ProductoUseCase {
 
     Page<Producto> listarTodosPorCategorias(List<Long> categoryIds, Pageable pageable);
 
-        Page<Producto> listarTodosFiltrado(
+    /** Lista solo productos activos. */
+    default Page<Producto> listarTodosFiltrado(
             List<Long> categoryIds,
             BigDecimal minPrice,
             BigDecimal maxPrice,
             BigDecimal minRating,
             BigDecimal maxRating,
             String name,
+            Pageable pageable) {
+        return listarTodosFiltrado(categoryIds, minPrice, maxPrice, minRating, maxRating, name, false, pageable);
+    }
+
+    Page<Producto> listarTodosFiltrado(
+            List<Long> categoryIds,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            BigDecimal minRating,
+            BigDecimal maxRating,
+            String name,
+            boolean includeInactive,
             Pageable pageable);
 
     Producto obtenerPorId(Long id);
@@ -38,6 +51,8 @@ public interface ProductoUseCase {
     Producto crear(Producto producto);
 
     Producto actualizar(Long id, Producto producto);
+
+    Producto guardarImagenes(Long idProducto, com.zyozmen.products.domain.model.Imagen fotoPrincipal, List<com.zyozmen.products.domain.model.Imagen> fotosSecundarias);
 
     void eliminar(Long id);
 

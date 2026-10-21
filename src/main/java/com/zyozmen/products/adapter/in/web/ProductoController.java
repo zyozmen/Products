@@ -7,6 +7,8 @@ import com.zyozmen.products.adapter.in.web.dto.ProductoListItemDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProductoResponseDTO;
 import com.zyozmen.products.adapter.in.web.mapper.ProductoWebMapper;
+import com.zyozmen.products.adapter.in.web.mapper.CategoryWebMapper;
+import com.zyozmen.products.domain.port.in.CategoryUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,8 +22,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -41,13 +47,16 @@ import java.util.Objects;
  * nunca de la implementación concreta del servicio.
  */
 @RestController
-@RequestMapping("/api/productos")
+@RequestMapping({"/api/productos", "/api/v1/products"})
 @RequiredArgsConstructor
 @Tag(name = "Productos", description = "API para gestión de productos")
 public class ProductoController {
 
     private final ProductoUseCase productoUseCase;
     private final ProductoWebMapper productoWebMapper;
+    private final ImageUploadService imageUploadService;
+    private final CategoryUseCase categoryUseCase;
+    private final CategoryWebMapper categoryWebMapper;
 
     @Operation(summary = "Listar todos los productos")
     @ApiResponse(responseCode = "200", description = "Lista de productos obtenida exitosamente")
@@ -96,7 +105,10 @@ public class ProductoController {
         boolean hasNameFilter = name != null && !name.isBlank();
 
         Page<Producto> productos;
-        if (normalizedCategoryIds.isEmpty() && !hasPriceFilter && !hasRatingFilter && !hasNameFilter) {
+        if (isAdmin()) {
+            productos = productoUseCase.listarTodosFiltrado(
+                    normalizedCategoryIds, minPrice, maxPrice, minRating, maxRating, name, true, pageable);
+        } else if (normalizedCategoryIds.isEmpty() && !hasPriceFilter && !hasRatingFilter && !hasNameFilter) {
             productos = productoUseCase.listarTodos(pageable);
         } else if (!hasPriceFilter && !hasRatingFilter && !hasNameFilter) {
             productos = productoUseCase.listarTodosPorCategorias(normalizedCategoryIds, pageable);
@@ -113,6 +125,31 @@ public class ProductoController {
 
         Page<ProductoListItemDTO> response = productos.map(productoWebMapper::toListItemDTO);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping(params = "categoryId")
+    public ResponseEntity<Page<ProductoListItemDTO>> listarPorCategoria(
+            @RequestParam Long categoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size,
+            @RequestParam(name = "sort_by", required = false) String sortBy,
+            @RequestParam(name = "sort_dir", defaultValue = "desc") String sortDir,
+            @RequestParam(name = "min_price", required = false) BigDecimal minPrice,
+            @RequestParam(name = "max_price", required = false) BigDecimal maxPrice,
+            @RequestParam(name = "min_rating", required = false) BigDecimal minRating,
+            @RequestParam(name = "max_rating", required = false) BigDecimal maxRating,
+            @RequestParam(required = false) String name) {
+        if (categoryId <= 0) {
+            throw new IllegalArgumentException("categoryId debe ser positivo");
+        }
+        return listarTodos(page, size, sortBy, sortDir, minPrice, maxPrice, minRating, maxRating,
+                name, List.of(categoryId));
+    }
+
+    private boolean isAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 
     @Operation(summary = "Obtener un producto por ID")
@@ -138,6 +175,7 @@ public class ProductoController {
 
     @Operation(summary = "Actualizar un producto existente")
     @ApiResponse(responseCode = "200", description = "Producto actualizado exitosamente")
+    @ApiResponse(responseCode = "204", description = "El producto se marcó como inactive y fue eliminado de la base de datos")
     @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos",
                      content = @Content(schema = @Schema(hidden = true)))
     @ApiResponse(responseCode = "404", description = "Producto no encontrado",
@@ -147,6 +185,10 @@ public class ProductoController {
             @Parameter(description = "ID del producto a actualizar", example = "1")
             @PathVariable Long id,
             @Valid @RequestBody ProductoRequestDTO requestDTO) {
+        if ("inactive".equalsIgnoreCase(requestDTO.getStatus())) {
+            productoUseCase.eliminar(id);
+            return ResponseEntity.noContent().build();
+        }
         Producto actualizado = productoUseCase.actualizar(id, productoWebMapper.toDomain(requestDTO));
         return ResponseEntity.ok(productoWebMapper.toResponseDTO(actualizado));
     }
@@ -184,5 +226,31 @@ public class ProductoController {
                 .map(productoWebMapper::toCategoryDTO)
                 .toList();
         return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Almacenar imagenes de producto o categoria segun target (PRODUCT por defecto)")
+    @ApiResponse(responseCode = "200", description = "Imágenes guardadas exitosamente")
+    @ApiResponse(responseCode = "400", description = "Límite de imágenes excedido o tipo de archivo inválido")
+    @ApiResponse(responseCode = "404", description = "Producto no encontrado")
+    @PostMapping(value = "/{idProducto}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> guardarImagenesPorDestino(
+            @PathVariable Long idProducto,
+            @RequestParam(name = "fotoPrincipal", required = false) MultipartFile fotoPrincipal,
+            @RequestParam(name = "fotosSecundarias", required = false) List<MultipartFile> fotosSecundarias,
+            @RequestParam(defaultValue = "PRODUCT") ImageUploadService.Target target) {
+        if (target == ImageUploadService.Target.CATEGORY) {
+            var images = imageUploadService.prepare(target, fotoPrincipal, fotosSecundarias);
+            return ResponseEntity.ok(categoryWebMapper.toResponse(
+                    categoryUseCase.saveImage(idProducto, images.getFotoPrincipal())));
+        }
+        return guardarImagenes(idProducto, fotoPrincipal, fotosSecundarias);
+    }
+
+    public ResponseEntity<ProductoResponseDTO> guardarImagenes(
+            Long idProducto, MultipartFile fotoPrincipal, List<MultipartFile> fotosSecundarias) {
+
+        var images = imageUploadService.prepare(ImageUploadService.Target.PRODUCT, fotoPrincipal, fotosSecundarias);
+        Producto actualizado = productoUseCase.guardarImagenes(idProducto, images.getFotoPrincipal(), images.getFotosSecundarias());
+        return ResponseEntity.ok(productoWebMapper.toResponseDTO(actualizado));
     }
 }

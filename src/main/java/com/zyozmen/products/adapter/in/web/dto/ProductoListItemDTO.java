@@ -27,6 +27,8 @@ public class ProductoListItemDTO {
     @Schema(description = "IDs de categorías del producto")
     private List<Long> categoryIds;
 
+    private Long categoryId;
+
     @JsonProperty("current_price")
     @Schema(description = "Precio actual del producto", example = "199.99")
     private BigDecimal currentPrice;
@@ -46,4 +48,11 @@ public class ProductoListItemDTO {
     @JsonProperty("total_reviews")
     @Schema(description = "Total de reseñas", example = "128")
     private Integer totalReviews;
+
+    @Schema(description = "Estado del producto", example = "active")
+    private String status;
+
+    @JsonProperty("images")
+    @Schema(description = "Imágenes del producto")
+    private ImagesDTO images;
 }

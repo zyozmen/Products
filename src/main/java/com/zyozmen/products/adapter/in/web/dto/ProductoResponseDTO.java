@@ -38,6 +38,8 @@ public class ProductoResponseDTO {
 	@Schema(description = "Listado de categorías asociadas")
 	private List<CategoryDTO> categories;
 
+	private Long categoryId;
+
 	@Schema(description = "Información de precio")
 	private PriceDTO price;
 
@@ -55,4 +57,8 @@ public class ProductoResponseDTO {
 	@JsonProperty("updated_at")
 	@Schema(description = "Fecha de última actualización del producto", example = "2026-06-17T13:00:00Z")
 	private Instant updatedAt;
+
+	@JsonProperty("images")
+	@Schema(description = "Imágenes del producto (foto principal y secundarias)")
+	private ImagesDTO images;
 }

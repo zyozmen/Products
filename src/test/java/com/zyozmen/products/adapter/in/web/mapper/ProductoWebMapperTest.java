@@ -25,6 +25,16 @@ class ProductoWebMapperTest {
     private final ProductoWebMapper mapper = new ProductoWebMapper();
 
     @Test
+    void categoryReferenceIsMappedInRequestsAndBothResponseShapes() {
+        Producto product = mapper.toDomain(ProductoRequestDTO.builder().name("Audio").categoryId(7L).build());
+
+        assertThat(product.getCategoryId()).isEqualTo(7L);
+        assertThat(mapper.toResponseDTO(product).getCategoryId()).isEqualTo(7L);
+        assertThat(mapper.toListItemDTO(product).getCategoryId()).isEqualTo(7L);
+        assertThat(mapper.toListItemDTO(product).getCategoryIds()).containsExactly(7L);
+    }
+
+    @Test
     void toDomainShouldMapRequestDtoToDomainModel() {
         ProductoRequestDTO dto = ProductoRequestDTO.builder()
                 .id("1")
@@ -87,11 +97,19 @@ class ProductoWebMapperTest {
                 .categories(List.of(Category.builder().categoryId(3L).name("Peripherals").slug("peripherals").build()))
                 .price(Price.builder().current(BigDecimal.valueOf(49.99)).original(BigDecimal.valueOf(59.99)).currency("USD").build())
                 .ranking(Ranking.builder().averageRating(BigDecimal.valueOf(4.8)).totalReviews(300).build())
+                .status("draft")
+                .images(com.zyozmen.products.domain.model.Images.builder()
+                        .fotoPrincipal(com.zyozmen.products.domain.model.Imagen.builder().nombre("main.jpg").build())
+                        .fotosSecundarias(List.of(com.zyozmen.products.domain.model.Imagen.builder().nombre("sec.jpg").build()))
+                        .build())
                 .build();
 
         ProductoListItemDTO dto = mapper.toListItemDTO(producto);
 
         assertThat(dto).isNotNull();
+        assertThat(dto.getStatus()).isEqualTo("draft");
+        assertThat(dto.getImages().getFotoPrincipal()).isNotNull();
+        assertThat(dto.getImages().getFotosSecundarias()).isNull();
         assertThat(dto.getId()).isEqualTo("3");
         assertThat(dto.getName()).isEqualTo("Mouse");
         assertThat(dto.getCategoryIds()).containsExactly(3L);
