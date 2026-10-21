@@ -50,6 +50,53 @@ class ProveedorControllerTest {
     }
 
     @Test
+    void consultaProveedorConservaContratoYAgregaCantidadesDeLotes() throws Exception {
+        var proveedor = Proveedor.builder().id("p1").nombre("Distribuidora Cannabis SAS").nit("900123456")
+                .telefono("3001234567").email("proveedor@example.com").estado(EstadoProveedor.ACTIVO)
+                .totalDeuda(new BigDecimal("8000000.00")).totalPagado(new BigDecimal("3000000.00"))
+                .saldoPendiente(new BigDecimal("5000000.00"))
+                .fechaCreacion(Instant.parse("2026-10-21T15:00:00Z")).build();
+        when(useCase.obtenerDetalle("p1"))
+                .thenReturn(new ProveedorUseCase.DetalleProveedor(proveedor, 3, 2));
+
+        mvc.perform(get("/api/proveedores/p1")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("p1"))
+                .andExpect(jsonPath("$.nombre").value("Distribuidora Cannabis SAS"))
+                .andExpect(jsonPath("$.nit").value("900123456"))
+                .andExpect(jsonPath("$.contacto.telefono").value("3001234567"))
+                .andExpect(jsonPath("$.contacto.email").value("proveedor@example.com"))
+                .andExpect(jsonPath("$.totalDeuda").value(8000000))
+                .andExpect(jsonPath("$.totalPagado").value(3000000))
+                .andExpect(jsonPath("$.saldoPendiente").value(5000000))
+                .andExpect(jsonPath("$.estado").value("ACTIVO"))
+                .andExpect(jsonPath("$.fechaCreacion").isNotEmpty())
+                .andExpect(jsonPath("$.lotesPagados").value(3))
+                .andExpect(jsonPath("$.lotesPorPagar").value(2))
+                .andExpect(jsonPath("$.proveedor").doesNotExist());
+        verify(useCase).obtenerDetalle("p1");
+    }
+
+    @Test
+    void consultaProveedorSinLotesExponeCantidadesCero() throws Exception {
+        var proveedor = Proveedor.builder().id("p1").estado(EstadoProveedor.ACTIVO).build();
+        when(useCase.obtenerDetalle("p1"))
+                .thenReturn(new ProveedorUseCase.DetalleProveedor(proveedor, 0, 0));
+
+        mvc.perform(get("/api/proveedores/p1")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lotesPagados").value(0))
+                .andExpect(jsonPath("$.lotesPorPagar").value(0));
+    }
+
+    @Test
+    void consultaProveedorInexistenteConserva404() throws Exception {
+        when(useCase.obtenerDetalle("otro")).thenThrow(
+                new com.zyozmen.products.domain.exception.ResourceNotFoundException("Proveedor no encontrado"));
+
+        mvc.perform(get("/api/proveedores/otro")).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Proveedor no encontrado"));
+    }
+
+    @Test
     void recibeContenedoresSinCodigoDeClienteYExponeInventario() throws Exception {
         when(useCase.recibirLote(any())).thenReturn(lote());
 
@@ -206,5 +253,58 @@ class ProveedorControllerTest {
                 .contenedores(List.of(Contenedor.builder().id("c1").tipoCepa("Sativa Premium")
                         .unidadBase("gramo").capacidadUnidadesBase(new BigDecimal("1000"))
                         .cantidadDisponible(new BigDecimal("1000")).estado("RECIBIDO").build())).build();
+    }
+
+    @Test
+    void listaLotesConValoresPorDefectoYTotalEnEncabezado() throws Exception {
+        when(useCase.listarLotes("p1", null, 0, 20, "fechaIngreso,desc"))
+                .thenReturn(new PageImpl<>(List.of(lote())));
+        mvc.perform(get("/api/proveedores/p1/lotes")).andExpect(status().isOk())
+                .andExpect(header().string("X-Total-Count", "1"))
+                .andExpect(jsonPath("$[0].id").value("l1"))
+                .andExpect(jsonPath("$[0].contenedores").isArray());
+        verify(useCase).listarLotes("p1", null, 0, 20, "fechaIngreso,desc");
+    }
+
+    @Test
+    void listaLotesConBusquedaPaginaYOrdenPersonalizado() throws Exception {
+        when(useCase.listarLotes("p1", "Bolsa", 1, 5, "costoTotalLote,asc"))
+                .thenReturn(new PageImpl<>(List.of(lote()), PageRequest.of(1, 5), 6));
+        mvc.perform(get("/api/proveedores/p1/lotes").param("buscar", "Bolsa")
+                        .param("page", "1").param("size", "5").param("sort", "costoTotalLote,asc"))
+                .andExpect(status().isOk()).andExpect(header().string("X-Total-Count", "6"))
+                .andExpect(jsonPath("$[0].codigoLote").value("LOT-20261021-ABC"));
+    }
+
+    @Test
+    void listaLotesFueraDeRangoConservaTotalReal() throws Exception {
+        when(useCase.listarLotes("p1", null, 5, 20, "fechaIngreso,desc"))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(5, 20), 3));
+        mvc.perform(get("/api/proveedores/p1/lotes").param("page", "5"))
+                .andExpect(status().isOk()).andExpect(header().string("X-Total-Count", "3"))
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void listaLotesSinCoincidenciasDevuelveTotalCero() throws Exception {
+        when(useCase.listarLotes("p1", "inexistente", 0, 20, "fechaIngreso,desc"))
+                .thenReturn(new PageImpl<>(List.of()));
+        mvc.perform(get("/api/proveedores/p1/lotes").param("buscar", "inexistente"))
+                .andExpect(status().isOk()).andExpect(header().string("X-Total-Count", "0"))
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void listaLotesExpone404YErroresDeParametros() throws Exception {
+        mvc.perform(get("/api/proveedores/p1/lotes").param("page", "abc"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(useCase);
+        when(useCase.listarLotes("p1", null, 0, 20, "no-valido"))
+                .thenThrow(new IllegalArgumentException("Orden invalido"));
+        mvc.perform(get("/api/proveedores/p1/lotes").param("sort", "no-valido"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("Orden invalido"));
+        when(useCase.listarLotes("p1", null, 0, 20, "fechaIngreso,desc"))
+                .thenThrow(new com.zyozmen.products.domain.exception.ResourceNotFoundException("Proveedor no encontrado"));
+        mvc.perform(get("/api/proveedores/p1/lotes")).andExpect(status().isNotFound());
     }
 }

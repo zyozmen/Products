@@ -6,6 +6,8 @@ import com.zyozmen.products.domain.model.EstadoPagoLote;
 import com.zyozmen.products.domain.model.EstadoProveedor;
 import com.zyozmen.products.domain.model.Lote;
 import com.zyozmen.products.domain.model.Contenedor;
+import com.zyozmen.products.domain.model.UnidadMedida;
+import org.bson.types.ObjectId;
 import com.zyozmen.products.domain.model.Proveedor;
 import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
 import com.zyozmen.products.domain.model.TransaccionProveedor;
@@ -17,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -69,6 +72,14 @@ public class ProveedorService implements ProveedorUseCase {
     }
 
     @Override
+    public DetalleProveedor obtenerDetalle(String id) {
+        Proveedor proveedor = obtener(id);
+        return new DetalleProveedor(proveedor,
+                loteRepository.countPagadosByProveedorId(proveedor.getId()),
+                loteRepository.countPorPagarByProveedorId(proveedor.getId()));
+    }
+
+    @Override
     public Page<Proveedor> buscar(String buscar, int page, int size) {
         var pageable = crearPaginacion(page, size);
         String texto = buscar == null ? "" : buscar.strip();
@@ -95,13 +106,15 @@ public class ProveedorService implements ProveedorUseCase {
             BigDecimal subtotal = costoUnitario.multiply(item.capacidadUnidadesBase())
                     .setScale(2, RoundingMode.HALF_UP);
             contenedores.add(Contenedor.builder()
-                    .id(UUID.randomUUID().toString())
+                    .id(new ObjectId().toHexString())
+                    .codigoContenedor("CONT-" + UUID.randomUUID().toString().toUpperCase(Locale.ROOT))
                     .tipoCepa(item.tipoCepa().trim())
-                    .unidadBase(item.unidadBase().trim())
+                    .unidadBase(UnidadMedida.desde(item.unidadBase()).name())
                     .presentacionId(item.presentacionId())
                     .capacidadUnidadesBase(item.capacidadUnidadesBase())
                     .cantidadDisponible(item.capacidadUnidadesBase())
                     .costoBasePorUnidad(costoUnitario)
+                    .precioBaseUnidad(item.precioBaseUnidad() == null ? null : money(item.precioBaseUnidad()))
                     .subtotal(subtotal)
                     .estado("RECIBIDO")
                     .build());
@@ -130,11 +143,14 @@ public class ProveedorService implements ProveedorUseCase {
                         + "-" + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT))
                 .costoTotalLote(costoTotal)
                 .montoPagadoLote(abono)
+                .abonoInicial(abono)
+                .costoTotalEmpaquetado(ZERO)
                 .saldoPendienteLote(saldoLote)
                 .estadoPago(estadoPago(abono, saldoLote))
                 .estado("RECIBIDO")
                 .contenedores(contenedores)
                 .fechaIngreso(now)
+                .createdAt(now).updatedAt(now)
                 .build());
 
         registrarTransaccion(proveedor.getId(), lote.getId(), TipoTransaccionProveedor.DEUDA_LOTE, costoTotal,
@@ -154,6 +170,29 @@ public class ProveedorService implements ProveedorUseCase {
     public Lote obtenerLote(String id) {
         return loteRepository.findLoteById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lote no encontrado"));
+    }
+
+    @Override
+    public Page<Lote> listarLotes(String proveedorId, String buscar, int page, int size, String sort) {
+        var paginacion = crearPaginacion(page, size);
+        String[] partes = sort == null ? new String[]{"fechaIngreso", "desc"} : sort.split(",", -1);
+        if (partes.length != 2) {
+            throw new IllegalArgumentException("El orden debe tener formato campo,asc o campo,desc");
+        }
+        String campo = partes[0].strip();
+        if (!List.of("fechaIngreso", "codigoLote", "costoTotalLote", "saldoPendienteLote").contains(campo)) {
+            throw new IllegalArgumentException(
+                    "Campo de orden no permitido: use fechaIngreso, codigoLote, costoTotalLote o saldoPendienteLote");
+        }
+        String direccion = partes[1].strip();
+        if (!"asc".equalsIgnoreCase(direccion) && !"desc".equalsIgnoreCase(direccion)) {
+            throw new IllegalArgumentException("La direccion de orden debe ser asc o desc");
+        }
+        Sort.Direction orden = Sort.Direction.fromString(direccion);
+        var pageable = PageRequest.of(paginacion.getPageNumber(), paginacion.getPageSize(),
+                Sort.by(orden, campo).and(Sort.by(orden, "id")));
+        Proveedor proveedor = obtener(proveedorId);
+        return loteRepository.findLotesByProveedorId(proveedor.getId(), buscar == null ? "" : buscar.strip(), pageable);
     }
 
     @Override
@@ -215,6 +254,7 @@ public class ProveedorService implements ProveedorUseCase {
         lote.setMontoPagadoLote(lote.getMontoPagadoLote().add(monto));
         lote.setSaldoPendienteLote(lote.getCostoTotalLote().subtract(lote.getMontoPagadoLote()).max(ZERO));
         lote.setEstadoPago(estadoPago(lote.getMontoPagadoLote(), lote.getSaldoPendienteLote()));
+        lote.setUpdatedAt(now);
         loteRepository.save(lote);
         registrarTransaccion(lote.getProveedorId(), lote.getId(), tipo, monto, observaciones, now);
     }
@@ -266,6 +306,10 @@ public class ProveedorService implements ProveedorUseCase {
             throw new BusinessRuleException("La capacidad debe ser positiva y admitir maximo 15 enteros y 3 decimales");
         }
         validarMonto(item.costoBasePorUnidad(), false, "El costo base por unidad");
+        UnidadMedida.desde(item.unidadBase());
+        if (item.precioBaseUnidad() != null) {
+            validarMonto(item.precioBaseUnidad(), true, "El precio base por unidad");
+        }
     }
 
     private void validarMonto(BigDecimal monto, boolean permiteCero, String campo) {

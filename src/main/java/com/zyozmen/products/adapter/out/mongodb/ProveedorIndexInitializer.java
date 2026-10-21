@@ -20,7 +20,7 @@ public class ProveedorIndexInitializer implements ApplicationRunner {
         var lotes = mongoTemplate.indexOps(LoteDocument.class);
         lotes.ensureIndex(new Index().on("codigoLote", Sort.Direction.ASC).unique());
         lotes.ensureIndex(new Index().on("proveedorId", Sort.Direction.ASC)
-                .on("fechaIngreso", Sort.Direction.ASC).on("_id", Sort.Direction.ASC));
+                .on("fechaRecepcion", Sort.Direction.ASC).on("_id", Sort.Direction.ASC));
         mongoTemplate.indexOps(TransaccionProveedorDocument.class).ensureIndex(new Index()
                 .on("proveedorId", Sort.Direction.ASC).on("fecha", Sort.Direction.DESC)
                 .on("_id", Sort.Direction.DESC));

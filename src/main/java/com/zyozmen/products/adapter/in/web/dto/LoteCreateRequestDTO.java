@@ -29,6 +29,9 @@ public record LoteCreateRequestDTO(
             @NotNull(message = "El costo base por unidad es obligatorio")
             @DecimalMin(value = "0.01", message = "El costo base por unidad debe ser mayor que cero")
             @Digits(integer = 15, fraction = 2, message = "El costo base por unidad admite máximo 2 decimales")
-            BigDecimal costoBasePorUnidad) {
+            BigDecimal costoBasePorUnidad,
+            @DecimalMin(value = "0.00", message = "El precio base no puede ser negativo")
+            @Digits(integer = 15, fraction = 2)
+            BigDecimal precioBaseUnidad) {
     }
 }

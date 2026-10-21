@@ -6,7 +6,7 @@ import lombok.Value;
 import java.math.BigDecimal;
 
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class Contenedor {
     String id;
     String tipoCepa;
@@ -17,4 +17,8 @@ public class Contenedor {
     BigDecimal costoBasePorUnidad;
     BigDecimal subtotal;
     String estado;
+    String codigoContenedor;
+    BigDecimal precioBaseUnidad;
+    @Builder.Default
+    java.util.List<PresentacionInventario> presentaciones = java.util.List.of();
 }

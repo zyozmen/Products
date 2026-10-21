@@ -6,6 +6,7 @@ import com.zyozmen.products.adapter.in.web.dto.LoteResponseDTO;
 import com.zyozmen.products.adapter.in.web.dto.PagoProveedorRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProveedorCreateRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProveedorResponseDTO;
+import com.zyozmen.products.adapter.in.web.dto.ProveedorDetalleResponseDTO;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,9 +51,9 @@ public class ProveedorController {
     }
 
     @GetMapping("/api/proveedores/{id}")
-    @Operation(summary = "Consultar un proveedor y sus saldos")
-    public ResponseEntity<ProveedorResponseDTO> obtener(@PathVariable String id) {
-        return ResponseEntity.ok(ProveedorResponseDTO.from(proveedorUseCase.obtener(id)));
+    @Operation(summary = "Consultar un proveedor, sus saldos y cantidades de lotes pagados y por pagar")
+    public ResponseEntity<ProveedorDetalleResponseDTO> obtener(@PathVariable String id) {
+        return ResponseEntity.ok(ProveedorDetalleResponseDTO.from(proveedorUseCase.obtenerDetalle(id)));
     }
 
     @PostMapping("/api/lotes")
@@ -60,7 +61,7 @@ public class ProveedorController {
     public ResponseEntity<LoteResponseDTO> recibirLote(@Valid @RequestBody LoteCreateRequestDTO request) {
         var contenedores = request.contenedores().stream()
                 .map(c -> new ProveedorUseCase.ContenedorCommand(c.tipoCepa(), c.unidadBase(), c.presentacionId(),
-                        c.capacidadUnidadesBase(), c.costoBasePorUnidad()))
+                        c.capacidadUnidadesBase(), c.costoBasePorUnidad(), c.precioBaseUnidad()))
                 .toList();
         return ResponseEntity.status(HttpStatus.CREATED).body(LoteResponseDTO.from(
                 proveedorUseCase.recibirLote(new ProveedorUseCase.RecibirLoteCommand(
@@ -83,6 +84,22 @@ public class ProveedorController {
         return ResponseEntity.ok()
                 .header("X-Total-Count", Long.toString(resultado.getTotalElements()))
                 .body(resultado.getContent().stream().map(AbonoProveedorResponseDTO::from).toList());
+    }
+
+    @GetMapping("/api/proveedores/{id}/lotes")
+    @Operation(summary = "Listar lotes paginados por proveedor, buscando por cepa, presentacion o SKU",
+            description = "Orden predeterminado: fechaIngreso,desc. Campos permitidos: fechaIngreso, codigoLote, "
+                    + "costoTotalLote y saldoPendienteLote; direccion asc o desc.")
+    public ResponseEntity<List<LoteResponseDTO>> listarLotes(
+            @PathVariable String id,
+            @RequestParam(required = false) String buscar,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "fechaIngreso,desc") String sort) {
+        var resultado = proveedorUseCase.listarLotes(id, buscar, page, size, sort);
+        return ResponseEntity.ok()
+                .header("X-Total-Count", Long.toString(resultado.getTotalElements()))
+                .body(resultado.getContent().stream().map(LoteResponseDTO::from).toList());
     }
 
     @PostMapping("/api/proveedores/{id}/pagos")

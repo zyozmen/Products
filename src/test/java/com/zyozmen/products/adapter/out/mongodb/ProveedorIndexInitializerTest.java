@@ -39,7 +39,7 @@ class ProveedorIndexInitializerTest {
                 .isEqualTo(new Document("codigoLote", 1));
         assertThat(captor.getAllValues().getFirst().getIndexOptions().getBoolean("unique")).isTrue();
         assertThat(captor.getAllValues().getLast().getIndexKeys())
-                .isEqualTo(new Document("proveedorId", 1).append("fechaIngreso", 1).append("_id", 1));
+                .isEqualTo(new Document("proveedorId", 1).append("fechaRecepcion", 1).append("_id", 1));
         verify(movimientos).ensureIndex(captor.capture());
         assertThat(captor.getValue().getIndexKeys())
                 .isEqualTo(new Document("proveedorId", 1).append("fecha", -1).append("_id", -1));

@@ -53,12 +53,33 @@ class ProveedorMongoAdapterTest {
     }
 
     @Test
+    void cuentaLotesPorProveedorSinCargarDocumentos() {
+        var id = new ObjectId(PROVEEDOR_ID);
+        when(lotes.countPagados(id)).thenReturn(4L);
+        when(lotes.countPorPagar(id)).thenReturn(7L);
+
+        assertThat(adapter.countPagadosByProveedorId(PROVEEDOR_ID)).isEqualTo(4);
+        assertThat(adapter.countPorPagarByProveedorId(PROVEEDOR_ID)).isEqualTo(7);
+        verify(lotes).countPagados(id);
+        verify(lotes).countPorPagar(id);
+        org.mockito.Mockito.verifyNoMoreInteractions(lotes);
+    }
+
+    @Test
+    void conteosSinLotesSeConservanEnCero() {
+        assertThat(adapter.countPagadosByProveedorId(PROVEEDOR_ID)).isZero();
+        assertThat(adapter.countPorPagarByProveedorId(PROVEEDOR_ID)).isZero();
+    }
+
+    @Test
     void persisteYRecuperaInventarioConTodosLosCamposDelContenedor() {
         var contenedor = Contenedor.builder().id("c1").tipoCepa("Sativa").unidadBase("gramo")
                 .presentacionId("pres1").capacidadUnidadesBase(new BigDecimal("1.125"))
                 .cantidadDisponible(new BigDecimal("1.125")).costoBasePorUnidad(new BigDecimal("5000.00"))
                 .subtotal(new BigDecimal("5625.00")).estado("RECIBIDO").build();
         var lote = Lote.builder().id("l1").proveedorId(PROVEEDOR_ID).codigoLote("LOT-1")
+                .costoTotalLote(new BigDecimal("5625.00")).montoPagadoLote(new BigDecimal("0.00"))
+                .saldoPendienteLote(new BigDecimal("5625.00"))
                 .estadoPago(EstadoPagoLote.PENDIENTE).estado("RECIBIDO").fechaIngreso(Instant.now())
                 .contenedores(List.of(contenedor)).build();
         when(lotes.save(any(LoteDocument.class))).thenAnswer(i -> i.getArgument(0));
@@ -69,6 +90,8 @@ class ProveedorMongoAdapterTest {
     @Test
     void pagosEnLotesHistoricosConservanPresentacionesSinInventarContenedores() {
         var documento = LoteDocument.builder().id("l1").estadoPago("PENDIENTE")
+                .costoTotalLote(new BigDecimal("1000")).montoPagadoLote(BigDecimal.ZERO)
+                .saldoPendienteLote(new BigDecimal("1000"))
                 .presentaciones(List.of(LoteDocument.PresentacionDocument.builder().presentacionId("pres1")
                         .cantidadUnidades(100).costoUnitario(BigDecimal.TEN)
                         .subtotal(new BigDecimal("1000")).build())).build();
@@ -115,7 +138,10 @@ class ProveedorMongoAdapterTest {
     void buscarUsaCoincidenciaLiteralYOrdenEstable() {
         var pagina = PageRequest.of(2, 10, Sort.by("nombre", "id"));
         var documento = ProveedorDocument.builder().id(PROVEEDOR_ID)
-                .nombre("Distribuidora SAS").nit("900123").estado("ACTIVO").build();
+                .nombre("Distribuidora SAS").nit("900123").estado("ACTIVO")
+                .financiero(ProveedorDocument.FinancieroDocument.builder()
+                        .totalDeuda(BigDecimal.ZERO).totalPagado(BigDecimal.ZERO).saldoPendiente(BigDecimal.ZERO).build())
+                .build();
         String texto = "SAS.*\\E";
         when(proveedores.buscarPorNombreONit(Pattern.quote(texto), pagina))
                 .thenReturn(new PageImpl<>(List.of(documento), pagina, 21));
@@ -139,5 +165,38 @@ class ProveedorMongoAdapterTest {
         assertThat(adapter.buscar("", PageRequest.of(0, 20)).getContent()).isEmpty();
         verify(proveedores).findAll(pagina);
         verify(proveedores, never()).buscarPorNombreONit(any(), any(Pageable.class));
+    }
+
+    @Test
+    void listarLotesSinBusquedaPaginaSoloPorProveedor() {
+        var pageable = PageRequest.of(1, 10, Sort.by(Sort.Direction.DESC, "fechaIngreso", "id"));
+        when(lotes.findLotes(new ObjectId(PROVEEDOR_ID), pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 5));
+
+        var resultado = adapter.findLotesByProveedorId(PROVEEDOR_ID, "", pageable);
+
+        assertThat(resultado.getContent()).isEmpty();
+        assertThat(resultado.getTotalElements()).isEqualTo(5);
+        verify(lotes).findLotes(new ObjectId(PROVEEDOR_ID), pageable);
+        verify(lotes, never()).buscarLotes(any(), any(), any());
+    }
+
+    @Test
+    void listarLotesEscapaBusquedaYConservaContenidoTotalYOrden() {
+        var pageable = PageRequest.of(1, 2, Sort.by("costoTotalLote", "id"));
+        var doc = LoteDocument.builder().id("l1").proveedorId(PROVEEDOR_ID)
+                .costoTotalLote(BigDecimal.TEN).abonoInicial(BigDecimal.ZERO).estadoPago("PENDIENTE").build();
+        for (String texto : List.of("Sativa", "Bolsa", "SAT-5", ".*\\E")) {
+            when(lotes.buscarLotes(new ObjectId(PROVEEDOR_ID), Pattern.quote(texto), pageable))
+                    .thenReturn(new PageImpl<>(List.of(doc), pageable, 3));
+
+            var resultado = adapter.findLotesByProveedorId(PROVEEDOR_ID, texto, pageable);
+
+            assertThat(resultado.getContent()).extracting(Lote::getId).containsExactly("l1");
+            assertThat(resultado.getContent().getFirst().getProveedorId()).isEqualTo(PROVEEDOR_ID);
+            assertThat(resultado.getTotalElements()).isEqualTo(3);
+            assertThat(resultado.getSort()).isEqualTo(pageable.getSort());
+            verify(lotes).buscarLotes(new ObjectId(PROVEEDOR_ID), Pattern.quote(texto), pageable);
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.zyozmen.products.adapter.in.web.dto;
 
 import com.zyozmen.products.domain.model.Lote;
+import com.zyozmen.products.domain.model.PresentacionInventario;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -16,11 +17,14 @@ public record LoteResponseDTO(
         String estadoPago,
         String estado,
         List<Contenedor> contenedores,
-        Instant fechaIngreso) {
+        Instant fechaIngreso,
+        BigDecimal costoTotalEmpaquetado) {
 
     public record Contenedor(String id, String tipoCepa, String unidadBase, String presentacionId,
                              BigDecimal capacidadUnidadesBase, BigDecimal cantidadDisponible,
-                             BigDecimal costoBasePorUnidad, BigDecimal subtotal, String estado) {
+                             BigDecimal costoBasePorUnidad, BigDecimal subtotal, String estado,
+                             String codigoContenedor, BigDecimal precioBaseUnidad,
+                             List<PresentacionInventario> presentaciones) {
     }
 
     public static LoteResponseDTO from(Lote l) {
@@ -30,8 +34,9 @@ public record LoteResponseDTO(
                 l.getContenedores().stream()
                         .map(c -> new Contenedor(c.getId(), c.getTipoCepa(), c.getUnidadBase(), c.getPresentacionId(),
                                 c.getCapacidadUnidadesBase(), c.getCantidadDisponible(),
-                                c.getCostoBasePorUnidad(), c.getSubtotal(), c.getEstado()))
+                                c.getCostoBasePorUnidad(), c.getSubtotal(), c.getEstado(),
+                                c.getCodigoContenedor(), c.getPrecioBaseUnidad(), c.getPresentaciones()))
                         .toList(),
-                l.getFechaIngreso());
+                l.getFechaIngreso(), l.getCostoTotalEmpaquetado());
     }
 }

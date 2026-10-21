@@ -15,11 +15,15 @@ public interface ProveedorUseCase {
 
     Proveedor obtener(String id);
 
+    DetalleProveedor obtenerDetalle(String id);
+
     Page<Proveedor> buscar(String buscar, int page, int size);
 
     Lote recibirLote(RecibirLoteCommand command);
 
     Lote obtenerLote(String id);
+
+    Page<Lote> listarLotes(String proveedorId, String buscar, int page, int size, String sort);
 
     Page<TransaccionProveedor> listarAbonos(String proveedorId, int page, int size);
 
@@ -29,8 +33,16 @@ public interface ProveedorUseCase {
     record CrearProveedorCommand(String nombre, String nit, String telefono, String email) {
     }
 
+    record DetalleProveedor(Proveedor proveedor, long lotesPagados, long lotesPorPagar) {
+    }
+
     record ContenedorCommand(String tipoCepa, String unidadBase, String presentacionId,
-                             BigDecimal capacidadUnidadesBase, BigDecimal costoBasePorUnidad) {
+                             BigDecimal capacidadUnidadesBase, BigDecimal costoBasePorUnidad,
+                             BigDecimal precioBaseUnidad) {
+        public ContenedorCommand(String tipoCepa, String unidadBase, String presentacionId,
+                                 BigDecimal capacidadUnidadesBase, BigDecimal costoBasePorUnidad) {
+            this(tipoCepa, unidadBase, presentacionId, capacidadUnidadesBase, costoBasePorUnidad, null);
+        }
     }
 
     record RecibirLoteCommand(String proveedorId, List<ContenedorCommand> contenedores,

@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -72,6 +73,38 @@ class ProveedorServiceTest {
             return lote;
         });
         when(transaccionRepository.insert(any(TransaccionProveedor.class))).thenAnswer(i -> i.getArgument(0));
+    }
+
+    @Test
+    void consultaProveedorIncluyeConteosGlobalesSinModificarSaldos() {
+        proveedorConDeuda("300000.00", "100000.00");
+        when(loteRepository.countPagadosByProveedorId(PROVEEDOR_ID)).thenReturn(3L);
+        when(loteRepository.countPorPagarByProveedorId(PROVEEDOR_ID)).thenReturn(2L);
+
+        var detalle = service.obtenerDetalle(PROVEEDOR_ID);
+
+        assertThat(detalle.proveedor()).isSameAs(proveedor);
+        assertThat(detalle.lotesPagados()).isEqualTo(3);
+        assertThat(detalle.lotesPorPagar()).isEqualTo(2);
+        assertThat(proveedor.getSaldoPendiente()).isEqualByComparingTo("200000.00");
+        verify(loteRepository).countPagadosByProveedorId(PROVEEDOR_ID);
+        verify(loteRepository).countPorPagarByProveedorId(PROVEEDOR_ID);
+        verify(proveedorRepository, never()).save(any());
+        verify(loteRepository, never()).save(any());
+    }
+
+    @Test
+    void consultaProveedorSinLotesDevuelveAmbosConteosEnCero() {
+        var detalle = service.obtenerDetalle(PROVEEDOR_ID);
+
+        assertThat(detalle.lotesPagados()).isZero();
+        assertThat(detalle.lotesPorPagar()).isZero();
+    }
+
+    @Test
+    void consultaProveedorInexistenteNoCuentaLotes() {
+        assertThrows(ResourceNotFoundException.class, () -> service.obtenerDetalle("otro"));
+        org.mockito.Mockito.verifyNoInteractions(loteRepository);
     }
 
     @Test
@@ -267,6 +300,65 @@ class ProveedorServiceTest {
     private RecibirLoteCommand comandoLote(BigDecimal abono) {
         return new RecibirLoteCommand(PROVEEDOR_ID,
                 List.of(contenedor("Sativa", "100", "3000")), abono);
+    }
+
+    @Test
+    void listarLotesOrdenaPorFechaDescendentePorDefectoYValidaProveedor() {
+        var pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "fechaIngreso", "id"));
+        var lote = loteConSaldo("l1", "100", "0", "2026-10-01T00:00:00Z");
+        when(loteRepository.findLotesByProveedorId(PROVEEDOR_ID, "", pageable))
+                .thenReturn(new PageImpl<>(List.of(lote), pageable, 1));
+
+        var resultado = service.listarLotes(PROVEEDOR_ID, null, 0, 20, null);
+
+        assertThat(resultado.getContent()).containsExactly(lote);
+        assertThat(resultado.getTotalElements()).isEqualTo(1);
+        verify(proveedorRepository).findById(PROVEEDOR_ID);
+    }
+
+    @Test
+    void listarLotesAdmiteTodosLosOrdenamientosYRecortaBusqueda() {
+        for (String campo : List.of("fechaIngreso", "codigoLote", "costoTotalLote", "saldoPendienteLote")) {
+            for (Sort.Direction direccion : Sort.Direction.values()) {
+                var pageable = PageRequest.of(2, 10, Sort.by(direccion, campo, "id"));
+                when(loteRepository.findLotesByProveedorId(PROVEEDOR_ID, "Sativa", pageable))
+                        .thenReturn(new PageImpl<>(List.of(), pageable, 15));
+                var resultado = service.listarLotes(PROVEEDOR_ID, "  Sativa  ", 2, 10,
+                        campo + "," + direccion.name());
+                assertThat(resultado.getContent()).isEmpty();
+                assertThat(resultado.getTotalElements()).isEqualTo(15);
+                verify(loteRepository).findLotesByProveedorId(PROVEEDOR_ID, "Sativa", pageable);
+            }
+        }
+    }
+
+    @Test
+    void listarLotesRechazaPaginacionYOrdenamientosInvalidos() {
+        for (int[] limites : List.of(new int[]{-1, 20}, new int[]{0, 0}, new int[]{0, 201})) {
+            assertThrows(IllegalArgumentException.class, () -> service.listarLotes(
+                    PROVEEDOR_ID, null, limites[0], limites[1], "fechaIngreso,desc"));
+        }
+        for (String orden : List.of("", "fechaIngreso", "fechaIngreso,", "fechaIngreso,desc,id",
+                "fechaIngreso,invalid", "proveedorId,asc", "contenedores.cepa.nombre,asc")) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.listarLotes(PROVEEDOR_ID, null, 0, 20, orden));
+        }
+        verify(loteRepository, never()).findLotesByProveedorId(any(), any(), any());
+    }
+
+    @Test
+    void listarLotesProveedorInexistenteNoConsultaLotes() {
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.listarLotes("desconocido", null, 0, 20, null));
+        verify(loteRepository, never()).findLotesByProveedorId(any(), any(), any());
+    }
+
+    @Test
+    void listarLotesBusquedaEnBlancoListaTodosLosLotesDelProveedor() {
+        var pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "fechaIngreso", "id"));
+        when(loteRepository.findLotesByProveedorId(PROVEEDOR_ID, "", pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        assertThat(service.listarLotes(PROVEEDOR_ID, "   ", 0, 20, null).getTotalElements()).isZero();
     }
 
     @Test

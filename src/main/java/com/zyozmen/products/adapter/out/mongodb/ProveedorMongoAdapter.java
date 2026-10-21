@@ -68,6 +68,25 @@ public class ProveedorMongoAdapter
     }
 
     @Override
+    public Page<Lote> findLotesByProveedorId(String proveedorId, String buscar, Pageable pageable) {
+        ObjectId id = new ObjectId(proveedorId);
+        var resultado = buscar.isEmpty()
+                ? loteRepository.findLotes(id, pageable)
+                : loteRepository.buscarLotes(id, Pattern.quote(buscar), pageable);
+        return resultado.map(mapper::toDomain);
+    }
+
+    @Override
+    public long countPagadosByProveedorId(String proveedorId) {
+        return loteRepository.countPagados(new ObjectId(proveedorId));
+    }
+
+    @Override
+    public long countPorPagarByProveedorId(String proveedorId) {
+        return loteRepository.countPorPagar(new ObjectId(proveedorId));
+    }
+
+    @Override
     public List<Lote> findPendientesByProveedorId(String proveedorId) {
         return loteRepository.findPendientes(new ObjectId(proveedorId)).stream().map(mapper::toDomain).toList();
     }
