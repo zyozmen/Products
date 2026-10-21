@@ -10,8 +10,6 @@ public interface LoteRepositoryPort {
 
     Optional<Lote> findLoteById(String id);
 
-    boolean existsByCodigoLote(String codigoLote);
-
     /** Lotes del proveedor con saldo pendiente, del mÃ¡s antiguo al mÃ¡s reciente. */
     List<Lote> findPendientesByProveedorId(String proveedorId);
 }

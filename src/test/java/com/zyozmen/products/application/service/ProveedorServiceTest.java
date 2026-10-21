@@ -9,7 +9,7 @@ import com.zyozmen.products.domain.model.Proveedor;
 import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
 import com.zyozmen.products.domain.model.TransaccionProveedor;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.CrearProveedorCommand;
-import com.zyozmen.products.domain.port.in.ProveedorUseCase.PresentacionCommand;
+import com.zyozmen.products.domain.port.in.ProveedorUseCase.ContenedorCommand;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.RecibirLoteCommand;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.RegistrarPagoCommand;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
@@ -29,9 +29,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -68,7 +71,7 @@ class ProveedorServiceTest {
             }
             return lote;
         });
-        when(transaccionRepository.save(any(TransaccionProveedor.class))).thenAnswer(i -> i.getArgument(0));
+        when(transaccionRepository.insert(any(TransaccionProveedor.class))).thenAnswer(i -> i.getArgument(0));
     }
 
     @Test
@@ -104,7 +107,7 @@ class ProveedorServiceTest {
         assertEquals(bd("200000.00"), proveedor.getSaldoPendiente());
 
         ArgumentCaptor<TransaccionProveedor> captor = ArgumentCaptor.forClass(TransaccionProveedor.class);
-        verify(transaccionRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        verify(transaccionRepository, org.mockito.Mockito.times(2)).insert(captor.capture());
         assertEquals(TipoTransaccionProveedor.DEUDA_LOTE, captor.getAllValues().get(0).getTipo());
         assertEquals(TipoTransaccionProveedor.ABONO_INICIAL, captor.getAllValues().get(1).getTipo());
     }
@@ -115,7 +118,7 @@ class ProveedorServiceTest {
 
         assertEquals(EstadoPagoLote.PENDIENTE, lote.getEstadoPago());
         assertEquals(bd("300000.00"), proveedor.getSaldoPendiente());
-        verify(transaccionRepository).save(any(TransaccionProveedor.class));
+        verify(transaccionRepository).insert(any(TransaccionProveedor.class));
     }
 
     @Test
@@ -144,8 +147,8 @@ class ProveedorServiceTest {
     @Test
     void recibirLoteRechazaProveedorInexistente() {
         when(proveedorRepository.findById("otro")).thenReturn(Optional.empty());
-        RecibirLoteCommand command = new RecibirLoteCommand("otro", "LOT-X",
-                List.of(new PresentacionCommand("P", 1, bd("10"))), null);
+        RecibirLoteCommand command = new RecibirLoteCommand("otro",
+                List.of(contenedor("Sativa", "1", "10")), null);
 
         assertThrows(ResourceNotFoundException.class, () -> service.recibirLote(command));
     }
@@ -179,6 +182,12 @@ class ProveedorServiceTest {
         assertEquals(EstadoPagoLote.PAGO_PARCIAL, reciente.getEstadoPago());
         assertEquals(bd("250000.00"), reciente.getSaldoPendienteLote());
         assertEquals(bd("250000.00"), resultado.getSaldoPendiente());
+        ArgumentCaptor<TransaccionProveedor> movimientos = ArgumentCaptor.forClass(TransaccionProveedor.class);
+        verify(transaccionRepository, org.mockito.Mockito.times(2)).insert(movimientos.capture());
+        assertThat(movimientos.getAllValues()).extracting(TransaccionProveedor::getLoteId)
+                .containsExactly("l1", "l2");
+        assertThat(movimientos.getAllValues()).extracting(TransaccionProveedor::getMonto)
+                .containsExactly(bd("200000"), bd("50000"));
     }
 
     @Test
@@ -225,9 +234,208 @@ class ProveedorServiceTest {
         assertThrows(ResourceNotFoundException.class, () -> service.obtener("x"));
     }
 
+    @Test
+    void buscarNormalizaTextoYConservaPaginacion() {
+        var pageable = PageRequest.of(1, 10);
+        when(proveedorRepository.buscar("900123", pageable))
+                .thenReturn(new PageImpl<>(List.of(proveedor), pageable, 11));
+
+        var resultado = service.buscar("  900123  ", 1, 10);
+
+        assertThat(resultado.getContent()).containsExactly(proveedor);
+        assertEquals(11, resultado.getTotalElements());
+        verify(proveedorRepository).buscar("900123", pageable);
+    }
+
+    @Test
+    void buscarSinTextoListaProveedores() {
+        var pageable = PageRequest.of(0, 20);
+        when(proveedorRepository.buscar("", pageable)).thenReturn(new PageImpl<>(List.of(proveedor)));
+
+        assertThat(service.buscar(null, 0, 20).getContent()).containsExactly(proveedor);
+        assertThat(service.buscar("   ", 0, 20).getContent()).containsExactly(proveedor);
+    }
+
+    @Test
+    void buscarRechazaPaginacionInvalida() {
+        for (int[] limites : List.of(new int[]{-1, 20}, new int[]{0, 0}, new int[]{0, -1}, new int[]{0, 201})) {
+            assertThrows(IllegalArgumentException.class, () -> service.buscar("SAS", limites[0], limites[1]));
+        }
+        verify(proveedorRepository, never()).buscar(any(), any());
+    }
+
     private RecibirLoteCommand comandoLote(BigDecimal abono) {
-        return new RecibirLoteCommand(PROVEEDOR_ID, "LOT-2026-001",
-                List.of(new PresentacionCommand("PRES-01", 100, bd("3000"))), abono);
+        return new RecibirLoteCommand(PROVEEDOR_ID,
+                List.of(contenedor("Sativa", "100", "3000")), abono);
+    }
+
+    @Test
+    void escenarioUnoRecibeDosContenedoresConInventarioDisponibleYDeudaDeOchoMillones() {
+        Instant antes = Instant.now();
+        Lote lote = service.recibirLote(new RecibirLoteCommand(PROVEEDOR_ID,
+                List.of(contenedor("Sativa Premium", "1000", "5000"),
+                        contenedor("Indica Gold", "500", "6000")), BigDecimal.ZERO));
+
+        assertEquals(bd("8000000"), lote.getCostoTotalLote());
+        assertEquals(bd("8000000"), proveedor.getTotalDeuda());
+        assertEquals(bd("0"), proveedor.getTotalPagado());
+        assertEquals(bd("8000000"), proveedor.getSaldoPendiente());
+        assertThat(lote.getCodigoLote()).matches("LOT-\\d{8}-[A-F0-9]{32}");
+        assertThat(lote.getFechaIngreso()).isBetween(antes, Instant.now());
+        assertEquals("RECIBIDO", lote.getEstado());
+        assertThat(lote.getContenedores()).hasSize(2).allSatisfy(c -> {
+            assertEquals("RECIBIDO", c.getEstado());
+            assertEquals(c.getCapacidadUnidadesBase(), c.getCantidadDisponible());
+            assertThat(c.getId()).isNotBlank();
+        });
+        assertThat(lote.getContenedores()).extracting(c -> c.getId()).doesNotHaveDuplicates();
+    }
+
+    @Test
+    void escenarioDosIncrementaSaldosExistentesConAbonoInicialDeTresMillones() {
+        proveedorConDeuda("2000000", "1000000");
+        Lote lote = service.recibirLote(new RecibirLoteCommand(PROVEEDOR_ID,
+                List.of(contenedor("Sativa", "2000", "5000")), bd("3000000")));
+
+        assertEquals(bd("10000000"), lote.getCostoTotalLote());
+        assertEquals(bd("7000000"), lote.getSaldoPendienteLote());
+        assertEquals(bd("12000000"), proveedor.getTotalDeuda());
+        assertEquals(bd("4000000"), proveedor.getTotalPagado());
+        assertEquals(bd("8000000"), proveedor.getSaldoPendiente());
+        ArgumentCaptor<TransaccionProveedor> captor = ArgumentCaptor.forClass(TransaccionProveedor.class);
+        verify(transaccionRepository, org.mockito.Mockito.times(2)).insert(captor.capture());
+        TransaccionProveedor abono = captor.getAllValues().get(1);
+        assertEquals(bd("3000000"), abono.getMonto());
+        assertEquals(PROVEEDOR_ID, abono.getProveedorId());
+        assertEquals(lote.getId(), abono.getLoteId());
+        assertEquals(lote.getFechaIngreso(), abono.getFecha());
+    }
+
+    @Test
+    void escenarioTresRechazaAbonoExcesivoConMensajeExactoSinEscribir() {
+        var command = new RecibirLoteCommand(PROVEEDOR_ID,
+                List.of(contenedor("Sativa", "800", "5000")), bd("5000000"));
+        var error = assertThrows(BusinessRuleException.class, () -> service.recibirLote(command));
+
+        assertEquals("El abono inicial no puede ser mayor al valor total del lote ($4,000,000 COP)",
+                error.getMessage());
+        verificarSinEscrituras();
+    }
+
+    @Test
+    void escenarioCuatroRechazaContenedoresVaciosONulosSinEscribir() {
+        for (List<ContenedorCommand> contenedores : java.util.Arrays.<List<ContenedorCommand>>asList(List.of(), null)) {
+            var error = assertThrows(BusinessRuleException.class, () -> service.recibirLote(
+                    new RecibirLoteCommand(PROVEEDOR_ID, contenedores, null)));
+            assertEquals("Debe agregar al menos un contenedor con su capacidad en unidades base para registrar el lote",
+                    error.getMessage());
+        }
+        verificarSinEscrituras();
+    }
+
+    @Test
+    void rechazaCapacidadesCostosYAbonosInvalidosSinRedondearlosSilenciosamente() {
+        for (String capacidad : List.of("0", "-1", "1.0001")) {
+            assertThrows(BusinessRuleException.class, () -> service.recibirLote(new RecibirLoteCommand(
+                    PROVEEDOR_ID, List.of(contenedor("Sativa", capacidad, "5000")), null)));
+        }
+        for (String costo : List.of("0", "-1", "0.001")) {
+            assertThrows(BusinessRuleException.class, () -> service.recibirLote(new RecibirLoteCommand(
+                    PROVEEDOR_ID, List.of(contenedor("Sativa", "1", costo)), null)));
+        }
+        assertThrows(BusinessRuleException.class, () -> service.recibirLote(new RecibirLoteCommand(
+                PROVEEDOR_ID, List.of(contenedor(" ", "1", "1")), null)));
+        assertThrows(BusinessRuleException.class, () -> service.recibirLote(new RecibirLoteCommand(
+                PROVEEDOR_ID, List.of(contenedor("Sativa", "1", "1")), new BigDecimal("-0.001"))));
+        verificarSinEscrituras();
+    }
+
+    @Test
+    void calculaCapacidadFraccionariaYGeneraCodigosDistintos() {
+        var command = new RecibirLoteCommand(PROVEEDOR_ID,
+                List.of(contenedor("Sativa", "1.125", "5000")), null);
+        Lote primero = service.recibirLote(command);
+        Lote segundo = service.recibirLote(command);
+
+        assertEquals(bd("5625"), primero.getCostoTotalLote());
+        assertThat(primero.getCodigoLote()).isNotEqualTo(segundo.getCodigoLote());
+    }
+
+    @Test
+    void escenarioCincoRegistraAbonoEnLoteMasAntiguoYConsultaSuMovimiento() {
+        proveedorConDeuda("7000000", "0");
+        Lote antiguo = loteConSaldo("l1", "2000000", "0", "2026-10-01T00:00:00Z");
+        Lote reciente = loteConSaldo("l2", "5000000", "0", "2026-10-15T00:00:00Z");
+        when(loteRepository.findPendientesByProveedorId(PROVEEDOR_ID)).thenReturn(List.of(antiguo, reciente));
+        Instant antes = Instant.now();
+
+        service.registrarPago(new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("1000000"), null, null));
+
+        ArgumentCaptor<TransaccionProveedor> captor = ArgumentCaptor.forClass(TransaccionProveedor.class);
+        verify(transaccionRepository).insert(captor.capture());
+        var movimiento = captor.getValue();
+        assertEquals("l1", movimiento.getLoteId());
+        assertEquals(PROVEEDOR_ID, movimiento.getProveedorId());
+        assertEquals(bd("1000000"), movimiento.getMonto());
+        assertThat(movimiento.getFecha()).isBetween(antes, Instant.now());
+        verify(loteRepository, never()).save(reciente);
+        when(transaccionRepository.findAbonosByProveedorId(PROVEEDOR_ID, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(movimiento)));
+        assertEquals(List.of(movimiento), service.listarAbonos(PROVEEDOR_ID, 0, 20).getContent());
+    }
+
+    @Test
+    void rechazaPagoSinLotesSuficientesAntesDeEscribir() {
+        proveedorConDeuda("500000", "0");
+        when(loteRepository.findPendientesByProveedorId(PROVEEDOR_ID)).thenReturn(List.of(
+                loteConSaldo("l1", "100000", "0", "2026-10-01T00:00:00Z")));
+        assertThrows(BusinessRuleException.class, () -> service.registrarPago(
+                new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("200000"), null, null)));
+        verificarSinEscrituras();
+    }
+
+    @Test
+    void consultarLoteYAbonosValidaExistencia() {
+        when(loteRepository.findLoteById("l1")).thenReturn(Optional.of(
+                loteConSaldo("l1", "10", "0", "2026-10-01T00:00:00Z")));
+        assertEquals("l1", service.obtenerLote("l1").getId());
+        assertThrows(ResourceNotFoundException.class, () -> service.obtenerLote("desconocido"));
+        assertThrows(ResourceNotFoundException.class, () -> service.listarAbonos("desconocido", 0, 20));
+        verify(transaccionRepository, never()).findAbonosByProveedorId(any(), any());
+    }
+
+    @Test
+    void historialConservaPaginaYTotalDeMovimientos() {
+        var pageable = PageRequest.of(2, 10);
+        var movimiento = TransaccionProveedor.builder().id("t21").build();
+        when(transaccionRepository.findAbonosByProveedorId(PROVEEDOR_ID, pageable))
+                .thenReturn(new PageImpl<>(List.of(movimiento), pageable, 21));
+
+        var resultado = service.listarAbonos(PROVEEDOR_ID, 2, 10);
+
+        assertThat(resultado.getContent()).containsExactly(movimiento);
+        assertEquals(21, resultado.getTotalElements());
+        assertEquals(2, resultado.getNumber());
+    }
+
+    @Test
+    void historialRechazaPaginacionInvalida() {
+        for (int[] limites : List.of(new int[]{-1, 20}, new int[]{0, 0}, new int[]{0, -1}, new int[]{0, 201})) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.listarAbonos(PROVEEDOR_ID, limites[0], limites[1]));
+        }
+        verify(transaccionRepository, never()).findAbonosByProveedorId(any(), any());
+    }
+
+    private ContenedorCommand contenedor(String cepa, String capacidad, String costo) {
+        return new ContenedorCommand(cepa, "gramo", "PRES-01",
+                new BigDecimal(capacidad), new BigDecimal(costo));
+    }
+
+    private void verificarSinEscrituras() {
+        verify(loteRepository, never()).save(any());
+        verify(proveedorRepository, never()).save(any());
+        verify(transaccionRepository, never()).insert(any());
     }
 
     private void proveedorConDeuda(String deuda, String pagado) {

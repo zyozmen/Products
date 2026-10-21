@@ -5,7 +5,7 @@ import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.EstadoPagoLote;
 import com.zyozmen.products.domain.model.EstadoProveedor;
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.Presentacion;
+import com.zyozmen.products.domain.model.Contenedor;
 import com.zyozmen.products.domain.model.Proveedor;
 import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
 import com.zyozmen.products.domain.model.TransaccionProveedor;
@@ -15,13 +15,20 @@ import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
 import com.zyozmen.products.domain.port.out.TransaccionProveedorRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -62,49 +69,71 @@ public class ProveedorService implements ProveedorUseCase {
     }
 
     @Override
+    public Page<Proveedor> buscar(String buscar, int page, int size) {
+        var pageable = crearPaginacion(page, size);
+        String texto = buscar == null ? "" : buscar.strip();
+        return proveedorRepository.buscar(texto, pageable);
+    }
+
+    @Override
     @Transactional
     public Lote recibirLote(RecibirLoteCommand command) {
         Proveedor proveedor = obtener(command.proveedorId());
         if (proveedor.getEstado() != EstadoProveedor.ACTIVO) {
             throw new BusinessRuleException("El proveedor no estÃ¡ activo");
         }
-        if (loteRepository.existsByCodigoLote(command.codigoLote())) {
-            throw new BusinessRuleException("Ya existe un lote con el cÃ³digo " + command.codigoLote());
+        if (command.contenedores() == null || command.contenedores().isEmpty()) {
+            throw new BusinessRuleException(
+                    "Debe agregar al menos un contenedor con su capacidad en unidades base para registrar el lote");
         }
 
-        List<Presentacion> presentaciones = new ArrayList<>();
+        List<Contenedor> contenedores = new ArrayList<>();
         BigDecimal costoTotal = ZERO;
-        for (PresentacionCommand item : command.presentaciones()) {
-            BigDecimal costoUnitario = money(item.costoUnitario());
-            BigDecimal subtotal = costoUnitario.multiply(BigDecimal.valueOf(item.cantidadUnidades()))
+        for (ContenedorCommand item : command.contenedores()) {
+            validarContenedor(item);
+            BigDecimal costoUnitario = money(item.costoBasePorUnidad());
+            BigDecimal subtotal = costoUnitario.multiply(item.capacidadUnidadesBase())
                     .setScale(2, RoundingMode.HALF_UP);
-            presentaciones.add(Presentacion.builder()
+            contenedores.add(Contenedor.builder()
+                    .id(UUID.randomUUID().toString())
+                    .tipoCepa(item.tipoCepa().trim())
+                    .unidadBase(item.unidadBase().trim())
                     .presentacionId(item.presentacionId())
-                    .cantidadUnidades(item.cantidadUnidades())
-                    .costoUnitario(costoUnitario)
+                    .capacidadUnidadesBase(item.capacidadUnidadesBase())
+                    .cantidadDisponible(item.capacidadUnidadesBase())
+                    .costoBasePorUnidad(costoUnitario)
                     .subtotal(subtotal)
+                    .estado("RECIBIDO")
                     .build());
             costoTotal = costoTotal.add(subtotal);
         }
 
-        BigDecimal abono = command.abonoInicial() == null ? ZERO : money(command.abonoInicial());
-        if (abono.signum() < 0) {
-            throw new BusinessRuleException("El abono inicial no puede ser negativo");
+        if (costoTotal.signum() <= 0) {
+            throw new BusinessRuleException("El valor total del lote debe ser mayor que cero");
         }
+        if (command.abonoInicial() != null) {
+            validarMonto(command.abonoInicial(), true, "El abono inicial");
+        }
+        BigDecimal abono = command.abonoInicial() == null ? ZERO : money(command.abonoInicial());
         if (abono.compareTo(costoTotal) > 0) {
-            throw new BusinessRuleException("El abono inicial no puede superar el costo total del lote");
+            NumberFormat formato = NumberFormat.getNumberInstance(Locale.US);
+            formato.setMaximumFractionDigits(2);
+            throw new BusinessRuleException("El abono inicial no puede ser mayor al valor total del lote ($"
+                    + formato.format(costoTotal) + " COP)");
         }
 
         Instant now = Instant.now();
         BigDecimal saldoLote = costoTotal.subtract(abono);
         Lote lote = loteRepository.save(Lote.builder()
                 .proveedorId(proveedor.getId())
-                .codigoLote(command.codigoLote())
+                .codigoLote("LOT-" + DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC).format(now)
+                        + "-" + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT))
                 .costoTotalLote(costoTotal)
                 .montoPagadoLote(abono)
                 .saldoPendienteLote(saldoLote)
                 .estadoPago(estadoPago(abono, saldoLote))
-                .presentaciones(presentaciones)
+                .estado("RECIBIDO")
+                .contenedores(contenedores)
                 .fechaIngreso(now)
                 .build());
 
@@ -122,16 +151,27 @@ public class ProveedorService implements ProveedorUseCase {
     }
 
     @Override
+    public Lote obtenerLote(String id) {
+        return loteRepository.findLoteById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Lote no encontrado"));
+    }
+
+    @Override
+    public Page<TransaccionProveedor> listarAbonos(String proveedorId, int page, int size) {
+        var pageable = crearPaginacion(page, size);
+        Proveedor proveedor = obtener(proveedorId);
+        return transaccionRepository.findAbonosByProveedorId(proveedor.getId(), pageable);
+    }
+
+    @Override
     @Transactional
     public Proveedor registrarPago(RegistrarPagoCommand command) {
         TipoTransaccionProveedor tipo = command.tipo() == null ? TipoTransaccionProveedor.ABONO : command.tipo();
         if (tipo == TipoTransaccionProveedor.DEUDA_LOTE || tipo == TipoTransaccionProveedor.ABONO_INICIAL) {
             throw new BusinessRuleException("El tipo " + tipo + " no es vÃ¡lido para un pago posterior");
         }
+        validarMonto(command.monto(), false, "El monto del pago");
         BigDecimal monto = money(command.monto());
-        if (monto.signum() <= 0) {
-            throw new BusinessRuleException("El monto del pago debe ser mayor que cero");
-        }
 
         Proveedor proveedor = obtener(command.proveedorId());
         if (monto.compareTo(proveedor.getSaldoPendiente()) > 0) {
@@ -148,17 +188,20 @@ public class ProveedorService implements ProveedorUseCase {
             }
             aplicarPagoALote(lote, monto, tipo, command.observaciones(), now);
         } else {
+            List<Lote> pendientes = loteRepository.findPendientesByProveedorId(proveedor.getId());
+            BigDecimal saldoDisponible = pendientes.stream().map(Lote::getSaldoPendienteLote)
+                    .reduce(ZERO, BigDecimal::add);
+            if (monto.compareTo(saldoDisponible) > 0) {
+                throw new BusinessRuleException("Los lotes pendientes no cubren el monto del pago");
+            }
             BigDecimal restante = monto;
-            for (Lote lote : loteRepository.findPendientesByProveedorId(proveedor.getId())) {
+            for (Lote lote : pendientes) {
                 if (restante.signum() == 0) {
                     break;
                 }
                 BigDecimal aplicado = restante.min(lote.getSaldoPendienteLote());
                 aplicarPagoALote(lote, aplicado, tipo, command.observaciones(), now);
                 restante = restante.subtract(aplicado);
-            }
-            if (restante.signum() > 0) {
-                throw new BusinessRuleException("Los lotes pendientes no cubren el monto del pago");
             }
         }
 
@@ -178,7 +221,7 @@ public class ProveedorService implements ProveedorUseCase {
 
     private void registrarTransaccion(String proveedorId, String loteId, TipoTransaccionProveedor tipo,
                                       BigDecimal monto, String observaciones, Instant fecha) {
-        transaccionRepository.save(TransaccionProveedor.builder()
+        transaccionRepository.insert(TransaccionProveedor.builder()
                 .proveedorId(proveedorId)
                 .loteId(loteId)
                 .tipo(tipo)
@@ -202,5 +245,34 @@ public class ProveedorService implements ProveedorUseCase {
 
     private BigDecimal money(BigDecimal value) {
         return value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private PageRequest crearPaginacion(int page, int size) {
+        if (page < 0 || size < 1 || size > 200) {
+            throw new IllegalArgumentException("La pagina debe ser >= 0 y el tamano debe estar entre 1 y 200");
+        }
+        return PageRequest.of(page, size);
+    }
+
+    private void validarContenedor(ContenedorCommand item) {
+        if (item == null || item.tipoCepa() == null || item.tipoCepa().isBlank()
+                || item.unidadBase() == null || item.unidadBase().isBlank()) {
+            throw new BusinessRuleException("Cada contenedor debe indicar su tipo o cepa y su unidad base");
+        }
+        BigDecimal capacidad = item.capacidadUnidadesBase();
+        if (capacidad == null || capacidad.signum() <= 0
+                || capacidad.stripTrailingZeros().scale() > 3
+                || capacidad.precision() - capacidad.scale() > 15) {
+            throw new BusinessRuleException("La capacidad debe ser positiva y admitir maximo 15 enteros y 3 decimales");
+        }
+        validarMonto(item.costoBasePorUnidad(), false, "El costo base por unidad");
+    }
+
+    private void validarMonto(BigDecimal monto, boolean permiteCero, String campo) {
+        if (monto == null || monto.signum() < 0 || (!permiteCero && monto.signum() == 0)
+                || monto.stripTrailingZeros().scale() > 2 || monto.precision() - monto.scale() > 15) {
+            throw new BusinessRuleException(campo + (permiteCero ? " debe ser no negativo" : " debe ser mayor que cero")
+                    + " y admitir maximo 15 enteros y 2 decimales");
+        }
     }
 }

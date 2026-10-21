@@ -21,6 +21,9 @@ public class Lote {
     private BigDecimal montoPagadoLote;
     private BigDecimal saldoPendienteLote;
     private EstadoPagoLote estadoPago;
+    private String estado;
+    private List<Contenedor> contenedores;
+    // Conserva el detalle de lotes historicos al registrar pagos; no se usa en nuevas recepciones.
     private List<Presentacion> presentaciones;
     private Instant fechaIngreso;
 }

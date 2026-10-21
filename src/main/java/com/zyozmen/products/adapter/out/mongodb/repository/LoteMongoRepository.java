@@ -8,8 +8,6 @@ import org.springframework.data.mongodb.repository.Query;
 import java.util.List;
 
 public interface LoteMongoRepository extends MongoRepository<LoteDocument, String> {
-    boolean existsByCodigoLote(String codigoLote);
-
-    @Query(value = "{ 'proveedorId': ?0, 'saldoPendienteLote': { $gt: 0 } }", sort = "{ 'fechaIngreso': 1 }")
+    @Query(value = "{ 'proveedorId': ?0, 'saldoPendienteLote': { $gt: 0 } }", sort = "{ 'fechaIngreso': 1, '_id': 1 }")
     List<LoteDocument> findPendientes(ObjectId proveedorId);
 }

@@ -14,19 +14,23 @@ public record LoteResponseDTO(
         BigDecimal montoPagadoLote,
         BigDecimal saldoPendienteLote,
         String estadoPago,
-        List<Presentacion> presentaciones,
+        String estado,
+        List<Contenedor> contenedores,
         Instant fechaIngreso) {
 
-    public record Presentacion(String presentacionId, int cantidadUnidades, BigDecimal costoUnitario,
-                               BigDecimal subtotal) {
+    public record Contenedor(String id, String tipoCepa, String unidadBase, String presentacionId,
+                             BigDecimal capacidadUnidadesBase, BigDecimal cantidadDisponible,
+                             BigDecimal costoBasePorUnidad, BigDecimal subtotal, String estado) {
     }
 
     public static LoteResponseDTO from(Lote l) {
         return new LoteResponseDTO(l.getId(), l.getProveedorId(), l.getCodigoLote(), l.getCostoTotalLote(),
                 l.getMontoPagadoLote(), l.getSaldoPendienteLote(), l.getEstadoPago().name(),
-                l.getPresentaciones().stream()
-                        .map(p -> new Presentacion(p.getPresentacionId(), p.getCantidadUnidades(),
-                                p.getCostoUnitario(), p.getSubtotal()))
+                l.getEstado(),
+                l.getContenedores().stream()
+                        .map(c -> new Contenedor(c.getId(), c.getTipoCepa(), c.getUnidadBase(), c.getPresentacionId(),
+                                c.getCapacidadUnidadesBase(), c.getCantidadDisponible(),
+                                c.getCostoBasePorUnidad(), c.getSubtotal(), c.getEstado()))
                         .toList(),
                 l.getFechaIngreso());
     }

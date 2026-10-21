@@ -21,6 +21,7 @@ Microservicio REST para la gestión de catálogo de productos, usuarios, órdene
 - **Autenticación y sesión:** login con JWT, renovación de token, cierre de sesión con revocación en servidor y control de inactividad parametrizable.
 - **Órdenes:** creación con validación de precios e IVA en backend, consulta por usuario, gestión administrativa con auditoría de estados, PQR y reportes.
 - **Proveedores y saldos (HU-01):** alta de proveedores, recepción de lotes con cálculo de costo y abono inicial opcional, abonos posteriores, saldos transaccionales y evaluación de la liquidación diaria con tope de pago.
+- **Recepción (HU-02):** lotes con contenedores por tipo/cepa, inventario en unidades base, código interno automático e historial de abonos con imputación FIFO.
 - **Operación:** documentación OpenAPI/Swagger, endpoints de Actuator, imagen Docker lista para producción.
 
 ## 2. Stack tecnológico
@@ -250,13 +251,67 @@ Content-Type: application/json
 }
 ```
 
-### Proveedores, lotes y liquidación (HU-01)
-Colecciones MongoDB: `proveedores`, `lotes` y `transacciones_proveedor`. Los montos son `BigDecimal` con 2 decimales y se guardan como `Decimal128`. La guía detallada para el frontend (campos, validaciones, ejemplos y tipos TypeScript) está en [docs/proveedores-api-frontend.md](docs/proveedores-api-frontend.md).
+### Proveedores, recepción de lotes y liquidación (HU-01 / HU-02)
+Colecciones MongoDB: `proveedores`, `lotes` y `transacciones_proveedor`. Los montos son `BigDecimal` con 2 decimales y se guardan como `Decimal128`. Los contenedores se guardan dentro del lote; el historial de movimientos se guarda por separado y solo admite inserciones desde el puerto de persistencia.
+
+La especificación de integración para el frontend está en [docs/proveedores-api-frontend.md](docs/proveedores-api-frontend.md), con contratos, ejemplos, validaciones, tipos TypeScript y flujos de actualización de la interfaz.
 
 - **Crear proveedor** (`POST /api/proveedores`): inicia `totalDeuda`, `totalPagado` y `saldoPendiente` en `0.00`, estado `ACTIVO`; el NIT es único (`422` si se repite).
-- **Recibir lote** (`POST /api/lotes`): `costoTotalLote = Σ(cantidadUnidades × costoUnitario)`; suma ese costo a `totalDeuda` y registra una transacción `DEUDA_LOTE`. Si hay `abonoInicial > 0` valida que sea `<= costoTotalLote`, lo suma a `totalPagado` y registra `ABONO_INICIAL`. `saldoPendiente = max(0, totalDeuda - totalPagado)`. El lote queda `PENDIENTE`, `PAGO_PARCIAL` o `PAGADO_TOTAL` (saldo del lote en cero). Todo ocurre en una transacción.
+- **Buscar/listar proveedores** (`GET /api/proveedores?buscar=...&page=0&size=20`): coincidencia parcial literal en `nombre` **o** `nit`, sin distinguir mayúsculas. Elimina espacios al inicio y final; no normaliza acentos, puntuación del NIT ni espacios internos. Sin `buscar`, vacío o solo espacios, lista todos los proveedores. Incluye activos e inactivos; para recepción, seleccionar uno `ACTIVO`. Responde `200` con un arreglo plano de `ProveedorResponseDTO` (misma estructura que la consulta por ID) y encabezado `X-Total-Count` con el total de coincidencias. Orden ascendente por `nombre` y desempate por ID. Paginación obligatoria internamente: `page` desde cero (por defecto `0`), `size` entre `1` y `200` (por defecto `20`); parámetros inválidos devuelven `400`. Sin coincidencias o página fuera de rango: `[]`, conservando el total real en el encabezado.
+- **Recibir lote** (`POST /api/lotes`): exige un proveedor activo y al menos un contenedor. `costoTotalLote = Σ(capacidadUnidadesBase × costoBasePorUnidad)`, redondeando cada subtotal a 2 decimales (`HALF_UP`); suma ese costo a `totalDeuda` y registra una transacción `DEUDA_LOTE`. Si hay `abonoInicial > 0` valida que sea `<= costoTotalLote`, lo suma a `totalPagado` y registra `ABONO_INICIAL` asociado al nuevo lote (no a lotes anteriores). `saldoPendiente = totalDeuda - totalPagado`. Lote y contenedores quedan en estado `RECIBIDO`; `estadoPago` es independiente: `PENDIENTE`, `PAGO_PARCIAL` o `PAGADO_TOTAL`. Cada contenedor inicia con `cantidadDisponible = capacidadUnidadesBase`. Todo ocurre en una transacción MongoDB, que requiere replica set (por ejemplo, Atlas).
+- **Trazabilidad:** el servidor genera `codigoLote` con formato `LOT-YYYYMMDD-<UUID hexadecimal>` y fecha UTC, protegido por índice único, además de `fechaIngreso` e identificadores de contenedor. El cliente no envía código ni saldos calculados.
+- **Consultar lote** (`GET /api/lotes/{id}`): devuelve el lote, los contenedores y sus cantidades disponibles en unidades base. El catálogo de productos no tiene un campo de stock; este inventario se registra en los contenedores, sin convertirlo en unidades de presentación.
 - **Registrar pago** (`POST /api/proveedores/{id}/pagos`): abono a un lote (`loteId`) o, si se omite, a los lotes pendientes del más antiguo al más reciente. Tipos permitidos: `ABONO` (por defecto), `PAGO_CORTESIA`, `AJUSTE_PQR`. No puede superar el saldo del proveedor ni del lote.
+- **FIFO:** si el abono sin lote supera el saldo del más antiguo, lo salda y distribuye el excedente entre los siguientes; genera un movimiento por cada monto aplicado a cada lote. Se ordena por `fechaIngreso` ascendente, con desempate por identificador.
+- **Consultar abonos** (`GET /api/proveedores/{id}/abonos?page=0&size=20`): arreglo JSON plano de movimientos paginados, del más reciente al más antiguo (desempate por identificador descendente), con `id`, `fecha` UTC, `monto`, `proveedorId`, `loteId`, `tipo` y `observaciones`. Incluye abonos iniciales y posteriores, cortesías y ajustes; excluye `DEUDA_LOTE`. El encabezado `X-Total-Count` indica el total de movimientos del proveedor, no el tamaño de la página; ya está expuesto por CORS. `page` inicia en `0` (predeterminado `0`) y `size` admite `1` a `200` (predeterminado `20`); parámetros inválidos devuelven `400`. Devuelve `[]` cuando no hay abonos o la página está fuera de rango, conservando el total real, y `404` si no existe el proveedor. No hay endpoints de edición ni eliminación de movimientos. **Cambio de comportamiento:** sin parámetros ahora devuelve únicamente los primeros 20 movimientos, no el historial completo.
 - **Procesar evento** (`POST /api/liquidaciones/procesar-evento`): evalúa si una venta/PQR acumula a la liquidación diaria sin modificar saldos ni inventario. Si el lote o el proveedor no tienen saldo pendiente devuelve `acumulaLiquidacion=false` y `montoLiquidable=0.00` (tope de pago); en caso contrario limita el monto al menor saldo. `descontarStock` siempre es `true`: el descuento de inventario lo ejecuta quien invoca el servicio.
+
+#### Contrato de recepción HU-02
+Todas estas rutas requieren rol `ADMIN`.
+
+Para el selector de proveedor del frontend:
+
+```http
+GET /api/proveedores?buscar=distribuidora&page=0&size=20
+GET /api/proveedores?buscar=900123&page=0&size=20
+GET /api/proveedores?page=0&size=20
+```
+
+Mostrar `nombre` y `nit`; guardar el `id` seleccionado como `proveedorId`. Reiniciar `page=0` al cambiar el texto, codificar el parámetro con `URLSearchParams` y descartar respuestas de búsquedas anteriores. Se recomienda debounce de 300 ms para autocompletar. Leer `X-Total-Count` para calcular páginas; el encabezado ya está expuesto por CORS.
+
+La búsqueda funciona con MongoDB estándar, sin Atlas Search ni índices de búsqueda externos. Se escapan los caracteres del usuario: `.` y `*`, por ejemplo, se buscan como texto literal, no como operadores. La coincidencia parcial sin distinguir mayúsculas puede requerir recorrer documentos; la paginación limita la respuesta, no el costo total de búsqueda. Para volúmenes altos, evaluar un índice de búsqueda dedicado.
+
+```http
+POST /api/lotes
+Content-Type: application/json
+
+{
+  "proveedorId": "60d5ecb8f1d2c2a4c8e9a010",
+  "contenedores": [
+    {
+      "tipoCepa": "Sativa Premium",
+      "unidadBase": "gramo",
+      "capacidadUnidadesBase": 1000,
+      "costoBasePorUnidad": 5000
+    },
+    {
+      "tipoCepa": "Indica Gold",
+      "unidadBase": "gramo",
+      "capacidadUnidadesBase": 500,
+      "costoBasePorUnidad": 6000
+    }
+  ],
+  "abonoInicial": 0
+}
+```
+
+Responde `201` con `costoTotalLote: 8000000.00`, `montoPagadoLote: 0.00`, `saldoPendienteLote: 8000000.00`, `estado: "RECIBIDO"`, `estadoPago: "PENDIENTE"`, código, fecha y los contenedores con sus identificadores, subtotales y cantidades disponibles.
+
+Cada contenedor exige `tipoCepa` y `unidadBase` no vacíos, capacidad positiva (hasta 15 enteros y 3 decimales) y costo base positivo (hasta 15 enteros y 2 decimales). `presentacionId` es una referencia opcional al catálogo, no interviene en el cálculo de unidades base. El tipo/cepa se registra como texto porque no existe un catálogo de cepas en este servicio. El valor total redondeado debe ser positivo. `abonoInicial` es opcional, admite cero y hasta 2 decimales; no puede superar el valor del lote.
+
+Una lista vacía o ausente devuelve `400`, con `"Debe agregar al menos un contenedor con su capacidad en unidades base para registrar el lote"` en `validationErrors`. Un abono excesivo devuelve `422` con, por ejemplo, `"El abono inicial no puede ser mayor al valor total del lote ($4,000,000 COP)"` en `message`; ninguna de estas validaciones escribe datos.
+
+**Cambio incompatible autorizado:** `contenedores` reemplaza a `presentaciones` y el código pasa a generarse en el servidor. Los clientes deben actualizar el cuerpo de recepción y lectura. Los lotes históricos conservan internamente sus presentaciones para no perder el detalle al registrar pagos, pero su consulta devuelve `contenedores: []` y `estado: null` si no tienen esos datos; no se infieren cepas ni inventario ni se migra automáticamente información histórica.
 
 ## 9. Manejo de errores
 Un manejador global normaliza las respuestas de error:

@@ -31,8 +31,26 @@ public class LoteDocument {
     private BigDecimal montoPagadoLote;
     private BigDecimal saldoPendienteLote;
     private String estadoPago;
+    private String estado;
+    private List<ContenedorDocument> contenedores;
     private List<PresentacionDocument> presentaciones;
     private Instant fechaIngreso;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ContenedorDocument {
+        private String id;
+        private String tipoCepa;
+        private String unidadBase;
+        private String presentacionId;
+        private BigDecimal capacidadUnidadesBase;
+        private BigDecimal cantidadDisponible;
+        private BigDecimal costoBasePorUnidad;
+        private BigDecimal subtotal;
+        private String estado;
+    }
 
     @Data
     @Builder

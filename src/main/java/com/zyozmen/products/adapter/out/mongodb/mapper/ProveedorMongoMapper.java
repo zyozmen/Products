@@ -4,6 +4,7 @@ import com.zyozmen.products.adapter.out.mongodb.document.LoteDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProveedorDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.TransaccionProveedorDocument;
 import com.zyozmen.products.domain.model.EstadoPagoLote;
+import com.zyozmen.products.domain.model.Contenedor;
 import com.zyozmen.products.domain.model.EstadoProveedor;
 import com.zyozmen.products.domain.model.Lote;
 import com.zyozmen.products.domain.model.Presentacion;
@@ -11,6 +12,8 @@ import com.zyozmen.products.domain.model.Proveedor;
 import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
 import com.zyozmen.products.domain.model.TransaccionProveedor;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 public class ProveedorMongoMapper {
@@ -59,7 +62,17 @@ public class ProveedorMongoMapper {
                 .montoPagadoLote(l.getMontoPagadoLote())
                 .saldoPendienteLote(l.getSaldoPendienteLote())
                 .estadoPago(l.getEstadoPago().name())
-                .presentaciones(l.getPresentaciones().stream().map(p -> LoteDocument.PresentacionDocument.builder()
+                .estado(l.getEstado())
+                .contenedores(l.getContenedores() == null ? List.of() : l.getContenedores().stream()
+                        .map(c -> LoteDocument.ContenedorDocument.builder()
+                                .id(c.getId()).tipoCepa(c.getTipoCepa()).unidadBase(c.getUnidadBase())
+                                .presentacionId(c.getPresentacionId())
+                                .capacidadUnidadesBase(c.getCapacidadUnidadesBase())
+                                .cantidadDisponible(c.getCantidadDisponible())
+                                .costoBasePorUnidad(c.getCostoBasePorUnidad())
+                                .subtotal(c.getSubtotal()).estado(c.getEstado()).build()).toList())
+                .presentaciones(l.getPresentaciones() == null ? null : l.getPresentaciones().stream()
+                        .map(p -> LoteDocument.PresentacionDocument.builder()
                         .presentacionId(p.getPresentacionId())
                         .cantidadUnidades(p.getCantidadUnidades())
                         .costoUnitario(p.getCostoUnitario())
@@ -78,7 +91,17 @@ public class ProveedorMongoMapper {
                 .montoPagadoLote(d.getMontoPagadoLote())
                 .saldoPendienteLote(d.getSaldoPendienteLote())
                 .estadoPago(EstadoPagoLote.valueOf(d.getEstadoPago()))
-                .presentaciones(d.getPresentaciones().stream().map(p -> Presentacion.builder()
+                .estado(d.getEstado())
+                .contenedores(d.getContenedores() == null ? List.of() : d.getContenedores().stream()
+                        .map(c -> Contenedor.builder()
+                                .id(c.getId()).tipoCepa(c.getTipoCepa()).unidadBase(c.getUnidadBase())
+                                .presentacionId(c.getPresentacionId())
+                                .capacidadUnidadesBase(c.getCapacidadUnidadesBase())
+                                .cantidadDisponible(c.getCantidadDisponible())
+                                .costoBasePorUnidad(c.getCostoBasePorUnidad())
+                                .subtotal(c.getSubtotal()).estado(c.getEstado()).build()).toList())
+                .presentaciones(d.getPresentaciones() == null ? null : d.getPresentaciones().stream()
+                        .map(p -> Presentacion.builder()
                         .presentacionId(p.getPresentacionId())
                         .cantidadUnidades(p.getCantidadUnidades())
                         .costoUnitario(p.getCostoUnitario())
