@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 public class Contenedor {
     String id;
     String tipoCepa;
+    String cepaId;
     String unidadBase;
     String presentacionId;
     BigDecimal capacidadUnidadesBase;

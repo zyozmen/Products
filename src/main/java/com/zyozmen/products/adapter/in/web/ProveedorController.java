@@ -60,7 +60,7 @@ public class ProveedorController {
     @Operation(summary = "Recibir un lote calculando su costo, con abono inicial opcional")
     public ResponseEntity<LoteResponseDTO> recibirLote(@Valid @RequestBody LoteCreateRequestDTO request) {
         var contenedores = request.contenedores().stream()
-                .map(c -> new ProveedorUseCase.ContenedorCommand(c.tipoCepa(), c.unidadBase(), c.presentacionId(),
+                .map(c -> new ProveedorUseCase.ContenedorCommand(c.cepaId(), c.unidadBase(), c.presentacionId(),
                         c.capacidadUnidadesBase(), c.costoBasePorUnidad(), c.precioBaseUnidad()))
                 .toList();
         return ResponseEntity.status(HttpStatus.CREATED).body(LoteResponseDTO.from(

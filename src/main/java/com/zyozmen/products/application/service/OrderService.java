@@ -9,10 +9,9 @@ import com.zyozmen.products.domain.model.OrderDelivery;
 import com.zyozmen.products.domain.model.OrderItem;
 import com.zyozmen.products.domain.model.OrderStatus;
 import com.zyozmen.products.domain.model.OrderStatusChange;
-import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.OrderUseCase;
 import com.zyozmen.products.domain.port.out.OrderRepositoryPort;
-import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
+import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +39,7 @@ public class OrderService implements OrderUseCase {
     private static final String ORDER_NOT_FOUND = "Orden no encontrada";
 
     private final OrderRepositoryPort orderRepository;
-    private final ProductoRepositoryPort productoRepository;
+    private final MarketplaceUseCase marketplace;
     private final UserRepositoryPort userRepository;
 
     // Zona horaria del negocio usada para delimitar los días del reporte.
@@ -63,32 +62,19 @@ public class OrderService implements OrderUseCase {
             if (requestedItem == null || requestedItem.quantity() <= 0) {
                 throw new IllegalArgumentException("La cantidad de cada producto debe ser mayor que cero");
             }
-            long productId;
-            try {
-                productId = Long.parseLong(requestedItem.productId());
-            } catch (NumberFormatException exception) {
-                throw new OrderProductException("El producto indicado no existe");
-            }
-
-            Producto product = productoRepository.findById(productId)
-                    .filter(value -> "active".equalsIgnoreCase(value.getStatus()))
-                    .orElseThrow(() -> new OrderProductException(
-                            "El producto " + requestedItem.productId() + " no existe o no está activo"));
-            if (product.getPrice() == null || product.getPrice().getCurrent() == null) {
-                throw new OrderProductException("El producto " + requestedItem.productId() + " no tiene precio válido");
-            }
-
-            BigDecimal unitPrice = product.getPrice().getCurrent().setScale(2, RoundingMode.HALF_UP);
+            var product = marketplace.resolverPresentacion(requestedItem.productId());
+            BigDecimal unitPrice = product.precioVenta().setScale(2, RoundingMode.HALF_UP);
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(requestedItem.quantity()))
                     .setScale(2, RoundingMode.HALF_UP);
             requireSameAmount(requestedItem.unitPrice(), unitPrice, "El precio del producto cambió");
             requireSameAmount(requestedItem.lineTotal(), lineTotal, "El total del producto no coincide");
             items.add(OrderItem.builder()
-                    .productId(product.getId())
-                    .name(product.getName())
+                    .productId(product.trazabilidad().presentacionId())
+                    .name(product.nombre())
                     .quantity(requestedItem.quantity())
                     .unitPrice(unitPrice)
                     .lineTotal(lineTotal)
+                    .trazabilidad(product.trazabilidad())
                     .build());
             subtotal = subtotal.add(lineTotal);
         }
@@ -140,12 +126,14 @@ public class OrderService implements OrderUseCase {
             if (requested == null || requested.quantity() <= 0) {
                 throw new IllegalArgumentException("La cantidad de cada producto debe ser mayor que cero");
             }
+            var product = marketplace.resolverPresentacion(requested.productId());
             items.add(OrderItem.builder()
-                    .productId(requested.productId())
-                    .name(requested.name())
+                    .productId(product.trazabilidad().presentacionId())
+                    .name(product.nombre())
                     .quantity(requested.quantity())
                     .unitPrice(ZERO)
                     .lineTotal(ZERO)
+                    .trazabilidad(product.trazabilidad())
                     .build());
         }
         OrderDeliveryRequest safeDelivery = delivery == null

@@ -36,12 +36,12 @@ public interface ProveedorUseCase {
     record DetalleProveedor(Proveedor proveedor, long lotesPagados, long lotesPorPagar) {
     }
 
-    record ContenedorCommand(String tipoCepa, String unidadBase, String presentacionId,
+    record ContenedorCommand(String cepaId, String unidadBase, String presentacionId,
                              BigDecimal capacidadUnidadesBase, BigDecimal costoBasePorUnidad,
                              BigDecimal precioBaseUnidad) {
-        public ContenedorCommand(String tipoCepa, String unidadBase, String presentacionId,
+        public ContenedorCommand(String cepaId, String unidadBase, String presentacionId,
                                  BigDecimal capacidadUnidadesBase, BigDecimal costoBasePorUnidad) {
-            this(tipoCepa, unidadBase, presentacionId, capacidadUnidadesBase, costoBasePorUnidad, null);
+            this(cepaId, unidadBase, presentacionId, capacidadUnidadesBase, costoBasePorUnidad, null);
         }
     }
 

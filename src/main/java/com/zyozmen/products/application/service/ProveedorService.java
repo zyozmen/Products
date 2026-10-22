@@ -12,6 +12,8 @@ import com.zyozmen.products.domain.model.Proveedor;
 import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
 import com.zyozmen.products.domain.model.TransaccionProveedor;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase;
+import com.zyozmen.products.domain.port.in.CepaUseCase;
+import com.zyozmen.products.domain.port.out.CodigoInventarioGeneratorPort;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
 import com.zyozmen.products.domain.port.out.TransaccionProveedorRepositoryPort;
@@ -25,13 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +42,8 @@ public class ProveedorService implements ProveedorUseCase {
     private final ProveedorRepositoryPort proveedorRepository;
     private final LoteRepositoryPort loteRepository;
     private final TransaccionProveedorRepositoryPort transaccionRepository;
+    private final CodigoInventarioGeneratorPort codigoInventarioGenerator;
+    private final CepaUseCase cepas;
 
     @Override
     @Transactional
@@ -102,13 +103,15 @@ public class ProveedorService implements ProveedorUseCase {
         BigDecimal costoTotal = ZERO;
         for (ContenedorCommand item : command.contenedores()) {
             validarContenedor(item);
+            var cepa = cepas.obtener(item.cepaId());
             BigDecimal costoUnitario = money(item.costoBasePorUnidad());
             BigDecimal subtotal = costoUnitario.multiply(item.capacidadUnidadesBase())
                     .setScale(2, RoundingMode.HALF_UP);
             contenedores.add(Contenedor.builder()
                     .id(new ObjectId().toHexString())
-                    .codigoContenedor("CONT-" + UUID.randomUUID().toString().toUpperCase(Locale.ROOT))
-                    .tipoCepa(item.tipoCepa().trim())
+                    .codigoContenedor(formatearCodigo("CONT-", codigoInventarioGenerator.siguienteNumeroContenedor()))
+                    .tipoCepa(cepa.nombre())
+                    .cepaId(cepa.id())
                     .unidadBase(UnidadMedida.desde(item.unidadBase()).name())
                     .presentacionId(item.presentacionId())
                     .capacidadUnidadesBase(item.capacidadUnidadesBase())
@@ -139,8 +142,7 @@ public class ProveedorService implements ProveedorUseCase {
         BigDecimal saldoLote = costoTotal.subtract(abono);
         Lote lote = loteRepository.save(Lote.builder()
                 .proveedorId(proveedor.getId())
-                .codigoLote("LOT-" + DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC).format(now)
-                        + "-" + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT))
+                .codigoLote(formatearCodigo("LOT-", codigoInventarioGenerator.siguienteNumeroLote()))
                 .costoTotalLote(costoTotal)
                 .montoPagadoLote(abono)
                 .abonoInicial(abono)
@@ -164,6 +166,10 @@ public class ProveedorService implements ProveedorUseCase {
         actualizarSaldo(proveedor, now);
         proveedorRepository.save(proveedor);
         return lote;
+    }
+
+    private static String formatearCodigo(String prefijo, long numero) {
+        return prefijo + String.format(Locale.ROOT, "%06d", numero);
     }
 
     @Override
@@ -295,7 +301,7 @@ public class ProveedorService implements ProveedorUseCase {
     }
 
     private void validarContenedor(ContenedorCommand item) {
-        if (item == null || item.tipoCepa() == null || item.tipoCepa().isBlank()
+        if (item == null || item.cepaId() == null || item.cepaId().isBlank()
                 || item.unidadBase() == null || item.unidadBase().isBlank()) {
             throw new BusinessRuleException("Cada contenedor debe indicar su tipo o cepa y su unidad base");
         }

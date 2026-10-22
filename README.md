@@ -224,7 +224,10 @@ El backend no redimensiona, recomprime ni mejora las imágenes: almacena los byt
 
 ### Órdenes
 - El propietario de la orden se toma del token; el cliente no puede indicar el `username`.
-- `POST /api/orders` valida que cada producto esté activo, recalcula precios vigentes e IVA (16 %) y responde `422` si los valores enviados no coinciden.
+- Desde HU-05/T1, `productId` en ventas y PQR es el **ID de la presentación de marketplace**, no el ID numérico del catálogo anterior. El catálogo anterior sigue disponible en sus rutas; no se consulta para crear nuevas órdenes. Las órdenes ya guardadas siguen siendo consultables.
+- `POST /api/orders` valida que la presentación esté activa y tenga procedencia en un lote, recalcula precios vigentes e IVA (16 %) y responde `422` si los valores enviados no coinciden. Un ID mal formado responde `400`; una presentación inexistente o inactiva, `404`.
+- Cada ítem nuevo guarda `trazabilidad` interna: proveedor, lote, contenedor, cepa, presentación, contenido, unidad base, costo base y costo por presentación. Los datos se resuelven en el servidor; no se aceptan costos del cliente. El costo congelado no cambia al actualizar el catálogo y no se expone en `OrderResponseDTO`.
+- Las PQR también requieren `productId` válido y resuelven nombre y costo desde el servidor. `name` es opcional y no se usa como fuente; sus precios e importes comerciales son cero.
 - Una orden de otro usuario responde `404`.
 - `GET /api/admin/orders` admite los filtros `status`, `from`, `to` (formato `YYYY-MM-DD`), `username`, `page` y `size`; con paginación devuelve una lista plana y el encabezado `X-Total-Count`.
 - Estados válidos: `CREADA`, `PAGADA`, `EMPACADA`, `ENTREGADA` y `CANCELADA`. Los cambios de estado se auditan y las transiciones no permitidas responden `409`.
@@ -238,7 +241,7 @@ Content-Type: application/json
 
 {
   "items": [
-    { "productId": "12", "name": "Producto", "quantity": 2, "unitPrice": 15000, "lineTotal": 30000 }
+    { "productId": "650000000000000000000401", "quantity": 2, "unitPrice": 15000, "lineTotal": 30000 }
   ],
   "delivery": {
     "recipientName": "Juan Pérez",
@@ -251,6 +254,104 @@ Content-Type: application/json
   "total": 34800
 }
 ```
+
+### Catalogo y detalle de marketplace por cepa (HU-05/T1 ampliada)
+
+`GET /api/marketplace/cepas/{cepaId}/presentaciones/{presentacionId}` es público
+y devuelve el nombre del producto (tipo/cepa), la presentación seleccionada y
+las presentaciones activas con stock positivo de esa misma cepa, incluso de distintos lotes,
+contenedores y proveedores. Cada opción conserva su propio ID, SKU, contenido,
+unidad base, precio, stock y fotografía; presentaciones de distintos lotes no
+se fusionan ni comparten existencias. No devuelve costos ni saldos internos.
+
+Las cepas se administran antes de recibir lotes y se almacenan en `cepas`.
+Su ID es un UUID persistido: renombrarlas no cambia sus referencias. El nombre
+normalizado (sin espacios extremos, espacios internos colapsados y minusculas)
+tiene indice unico. El detalle usa el nombre actual de la entidad, no la copia
+historica del contenedor o de marketplace. Las respuestas administrativas de
+lotes exponen `cepaId` en cada contenedor.
+
+**Administracion (ADMIN):**
+- `POST /api/cepas` con `{"nombre":"Tangerine"}` devuelve `201`.
+- `GET /api/cepas?page=0&size=20` devuelve un arreglo y `X-Total-Count`;
+  `GET /api/cepas/{id}` devuelve la entidad, incluida su version.
+- `PUT /api/cepas/{id}` con `{"nombre":"Nuevo nombre","version":0}` renombra
+  conservando el ID y la fotografia. Version desactualizada y nombre duplicado
+  normalizado: `409`; cepa inexistente: `404`. No se elimina una cepa referenciada.
+- `POST /api/v1/images/{cepaId}?target=CEPA` acepta multipart `fotoPrincipal`.
+  Reutiliza el servicio de imagenes: PNG, JPG/JPEG o WebP hasta 2 MiB, con MIME
+  correspondiente. Almacena Base64 en la entidad cepa e ignora secundarias.
+  PRODUCT y CATEGORY conservan su contrato numerico anterior. Las rutas
+  antiguas de imagenes de producto rechazan CEPA para evitar sobrescribir productos.
+
+**Listado publico:** `GET /api/marketplace/presentaciones?buscar=10gr&page=0&size=20`
+
+```json
+{
+  "content": [{
+    "cepaId": "UUID-de-cepa",
+    "nombre": "Tangerine",
+    "fotografia": {"nombre": "tangerine.webp", "extension": "webp", "filepart": "BASE64"},
+    "precioDesde": 8000,
+    "presentaciones": [{
+      "presentacionId": "650000000000000000000401",
+      "sku": "TAN-5",
+      "nombre": "Bolsa 5 g",
+      "contenidoUnidad": 5,
+      "unidadBase": "GRAMOS",
+      "precioVenta": 8000,
+      "stockDisponible": 12,
+      "fotografia": null
+    }]
+  }],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+- Pagina por **cepas**, ordenadas por nombre normalizado y desempate por ID.
+  `page >= 0`, `size` entre 1 y 100; valores invalidos o busqueda de mas de
+  100 caracteres: `400`. Sin coincidencias o fuera de rango, `content: []`.
+- Incluye solo presentaciones `ACTIVO` con stock mayor que cero; excluye cepas
+  sin opciones disponibles. `precioDesde` es el menor precio de esas opciones.
+- Busca coincidencia parcial literal sin distinguir mayusculas por nombre de
+  cepa o presentacion. Tambien interpreta contenido y unidad: `10gr`, `10 g`,
+  `10 gramos`, `10ml` o `1 unidad`, reutilizando los alias de unidades existentes.
+  No convierte unidades ni interpreta expresiones regulares del usuario.
+- Una presentacion coincidente selecciona la cepa **con todas sus opciones
+  disponibles**, no solo la coincidencia; el precio minimo tambien usa todas.
+- Foto principal de tarjeta: fotografia de la cepa. Si no tiene imagen,
+  `fotografia: null`; la aplicacion consumidora decide el placeholder.
+  Se conserva ademas la fotografia propia de cada opcion.
+- El detalle devuelve tambien `fotografia` de cepa y `precioDesde`. Un par
+  cepa/presentacion incorrecto o una seleccion agotada responde `404`.
+- La consulta pagina y cuenta dentro de MongoDB, sin cargar todo el catalogo en
+  memoria Java. No necesita Atlas Search. La busqueda literal con `$indexOfCP`
+  no ofrece relevancia, busqueda difusa ni normalizacion de acentos.
+
+**Datos anteriores:** antes de desplegar, detener escrituras y verificar un
+respaldo. Ejecutar primero la previsualizacion de
+[reconciliacion HU-05](docs/migrations/hu05-cepas.js), revisarla y aplicar con
+`globalThis.APPLY=true` en mongosh. Requiere replica set; no se ejecuta al
+arrancar. Crea entidades compartidas desde nombres existentes y completa
+referencias y datos de presentacion en marketplace, sin modificar ventas,
+existencias ni saldos. Conserva los UUID deterministas anteriores cuando crea
+esas entidades. Datos ambiguos detienen la reconciliacion antes de escribir.
+Las nuevas recepciones requieren `cepaId`; el contrato solo con `tipoCepa`
+ya no se acepta. Los lotes pendientes de reconciliar no pueden empaquetarse.
+
+Para ejecutar las pruebas reales del catalogo, proporcionar
+`HU05_TEST_MONGO_URI` apuntando a un MongoDB **aislado de pruebas**. Estas pruebas
+crean bases `hu05_test_<UUID>` y eliminan exclusivamente esas bases al terminar.
+Sin esa variable se omiten; el resto de las pruebas no requiere MongoDB.
+
+El plan completo y el control de avance están en
+[HU-05: plan de integración](docs/hu05-plan-integracion.md). T1 incorpora
+trazabilidad y detalle. El descuento de inventario, los nuevos estados de PQR,
+la acumulación diaria y el reporte financiero pertenecen a T2 y siguientes:
+no deben considerarse implementados por esta entrega.
 
 ### Proveedores, recepción de lotes y liquidación (HU-01 / HU-02)
 Colecciones MongoDB: `proveedores`, `lotes` y `transacciones_proveedor`. Los montos son `BigDecimal` con 2 decimales y se guardan como `Decimal128`. Los contenedores se guardan dentro del lote; el historial de movimientos se guarda por separado y solo admite inserciones desde el puerto de persistencia.
@@ -334,13 +435,13 @@ Content-Type: application/json
   "proveedorId": "60d5ecb8f1d2c2a4c8e9a010",
   "contenedores": [
     {
-      "tipoCepa": "Sativa Premium",
+      "cepaId": "UUID-de-cepa-sativa",
       "unidadBase": "gramo",
       "capacidadUnidadesBase": 1000,
       "costoBasePorUnidad": 5000
     },
     {
-      "tipoCepa": "Indica Gold",
+      "cepaId": "UUID-de-cepa-indica",
       "unidadBase": "gramo",
       "capacidadUnidadesBase": 500,
       "costoBasePorUnidad": 6000
@@ -352,7 +453,7 @@ Content-Type: application/json
 
 Responde `201` con `costoTotalLote: 8000000.00`, `montoPagadoLote: 0.00`, `saldoPendienteLote: 8000000.00`, `estado: "RECIBIDO"`, `estadoPago: "PENDIENTE"`, código, fecha y los contenedores con sus identificadores, subtotales y cantidades disponibles.
 
-Cada contenedor exige `tipoCepa` y `unidadBase` no vacíos, capacidad positiva (hasta 15 enteros y 3 decimales) y costo base positivo (hasta 15 enteros y 2 decimales). `presentacionId` es una referencia opcional al catálogo, no interviene en el cálculo de unidades base. El tipo/cepa se registra como texto porque no existe un catálogo de cepas en este servicio. El valor total redondeado debe ser positivo. `abonoInicial` es opcional, admite cero y hasta 2 decimales; no puede superar el valor del lote.
+Cada contenedor exige `cepaId` existente y `unidadBase` no vacios, capacidad positiva (hasta 15 enteros y 3 decimales) y costo base positivo (hasta 15 enteros y 2 decimales). El servidor resuelve el nombre de la cepa; el texto enviado por el cliente no es su identidad. `presentacionId` es una referencia opcional al catalogo, no interviene en el calculo de unidades base. El valor total redondeado debe ser positivo. `abonoInicial` es opcional, admite cero y hasta 2 decimales; no puede superar el valor del lote.
 
 Con HU-03, `unidadBase` se normaliza a `GRAMOS`, `MILILITROS` o `UNIDADES`; se mantienen los alias `g`, `gr`, `gramo`, `gramos`, `ml`, `mililitro`, `mililitros`, `unidad` y `unidades`, sin distinguir mayúsculas. Otras unidades devuelven `400`; no se realizan conversiones. Cada contenedor recibe un ObjectId y `codigoContenedor` automático. Opcionalmente puede recibirse `precioBaseUnidad` (no negativo, hasta 15 enteros y 2 decimales), que se guarda en la cepa como referencia, sin alterar costo ni deuda.
 

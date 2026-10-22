@@ -70,6 +70,7 @@ public class LoteDocument {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class CepaDocument {
+        private String id;
         private String nombre;
         private BigDecimal costoBaseUnidad;
         private BigDecimal precioBaseUnidad;

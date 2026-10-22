@@ -20,7 +20,7 @@ public record PqrOrderCreateRequestDTO(
         String notes) {
 
     public record ItemRequest(
-            String productId,
-            @NotBlank(message = "El nombre del producto es obligatorio") String name,
+            @NotBlank(message = "El ID de la presentacion es obligatorio") String productId,
+            String name,
             @NotNull @Positive(message = "La cantidad debe ser mayor que cero") Integer quantity) { }
 }

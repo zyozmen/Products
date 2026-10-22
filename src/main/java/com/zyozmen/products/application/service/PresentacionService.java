@@ -10,6 +10,7 @@ import com.zyozmen.products.domain.model.PresentacionInventario;
 import com.zyozmen.products.domain.model.ProductoMarketplace;
 import com.zyozmen.products.domain.model.FotografiaPresentacion;
 import com.zyozmen.products.domain.port.in.PresentacionUseCase;
+import com.zyozmen.products.domain.port.in.CepaUseCase;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.MarketplaceRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
@@ -31,6 +32,7 @@ public class PresentacionService implements PresentacionUseCase {
     private final LoteRepositoryPort loteRepository;
     private final ProveedorRepositoryPort proveedorRepository;
     private final MarketplaceRepositoryPort marketplaceRepository;
+    private final CepaUseCase cepas;
 
     @Override
     @Transactional
@@ -43,6 +45,10 @@ public class PresentacionService implements PresentacionUseCase {
         Contenedor contenedor = lote.getContenedores().stream()
                 .filter(c -> c.getId().equals(contenedorId)).findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Contenedor no encontrado en el lote"));
+        if (contenedor.getCepaId() == null) {
+            throw new BusinessRuleException("Contenedor sin cepaId: ejecute la reconciliacion de cepas");
+        }
+        var cepa = cepas.obtener(contenedor.getCepaId());
         var proveedor = proveedorRepository.findById(lote.getProveedorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Proveedor no encontrado"));
 
@@ -95,9 +101,10 @@ public class PresentacionService implements PresentacionUseCase {
         Lote guardado = loteRepository.save(lote);
         for (PresentacionInventario p : nuevas) {
             marketplaceRepository.insert(new ProductoMarketplace(p.presentacionId(), lote.getId(),
-                    proveedor.getNombre(), contenedor.getTipoCepa() + " - " + p.nombre(), contenedor.getTipoCepa(),
+                    proveedor.getNombre(), cepa.nombre(), cepa.nombre(),
                     p.sku(), p.precioVenta(), p.stockDisponible(), p.fotografia(),
-                    p.activoMarketplace() ? "ACTIVO" : "INACTIVO"));
+                    p.activoMarketplace() ? "ACTIVO" : "INACTIVO", cepa.id(), p.nombre(),
+                    p.contenidoUnidad(), contenedor.getUnidadBase()));
         }
         return guardado;
     }

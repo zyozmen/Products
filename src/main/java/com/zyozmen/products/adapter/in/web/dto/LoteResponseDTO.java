@@ -24,7 +24,7 @@ public record LoteResponseDTO(
                              BigDecimal capacidadUnidadesBase, BigDecimal cantidadDisponible,
                              BigDecimal costoBasePorUnidad, BigDecimal subtotal, String estado,
                              String codigoContenedor, BigDecimal precioBaseUnidad,
-                             List<PresentacionInventario> presentaciones) {
+                             List<PresentacionInventario> presentaciones, String cepaId) {
     }
 
     public static LoteResponseDTO from(Lote l) {
@@ -35,7 +35,8 @@ public record LoteResponseDTO(
                         .map(c -> new Contenedor(c.getId(), c.getTipoCepa(), c.getUnidadBase(), c.getPresentacionId(),
                                 c.getCapacidadUnidadesBase(), c.getCantidadDisponible(),
                                 c.getCostoBasePorUnidad(), c.getSubtotal(), c.getEstado(),
-                                c.getCodigoContenedor(), c.getPrecioBaseUnidad(), c.getPresentaciones()))
+                                c.getCodigoContenedor(), c.getPrecioBaseUnidad(), c.getPresentaciones(),
+                                c.getCepaId()))
                         .toList(),
                 l.getFechaIngreso(), l.getCostoTotalEmpaquetado());
     }

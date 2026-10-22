@@ -6,6 +6,7 @@ import com.zyozmen.products.domain.exception.MargenNegativoException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.*;
 import com.zyozmen.products.domain.port.in.PresentacionUseCase.CrearPresentacionCommand;
+import com.zyozmen.products.domain.port.in.CepaUseCase;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.MarketplaceRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
@@ -34,6 +35,7 @@ class PresentacionServiceTest {
     @Mock private LoteRepositoryPort lotes;
     @Mock private ProveedorRepositoryPort proveedores;
     @Mock private MarketplaceRepositoryPort marketplace;
+    @Mock private CepaUseCase cepas;
     @InjectMocks private PresentacionService service;
     private Lote lote;
     private Proveedor proveedor;
@@ -43,7 +45,7 @@ class PresentacionServiceTest {
         lote = Lote.builder().id(LOTE).proveedorId("p1").estado("RECIBIDO").version(2L)
                 .costoTotalLote(bd("5000000")).montoPagadoLote(bd("1000000"))
                 .saldoPendienteLote(bd("4000000")).estadoPago(EstadoPagoLote.PAGO_PARCIAL)
-                .contenedores(List.of(Contenedor.builder().id(CONTENEDOR).tipoCepa("Sativa Premium")
+                .contenedores(List.of(Contenedor.builder().id(CONTENEDOR).tipoCepa("Sativa Premium").cepaId("cepa")
                         .unidadBase("GRAMOS").capacidadUnidadesBase(bd("1000"))
                         .cantidadDisponible(bd("1000")).costoBasePorUnidad(bd("5000")).build())).build();
         proveedor = Proveedor.builder().id("p1").nombre("AgroSustentable S.A.S")
@@ -52,6 +54,7 @@ class PresentacionServiceTest {
         when(lotes.findLoteById(LOTE)).thenReturn(Optional.of(lote));
         lenient().when(proveedores.findById("p1")).thenReturn(Optional.of(proveedor));
         lenient().when(lotes.save(any())).thenAnswer(i -> i.getArgument(0));
+        lenient().when(cepas.obtener("cepa")).thenReturn(new Cepa("cepa", "Sativa Premium"));
     }
 
     @Test
@@ -73,7 +76,7 @@ class PresentacionServiceTest {
         var productos = ArgumentCaptor.forClass(ProductoMarketplace.class);
         verify(marketplace, times(2)).insert(productos.capture());
         assertThat(productos.getAllValues()).extracting(ProductoMarketplace::stockDisponible).containsExactly(100, 50);
-        assertThat(productos.getValue().nombreProducto()).isEqualTo("Sativa Premium - Bolsa SAT-10");
+        assertThat(productos.getValue().nombreProducto()).isEqualTo("Sativa Premium");
         assertThat(productos.getValue().estado()).isEqualTo("ACTIVO");
         verify(proveedores, never()).save(any());
         assertThat(proveedor.getTotalDeuda()).isEqualByComparingTo("5000000");

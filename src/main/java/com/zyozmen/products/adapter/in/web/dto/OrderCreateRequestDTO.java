@@ -19,7 +19,7 @@ public record OrderCreateRequestDTO(
         @NotNull @DecimalMin(value = "0.0", message = "El total no puede ser negativo") BigDecimal total) {
 
     public record ItemRequest(
-            @NotBlank(message = "El ID del producto es obligatorio") String productId,
+            @NotBlank(message = "El ID de la presentacion es obligatorio") String productId,
             String name,
             @NotNull @Positive(message = "La cantidad debe ser mayor que cero") Integer quantity,
             @NotNull @DecimalMin(value = "0.0", message = "El precio no puede ser negativo") BigDecimal unitPrice,

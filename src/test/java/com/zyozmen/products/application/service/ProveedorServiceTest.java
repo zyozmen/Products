@@ -6,12 +6,15 @@ import com.zyozmen.products.domain.model.EstadoPagoLote;
 import com.zyozmen.products.domain.model.EstadoProveedor;
 import com.zyozmen.products.domain.model.Lote;
 import com.zyozmen.products.domain.model.Proveedor;
+import com.zyozmen.products.domain.model.Cepa;
+import com.zyozmen.products.domain.port.in.CepaUseCase;
 import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
 import com.zyozmen.products.domain.model.TransaccionProveedor;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.CrearProveedorCommand;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.ContenedorCommand;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.RecibirLoteCommand;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.RegistrarPagoCommand;
+import com.zyozmen.products.domain.port.out.CodigoInventarioGeneratorPort;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
 import com.zyozmen.products.domain.port.out.TransaccionProveedorRepositoryPort;
@@ -29,6 +32,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -53,13 +57,23 @@ class ProveedorServiceTest {
     private LoteRepositoryPort loteRepository;
     @Mock
     private TransaccionProveedorRepositoryPort transaccionRepository;
+    @Mock
+    private CodigoInventarioGeneratorPort codigoInventarioGenerator;
+    @Mock private CepaUseCase cepas;
     @InjectMocks
     private ProveedorService service;
 
     private Proveedor proveedor;
+    private final AtomicLong siguienteLote = new AtomicLong(1);
+    private final AtomicLong siguienteContenedor = new AtomicLong(1);
 
     @BeforeEach
     void setUp() {
+        when(cepas.obtener(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(i -> new Cepa(i.getArgument(0), i.getArgument(0)));
+        when(codigoInventarioGenerator.siguienteNumeroLote()).thenAnswer(i -> siguienteLote.getAndIncrement());
+        when(codigoInventarioGenerator.siguienteNumeroContenedor())
+                .thenAnswer(i -> siguienteContenedor.getAndIncrement());
         proveedor = Proveedor.builder().id(PROVEEDOR_ID).nombre("CafÃ© Colombia").nit("900123456-1")
                 .totalDeuda(bd("0.00")).totalPagado(bd("0.00")).saldoPendiente(bd("0.00"))
                 .estado(EstadoProveedor.ACTIVO).fechaCreacion(Instant.now()).build();
@@ -91,6 +105,18 @@ class ProveedorServiceTest {
         verify(loteRepository).countPorPagarByProveedorId(PROVEEDOR_ID);
         verify(proveedorRepository, never()).save(any());
         verify(loteRepository, never()).save(any());
+    }
+
+    @Test
+    void recibirLoteExigeCepaExistenteYUsaSuNombreReal() {
+        when(cepas.obtener("cepa-id")).thenReturn(new Cepa("cepa-id", "Tangerine"));
+        var lote = service.recibirLote(new RecibirLoteCommand(PROVEEDOR_ID,
+                List.of(new ContenedorCommand("cepa-id", "g", null, bd("100"), bd("1000"))), null));
+        assertThat(lote.getContenedores().getFirst().getCepaId()).isEqualTo("cepa-id");
+        assertThat(lote.getContenedores().getFirst().getTipoCepa()).isEqualTo("Tangerine");
+        when(cepas.obtener("inexistente")).thenThrow(new ResourceNotFoundException("Cepa no encontrada"));
+        assertThrows(ResourceNotFoundException.class, () -> service.recibirLote(new RecibirLoteCommand(PROVEEDOR_ID,
+                List.of(new ContenedorCommand("inexistente", "g", null, bd("100"), bd("1000"))), null)));
     }
 
     @Test
@@ -372,7 +398,7 @@ class ProveedorServiceTest {
         assertEquals(bd("8000000"), proveedor.getTotalDeuda());
         assertEquals(bd("0"), proveedor.getTotalPagado());
         assertEquals(bd("8000000"), proveedor.getSaldoPendiente());
-        assertThat(lote.getCodigoLote()).matches("LOT-\\d{8}-[A-F0-9]{32}");
+        assertThat(lote.getCodigoLote()).isEqualTo("LOT-000001");
         assertThat(lote.getFechaIngreso()).isBetween(antes, Instant.now());
         assertEquals("RECIBIDO", lote.getEstado());
         assertThat(lote.getContenedores()).hasSize(2).allSatisfy(c -> {
@@ -381,6 +407,8 @@ class ProveedorServiceTest {
             assertThat(c.getId()).isNotBlank();
         });
         assertThat(lote.getContenedores()).extracting(c -> c.getId()).doesNotHaveDuplicates();
+        assertThat(lote.getContenedores()).extracting(c -> c.getCodigoContenedor())
+                .containsExactly("CONT-000001", "CONT-000002");
     }
 
     @Test

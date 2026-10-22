@@ -19,7 +19,7 @@ public record LoteCreateRequestDTO(
         BigDecimal abonoInicial) {
 
     public record ContenedorRequestDTO(
-            @NotBlank(message = "El tipo o cepa es obligatorio") String tipoCepa,
+            @NotBlank(message = "El cepaId es obligatorio") String cepaId,
             @NotBlank(message = "La unidad base es obligatoria") String unidadBase,
             String presentacionId,
             @NotNull(message = "La capacidad en unidades base es obligatoria")

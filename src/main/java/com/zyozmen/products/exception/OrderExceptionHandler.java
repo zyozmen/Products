@@ -2,6 +2,7 @@ package com.zyozmen.products.exception;
 
 import com.zyozmen.products.adapter.in.web.AdminOrdersController;
 import com.zyozmen.products.adapter.in.web.OrdersController;
+import com.zyozmen.products.adapter.in.web.MarketplaceController;
 import com.zyozmen.products.domain.exception.OrderConflictException;
 import com.zyozmen.products.domain.exception.OrderProductException;
 import com.zyozmen.products.domain.exception.OrderValidationException;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
 
-@RestControllerAdvice(assignableTypes = {OrdersController.class, AdminOrdersController.class})
+@RestControllerAdvice(assignableTypes = {OrdersController.class, AdminOrdersController.class, MarketplaceController.class})
 @SuppressWarnings("null")
 public class OrderExceptionHandler {
 

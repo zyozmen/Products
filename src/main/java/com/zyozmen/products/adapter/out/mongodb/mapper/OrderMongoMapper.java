@@ -35,6 +35,7 @@ public class OrderMongoMapper {
                         .quantity(item.getQuantity())
                         .unitPrice(item.getUnitPrice())
                         .lineTotal(item.getLineTotal())
+                        .trazabilidad(item.getTrazabilidad())
                         .build()).toList())
                 .statusHistory(document.getStatusHistory().stream().map(change -> OrderStatusChange.builder()
                         .fromStatus(OrderStatus.valueOf(change.getFromStatus()))
@@ -78,6 +79,7 @@ public class OrderMongoMapper {
                         .quantity(item.getQuantity())
                         .unitPrice(item.getUnitPrice())
                         .lineTotal(item.getLineTotal())
+                        .trazabilidad(item.getTrazabilidad())
                         .build()).toList())
                 .statusHistory(order.getStatusHistory().stream().map(change ->
                         OrderMongoDocument.StatusChangeDocument.builder()

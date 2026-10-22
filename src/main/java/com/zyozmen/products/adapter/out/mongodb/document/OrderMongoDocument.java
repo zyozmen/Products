@@ -1,5 +1,6 @@
 package com.zyozmen.products.adapter.out.mongodb.document;
 
+import com.zyozmen.products.domain.model.TrazabilidadPresentacion;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -78,6 +79,8 @@ public class OrderMongoDocument {
         private BigDecimal unitPrice;
         @Field("line_total")
         private BigDecimal lineTotal;
+        @Field("trazabilidad")
+        private TrazabilidadPresentacion trazabilidad;
     }
 
     @Data

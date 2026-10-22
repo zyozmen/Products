@@ -13,5 +13,12 @@ public record ProductoMarketplaceDocument(
         @Field(targetType = FieldType.OBJECT_ID) String presentacionId,
         @Field(targetType = FieldType.OBJECT_ID) String loteId,
         String proveedorNombre, String nombreProducto, String cepaNombre, String sku,
-        BigDecimal precioVenta, int stockDisponible, ImagenDocument fotografia, String estado) {
+        BigDecimal precioVenta, int stockDisponible, ImagenDocument fotografia, String estado,
+        String cepaId, String presentacionNombre, BigDecimal contenidoUnidad, String unidadBase) {
+    public ProductoMarketplaceDocument(String id, String presentacionId, String loteId, String proveedorNombre,
+                                      String nombreProducto, String cepaNombre, String sku, BigDecimal precioVenta,
+                                      int stockDisponible, ImagenDocument fotografia, String estado) {
+        this(id, presentacionId, loteId, proveedorNombre, nombreProducto, cepaNombre, sku, precioVenta,
+                stockDisponible, fotografia, estado, null, null, null, null);
+    }
 }

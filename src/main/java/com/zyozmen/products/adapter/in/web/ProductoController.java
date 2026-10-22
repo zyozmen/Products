@@ -238,6 +238,9 @@ public class ProductoController {
             @RequestParam(name = "fotoPrincipal", required = false) MultipartFile fotoPrincipal,
             @RequestParam(name = "fotosSecundarias", required = false) List<MultipartFile> fotosSecundarias,
             @RequestParam(defaultValue = "PRODUCT") ImageUploadService.Target target) {
+        if (target == ImageUploadService.Target.CEPA) {
+            throw new IllegalArgumentException("Para cepas use /api/v1/images/{cepaId}?target=CEPA");
+        }
         if (target == ImageUploadService.Target.CATEGORY) {
             var images = imageUploadService.prepare(target, fotoPrincipal, fotosSecundarias);
             return ResponseEntity.ok(categoryWebMapper.toResponse(

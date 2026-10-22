@@ -101,7 +101,7 @@ class ProveedorControllerTest {
         when(useCase.recibirLote(any())).thenReturn(lote());
 
         mvc.perform(post("/api/lotes").contentType(MediaType.APPLICATION_JSON).content("""
-                {"proveedorId":"p1","contenedores":[{"tipoCepa":"Sativa Premium","unidadBase":"gramo",
+                {"proveedorId":"p1","contenedores":[{"cepaId":"cepa-sativa","unidadBase":"gramo",
                 "capacidadUnidadesBase":1000,"costoBasePorUnidad":5000}],"abonoInicial":0}
                 """))
                 .andExpect(status().isCreated())
@@ -134,11 +134,11 @@ class ProveedorControllerTest {
                 "{\"proveedorId\":\"p1\",\"presentaciones\":[]}",
                 "{\"proveedorId\":\"p1\",\"contenedores\":[null]}",
                 """
-                {"proveedorId":"p1","contenedores":[{"tipoCepa":"","unidadBase":"gramo",
+                {"proveedorId":"p1","contenedores":[{"cepaId":"","unidadBase":"gramo",
                 "capacidadUnidadesBase":0,"costoBasePorUnidad":-1}]}
                 """,
                 """
-                {"proveedorId":"p1","contenedores":[{"tipoCepa":"Sativa","unidadBase":"gramo",
+                {"proveedorId":"p1","contenedores":[{"cepaId":"cepa-sativa","unidadBase":"gramo",
                 "capacidadUnidadesBase":1.0001,"costoBasePorUnidad":0.001}]}
                 """)) {
             mvc.perform(post("/api/lotes").contentType(MediaType.APPLICATION_JSON).content(cuerpo))
@@ -159,7 +159,7 @@ class ProveedorControllerTest {
         String mensaje = "El abono inicial no puede ser mayor al valor total del lote ($4,000,000 COP)";
         when(useCase.recibirLote(any())).thenThrow(new BusinessRuleException(mensaje));
         mvc.perform(post("/api/lotes").contentType(MediaType.APPLICATION_JSON).content("""
-                {"proveedorId":"p1","contenedores":[{"tipoCepa":"Sativa","unidadBase":"gramo",
+                {"proveedorId":"p1","contenedores":[{"cepaId":"cepa-sativa","unidadBase":"gramo",
                 "capacidadUnidadesBase":800,"costoBasePorUnidad":5000}],"abonoInicial":5000000}
                 """))
                 .andExpect(status().isUnprocessableEntity())
