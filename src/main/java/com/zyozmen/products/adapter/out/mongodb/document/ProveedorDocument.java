@@ -8,6 +8,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -23,12 +24,13 @@ public class ProveedorDocument {
     private String nombre;
     @Indexed(unique = true)
     private String nit;
-    private ContactoDocument contacto;
-    private BigDecimal totalDeuda;
-    private BigDecimal totalPagado;
-    private BigDecimal saldoPendiente;
+    private String telefono;
+    private String correo;
+    private FinancieroDocument financiero;
     private String estado;
+    @Field("createdAt")
     private Instant fechaCreacion;
+    @Field("updatedAt")
     private Instant ultimaActualizacion;
     @Version
     private Long version;
@@ -37,8 +39,9 @@ public class ProveedorDocument {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class ContactoDocument {
-        private String telefono;
-        private String email;
+    public static class FinancieroDocument {
+        private BigDecimal totalDeuda;
+        private BigDecimal totalPagado;
+        private BigDecimal saldoPendiente;
     }
 }

@@ -1,12 +1,16 @@
 package com.zyozmen.products.exception;
 
+import com.mongodb.MongoException;
 import com.zyozmen.products.adapter.in.web.AdminOrdersController;
 import com.zyozmen.products.adapter.in.web.OrdersController;
+import com.zyozmen.products.adapter.in.web.MarketplaceController;
 import com.zyozmen.products.domain.exception.OrderConflictException;
 import com.zyozmen.products.domain.exception.OrderProductException;
 import com.zyozmen.products.domain.exception.OrderValidationException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.mongodb.MongoTransactionException;
+import org.springframework.data.mongodb.UncategorizedMongoDbException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -18,7 +22,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
 
-@RestControllerAdvice(assignableTypes = {OrdersController.class, AdminOrdersController.class})
+@RestControllerAdvice(assignableTypes = {OrdersController.class, AdminOrdersController.class, MarketplaceController.class})
 @SuppressWarnings("null")
 public class OrderExceptionHandler {
 
@@ -57,6 +61,18 @@ public class OrderExceptionHandler {
                 ? exception.getMessage()
                 : "La orden fue modificada por otra solicitud; vuelve a intentarlo";
         return response(HttpStatus.CONFLICT, message);
+    }
+
+    @ExceptionHandler({UncategorizedMongoDbException.class, MongoTransactionException.class})
+    public ResponseEntity<Map<String, String>> handleMongoConflict(RuntimeException exception) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof MongoException mongo
+                    && (mongo.getCode() == 112 || mongo.hasErrorLabel("TransientTransactionError"))) {
+                return response(HttpStatus.CONFLICT,
+                        "La orden o el inventario cambio por otra solicitud; consulta la orden antes de reintentar");
+            }
+        }
+        throw exception;
     }
 
     @ExceptionHandler(IllegalStateException.class)

@@ -9,12 +9,12 @@ import com.zyozmen.products.domain.model.OrderDelivery;
 import com.zyozmen.products.domain.model.OrderItem;
 import com.zyozmen.products.domain.model.OrderStatus;
 import com.zyozmen.products.domain.model.OrderStatusChange;
-import com.zyozmen.products.domain.model.Price;
-import com.zyozmen.products.domain.model.Producto;
+import com.zyozmen.products.domain.model.TrazabilidadPresentacion;
+import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
 import com.zyozmen.products.domain.port.in.OrderUseCase;
 import com.zyozmen.products.domain.port.out.OrderRepositoryPort;
-import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
+import com.zyozmen.products.domain.port.out.InventarioOrdenPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -43,10 +43,11 @@ class OrderServiceTest {
     private OrderRepositoryPort orderRepository;
 
     @Mock
-    private ProductoRepositoryPort productoRepository;
+    private MarketplaceUseCase marketplace;
 
     @Mock
     private UserRepositoryPort userRepository;
+    @Mock private InventarioOrdenPort inventario;
 
     @InjectMocks
     private OrderService orderService;
@@ -54,10 +55,11 @@ class OrderServiceTest {
     @Test
     void createPqrForcesZeroTotalsAndPqrFlag() {
         when(userRepository.existsByUsername("juan")).thenReturn(true);
+        when(marketplace.resolverPresentacion("presentacion")).thenReturn(activeProduct());
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Order created = orderService.createPqr("juan",
-                List.of(new OrderUseCase.PqrItemRequest(null, "Reposición", 1)), null, "motivo");
+                List.of(new OrderUseCase.PqrItemRequest("presentacion", "Nombre no confiable", 1)), null, "motivo");
 
         assertThat(created.isPqr()).isTrue();
         assertThat(created.getStatus()).isEqualTo(OrderStatus.CREADA);
@@ -65,7 +67,12 @@ class OrderServiceTest {
         assertThat(created.getSubtotal()).isEqualByComparingTo("0");
         assertThat(created.getTaxAmount()).isEqualByComparingTo("0");
         assertThat(created.getItems().get(0).getUnitPrice()).isEqualByComparingTo("0");
+        assertThat(created.getItems().get(0).getName()).isEqualTo("Tangerine");
+        assertThat(created.getItems().get(0).getTrazabilidad().costoPresentacion())
+                .isEqualByComparingTo("10000");
         assertThat(created.getNotes()).isEqualTo("motivo");
+        assertThat(created.isInventoryDeducted()).isTrue();
+        verify(inventario).descontar(created.getItems());
     }
 
     @Test
@@ -111,6 +118,8 @@ class OrderServiceTest {
 
         assertThat(paid.isCashOnDelivery()).isTrue();
         assertThat(paid.getPaidAt()).isNotNull();
+        assertThat(paid.isInventoryDeducted()).isTrue();
+        verify(inventario).descontar(paid.getItems());
     }
 
     @Test
@@ -214,12 +223,12 @@ class OrderServiceTest {
     }
 
     @Test
-    void createUsesCatalogPriceAndBuildsOrderForAuthenticatedUser() {
-        when(productoRepository.findById(12L)).thenReturn(Optional.of(activeProduct()));
+    void createUsesMarketplacePriceAndSnapshotForAuthenticatedUser() {
+        when(marketplace.resolverPresentacion("presentacion")).thenReturn(activeProduct());
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Order created = orderService.create("juan",
-                List.of(new OrderUseCase.OrderItemRequest("12", 2,
+                List.of(new OrderUseCase.OrderItemRequest("presentacion", 2,
                         new BigDecimal("15000.00"), new BigDecimal("30000.00"))),
                 new OrderUseCase.OrderDeliveryRequest("Juan", "Calle 1", "", "3001234567"),
                 new OrderUseCase.OrderAmountsRequest(
@@ -231,16 +240,18 @@ class OrderServiceTest {
         assertThat(created.getTaxAmount()).isEqualByComparingTo("4800.00");
         assertThat(created.getTotal()).isEqualByComparingTo("34800.00");
         assertThat(created.getItems()).containsExactly(OrderItem.builder()
-                .productId("12").name("Producto real").quantity(2)
-                .unitPrice(new BigDecimal("15000.00")).lineTotal(new BigDecimal("30000.00")).build());
+                .productId("presentacion").name("Tangerine").quantity(2)
+                .unitPrice(new BigDecimal("15000.00")).lineTotal(new BigDecimal("30000.00"))
+                .trazabilidad(activeProduct().trazabilidad()).build());
         assertThat(created.getDelivery().getRecipientName()).isEqualTo("Juan");
         assertThat(created.getCreatedAt()).isNotNull();
         verify(orderRepository).save(created);
+        verifyNoInteractions(inventario);
     }
 
     @Test
     void createRejectsStaleClientPrice() {
-        when(productoRepository.findById(12L)).thenReturn(Optional.of(activeProduct()));
+        when(marketplace.resolverPresentacion("presentacion")).thenReturn(activeProduct());
 
         assertThatThrownBy(this::createWithStalePrice)
                 .isInstanceOf(OrderProductException.class)
@@ -251,11 +262,12 @@ class OrderServiceTest {
 
     @Test
     void createRejectsMissingOrInactiveProduct() {
-        when(productoRepository.findById(12L)).thenReturn(Optional.empty());
+        when(marketplace.resolverPresentacion("presentacion"))
+                .thenThrow(new ResourceNotFoundException("Presentacion no encontrada o inactiva"));
 
         assertThatThrownBy(this::createWithMissingProduct)
-                .isInstanceOf(OrderProductException.class)
-                .hasMessageContaining("no existe o no está activo");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("no encontrada o inactiva");
     }
 
     @Test
@@ -293,9 +305,47 @@ class OrderServiceTest {
                 .hasMessageContaining("No se permite");
     }
 
-    private Producto activeProduct() {
-        return Producto.builder().id("12").name("Producto real").status("active")
-                .price(Price.builder().current(new BigDecimal("15000.00")).build()).build();
+    @Test
+    void cancelarDevuelveStockUnaSolaVezYLaSegundaSolicitudNoTocaInventario() {
+        var order = order("juan", OrderStatus.PAGADA);
+        order.setInventoryDeducted(true);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var cancelada = orderService.changeStatus(101L, OrderStatus.CANCELADA, "admin");
+
+        assertThat(cancelada.isInventoryDeducted()).isFalse();
+        verify(inventario).restituir(order.getItems());
+        assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.CANCELADA, "admin"))
+                .isInstanceOf(OrderConflictException.class);
+        org.mockito.Mockito.verifyNoMoreInteractions(inventario);
+    }
+
+    @Test
+    void cancelarCreadaNoRestituyeStockQueNuncaSeDesconto() {
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order("juan", OrderStatus.CREADA)));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        orderService.changeStatus(101L, OrderStatus.CANCELADA, "admin");
+        verifyNoInteractions(inventario);
+    }
+
+    @Test
+    void reintentarPagadaOAvanzarAEmpacadaNoDescuentaDosVeces() {
+        var order = order("juan", OrderStatus.CREADA);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        orderService.changeStatus(101L, OrderStatus.PAGADA, "admin");
+        assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.PAGADA, "admin"))
+                .isInstanceOf(OrderConflictException.class);
+        orderService.changeStatus(101L, OrderStatus.EMPACADA, "admin");
+        verify(inventario).descontar(order.getItems());
+        org.mockito.Mockito.verifyNoMoreInteractions(inventario);
+    }
+
+    private MarketplaceUseCase.PresentacionVenta activeProduct() {
+        return new MarketplaceUseCase.PresentacionVenta("Tangerine", new BigDecimal("15000.00"),
+                new TrazabilidadPresentacion("proveedor", "lote", "contenedor", "cepa", "presentacion",
+                        BigDecimal.TEN, "GRAMOS", new BigDecimal("1000"), new BigDecimal("10000")));
     }
 
     private OrderDelivery deliveryDomain() {
@@ -309,7 +359,7 @@ class OrderServiceTest {
 
     private Order createWithStalePrice() {
         return orderService.create("juan",
-                List.of(new OrderUseCase.OrderItemRequest("12", 2,
+                List.of(new OrderUseCase.OrderItemRequest("presentacion", 2,
                         new BigDecimal("14000.00"), new BigDecimal("28000.00"))),
                 delivery(), new OrderUseCase.OrderAmountsRequest(
                         new BigDecimal("28000.00"), new BigDecimal("4480.00"), new BigDecimal("32480.00")));
@@ -317,7 +367,7 @@ class OrderServiceTest {
 
     private Order createWithMissingProduct() {
         return orderService.create("juan",
-                List.of(new OrderUseCase.OrderItemRequest("12", 1,
+                List.of(new OrderUseCase.OrderItemRequest("presentacion", 1,
                         new BigDecimal("15000.00"), new BigDecimal("15000.00"))),
                 delivery(), new OrderUseCase.OrderAmountsRequest(
                         new BigDecimal("15000.00"), new BigDecimal("2400.00"), new BigDecimal("17400.00")));

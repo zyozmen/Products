@@ -39,7 +39,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest({CategoryController.class, ImageController.class, ProductoController.class})
+@WebMvcTest({CategoryController.class, ImageController.class, ProductoController.class, CepaController.class})
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class, CategoryWebMapper.class,
         ProductoWebMapper.class, ImageUploadService.class})
 class CategoryApiTest {
@@ -47,12 +47,62 @@ class CategoryApiTest {
     private MockMvc mvc;
     @MockBean
     private CategoryUseCase categories;
+    @MockBean private com.zyozmen.products.domain.port.in.CepaUseCase cepas;
     @MockBean
     private ProductoUseCase products;
     @MockBean
     private JwtService jwtService;
     @MockBean
     private RevokedTokenRepositoryPort revokedTokens;
+
+    @Test
+    void cepaUploadUsesSharedValidatorAndPersistsBase64WithStringIdentity() throws Exception {
+        var main = new MockMultipartFile("fotoPrincipal", "cepa.webp", "image/webp", new byte[]{1, 2, 3});
+        var foto = new Imagen("cepa.webp", "webp", "AQID");
+        when(cepas.guardarFotografia("cepa-id", foto)).thenReturn(
+                new com.zyozmen.products.domain.model.Cepa("cepa-id", "Tangerine", foto, null, null, 1L));
+        mvc.perform(multipart("/api/v1/images/cepa-id").file(main).param("target", "CEPA")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.fotografia.filepart").value("AQID"));
+        mvc.perform(multipart("/api/v1/images/cepa-id").file(main).param("target", "CEPA"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(multipart("/api/v1/images/cepa-id").file(main).param("target", "CEPA")
+                        .with(user("client").roles("CLIENTE"))).andExpect(status().isForbidden());
+        mvc.perform(multipart("/api/v1/images/cepa-id").param("target", "CEPA")
+                        .with(user("admin").roles("ADMIN"))).andExpect(status().isBadRequest());
+        verifyNoInteractions(categories, products);
+    }
+
+    @Test
+    void cepasAreAdminOnlyAndSupportCreateUpdateAndList() throws Exception {
+        var cepa = new com.zyozmen.products.domain.model.Cepa("cepa-id", "Tangerine");
+        when(cepas.crear("Tangerine", null)).thenReturn(cepa);
+        when(cepas.actualizar("cepa-id", "Tangerine", 1L, null)).thenReturn(cepa);
+        when(cepas.listar(0, 20)).thenReturn(new PageImpl<>(List.of(cepa)));
+        mvc.perform(post("/api/cepas").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Tangerine\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value("cepa-id"));
+        mvc.perform(put("/api/cepas/cepa-id").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Tangerine\",\"version\":1}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/cepas").with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk()).andExpect(header().string("X-Total-Count", "1"));
+        mvc.perform(get("/api/cepas")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/cepas").with(user("client").roles("CLIENTE"))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void cepaRecibeCategoriasYRechazaIdsInvalidos() throws Exception {
+        var cepa = new com.zyozmen.products.domain.model.Cepa("cepa-id", "Tangerine",
+                null, null, null, 1L, List.of(7L));
+        when(cepas.crear("Tangerine", List.of(7L))).thenReturn(cepa);
+        mvc.perform(post("/api/cepas").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Tangerine\",\"categoryIds\":[7]}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.categoryIds[0]").value(7));
+        mvc.perform(put("/api/cepas/cepa-id").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Tangerine\",\"version\":1,\"categoryIds\":[-1]}"))
+                .andExpect(status().isBadRequest());
+    }
 
     @Test
     void listAndDetailArePublicAndDoNotRequireProducts() throws Exception {
@@ -189,6 +239,14 @@ class CategoryApiTest {
         mvc.perform(multipart("/api/v1/images/7").param("target", "UNKNOWN")
                         .with(user("admin").roles("ADMIN"))).andExpect(status().isBadRequest());
         verifyNoInteractions(categories, products);
+    }
+
+    @Test
+    void legacyProductImageRouteRejectsCepaInsteadOfOverwritingProduct() throws Exception {
+        var main = new MockMultipartFile("fotoPrincipal", "cepa.png", "image/png", new byte[]{1});
+        mvc.perform(multipart("/api/productos/7/images").file(main).param("target", "CEPA")
+                        .with(user("admin").roles("ADMIN"))).andExpect(status().isBadRequest());
+        verifyNoInteractions(categories, products, cepas);
     }
 
     @ParameterizedTest

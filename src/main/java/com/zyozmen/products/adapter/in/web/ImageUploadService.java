@@ -14,7 +14,7 @@ import java.util.Objects;
 
 @Service
 public class ImageUploadService {
-    public enum Target { PRODUCT, CATEGORY }
+    public enum Target { PRODUCT, CATEGORY, CEPA }
 
     public static final long MAX_SIZE = 2L * 1024 * 1024;
     private static final Map<String, String> CONTENT_TYPES = Map.of(
@@ -24,10 +24,11 @@ public class ImageUploadService {
         if (target == null) {
             throw new IllegalArgumentException("El destino de las imagenes es obligatorio");
         }
-        if (target == Target.CATEGORY) {
+        if (target == Target.CATEGORY || target == Target.CEPA) {
             Imagen image = convert(main);
             if (image == null) {
-                throw new IllegalArgumentException("La foto principal es obligatoria para categorias");
+                throw new IllegalArgumentException("La foto principal es obligatoria para "
+                        + (target == Target.CEPA ? "cepas" : "categorias"));
             }
             return Images.builder().fotoPrincipal(image).fotosSecundarias(List.of()).build();
         }

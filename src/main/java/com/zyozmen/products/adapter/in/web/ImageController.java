@@ -4,6 +4,7 @@ import com.zyozmen.products.adapter.in.web.mapper.CategoryWebMapper;
 import com.zyozmen.products.adapter.in.web.mapper.ProductoWebMapper;
 import com.zyozmen.products.domain.model.Images;
 import com.zyozmen.products.domain.port.in.CategoryUseCase;
+import com.zyozmen.products.domain.port.in.CepaUseCase;
 import com.zyozmen.products.domain.port.in.ProductoUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -22,17 +23,27 @@ public class ImageController {
     private final CategoryUseCase categoryUseCase;
     private final ProductoWebMapper productoMapper;
     private final CategoryWebMapper categoryMapper;
+    private final CepaUseCase cepaUseCase;
 
     @PostMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> upload(@PathVariable Long id,
+    public ResponseEntity<?> upload(@PathVariable String id,
             @RequestParam ImageUploadService.Target target,
             @RequestParam(required = false) MultipartFile fotoPrincipal,
             @RequestParam(required = false) List<MultipartFile> fotosSecundarias) {
         Images images = imageUploadService.prepare(target, fotoPrincipal, fotosSecundarias);
+        if (target == ImageUploadService.Target.CEPA) {
+            return ResponseEntity.ok(cepaUseCase.guardarFotografia(id, images.getFotoPrincipal()));
+        }
+        long numericId;
+        try {
+            numericId = Long.parseLong(id);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("El ID de producto o categoria debe ser numerico", exception);
+        }
         if (target == ImageUploadService.Target.CATEGORY) {
-            return ResponseEntity.ok(categoryMapper.toResponse(categoryUseCase.saveImage(id, images.getFotoPrincipal())));
+            return ResponseEntity.ok(categoryMapper.toResponse(categoryUseCase.saveImage(numericId, images.getFotoPrincipal())));
         }
         return ResponseEntity.ok(productoMapper.toResponseDTO(
-                productoUseCase.guardarImagenes(id, images.getFotoPrincipal(), images.getFotosSecundarias())));
+                productoUseCase.guardarImagenes(numericId, images.getFotoPrincipal(), images.getFotosSecundarias())));
     }
 }

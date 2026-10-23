@@ -9,16 +9,17 @@ import com.zyozmen.products.domain.model.OrderDelivery;
 import com.zyozmen.products.domain.model.OrderItem;
 import com.zyozmen.products.domain.model.OrderStatus;
 import com.zyozmen.products.domain.model.OrderStatusChange;
-import com.zyozmen.products.domain.model.Producto;
 import com.zyozmen.products.domain.port.in.OrderUseCase;
 import com.zyozmen.products.domain.port.out.OrderRepositoryPort;
-import com.zyozmen.products.domain.port.out.ProductoRepositoryPort;
+import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
+import com.zyozmen.products.domain.port.out.InventarioOrdenPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -40,8 +41,9 @@ public class OrderService implements OrderUseCase {
     private static final String ORDER_NOT_FOUND = "Orden no encontrada";
 
     private final OrderRepositoryPort orderRepository;
-    private final ProductoRepositoryPort productoRepository;
+    private final MarketplaceUseCase marketplace;
     private final UserRepositoryPort userRepository;
+    private final InventarioOrdenPort inventario;
 
     // Zona horaria del negocio usada para delimitar los días del reporte.
     @Value("${app.report.timezone:America/Bogota}")
@@ -63,32 +65,19 @@ public class OrderService implements OrderUseCase {
             if (requestedItem == null || requestedItem.quantity() <= 0) {
                 throw new IllegalArgumentException("La cantidad de cada producto debe ser mayor que cero");
             }
-            long productId;
-            try {
-                productId = Long.parseLong(requestedItem.productId());
-            } catch (NumberFormatException exception) {
-                throw new OrderProductException("El producto indicado no existe");
-            }
-
-            Producto product = productoRepository.findById(productId)
-                    .filter(value -> "active".equalsIgnoreCase(value.getStatus()))
-                    .orElseThrow(() -> new OrderProductException(
-                            "El producto " + requestedItem.productId() + " no existe o no está activo"));
-            if (product.getPrice() == null || product.getPrice().getCurrent() == null) {
-                throw new OrderProductException("El producto " + requestedItem.productId() + " no tiene precio válido");
-            }
-
-            BigDecimal unitPrice = product.getPrice().getCurrent().setScale(2, RoundingMode.HALF_UP);
+            var product = marketplace.resolverPresentacion(requestedItem.productId());
+            BigDecimal unitPrice = product.precioVenta().setScale(2, RoundingMode.HALF_UP);
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(requestedItem.quantity()))
                     .setScale(2, RoundingMode.HALF_UP);
             requireSameAmount(requestedItem.unitPrice(), unitPrice, "El precio del producto cambió");
             requireSameAmount(requestedItem.lineTotal(), lineTotal, "El total del producto no coincide");
             items.add(OrderItem.builder()
-                    .productId(product.getId())
-                    .name(product.getName())
+                    .productId(product.trazabilidad().presentacionId())
+                    .name(product.nombre())
                     .quantity(requestedItem.quantity())
                     .unitPrice(unitPrice)
                     .lineTotal(lineTotal)
+                    .trazabilidad(product.trazabilidad())
                     .build());
             subtotal = subtotal.add(lineTotal);
         }
@@ -127,6 +116,7 @@ public class OrderService implements OrderUseCase {
     }
 
     @Override
+    @Transactional
     public Order createPqr(String username, List<PqrItemRequest> requestedItems, OrderDeliveryRequest delivery,
                            String notes) {
         if (username == null || !userRepository.existsByUsername(username)) {
@@ -140,21 +130,25 @@ public class OrderService implements OrderUseCase {
             if (requested == null || requested.quantity() <= 0) {
                 throw new IllegalArgumentException("La cantidad de cada producto debe ser mayor que cero");
             }
+            var product = marketplace.resolverPresentacion(requested.productId());
             items.add(OrderItem.builder()
-                    .productId(requested.productId())
-                    .name(requested.name())
+                    .productId(product.trazabilidad().presentacionId())
+                    .name(product.nombre())
                     .quantity(requested.quantity())
                     .unitPrice(ZERO)
                     .lineTotal(ZERO)
+                    .trazabilidad(product.trazabilidad())
                     .build());
         }
         OrderDeliveryRequest safeDelivery = delivery == null
                 ? new OrderDeliveryRequest("", "", "", "") : delivery;
+        inventario.descontar(items);
         Instant now = Instant.now();
         return orderRepository.save(Order.builder()
                 .username(username)
                 .status(OrderStatus.CREADA)
                 .pqr(true)
+                .inventoryDeducted(true)
                 .notes(notes)
                 .subtotal(ZERO)
                 .taxAmount(ZERO)
@@ -196,6 +190,13 @@ public class OrderService implements OrderUseCase {
     }
 
     @Override
+    @Transactional
+    public Order changeStatus(Long id, OrderStatus status, String changedBy) {
+        return changeStatus(id, status, changedBy, StatusChangeDetails.NONE);
+    }
+
+    @Override
+    @Transactional
     public Order changeStatus(Long id, OrderStatus status, String changedBy, StatusChangeDetails details) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ORDER_NOT_FOUND));
@@ -207,6 +208,10 @@ public class OrderService implements OrderUseCase {
         Instant now = Instant.now();
         switch (status) {
             case PAGADA -> {
+                if (!order.isInventoryDeducted()) {
+                    inventario.descontar(order.getItems());
+                    order.setInventoryDeducted(true);
+                }
                 order.setCashOnDelivery(Boolean.TRUE.equals(safeDetails.cashOnDelivery()));
                 order.setPaidAt(now);
             }
@@ -215,7 +220,13 @@ public class OrderService implements OrderUseCase {
                 applyDeliveryPayment(order, safeDetails);
                 order.setDeliveredAt(now);
             }
-            case CANCELADA -> order.setCancelledAt(now);
+            case CANCELADA -> {
+                if (order.isInventoryDeducted()) {
+                    inventario.restituir(order.getItems());
+                    order.setInventoryDeducted(false);
+                }
+                order.setCancelledAt(now);
+            }
             default -> { }
         }
         List<OrderStatusChange> history = new ArrayList<>(order.getStatusHistory());

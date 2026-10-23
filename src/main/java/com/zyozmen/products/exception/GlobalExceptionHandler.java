@@ -1,6 +1,7 @@
 package com.zyozmen.products.exception;
 
 import com.zyozmen.products.domain.exception.BusinessRuleException;
+import com.zyozmen.products.domain.exception.CapacidadExcedidaException;
 import com.zyozmen.products.domain.exception.InvalidCredentialsException;
 import com.zyozmen.products.domain.exception.MainAdminProtectedException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
@@ -15,11 +16,13 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
@@ -32,6 +35,33 @@ import java.util.List;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(ErrorResponse.builder().status(400).error("Bad Request")
+                .message("El cuerpo JSON es invalido o contiene tipos de datos incorrectos")
+                .path(request.getRequestURI()).timestamp(LocalDateTime.now(ZoneId.of("UTC"))).build());
+    }
+
+    @ExceptionHandler(CapacidadExcedidaException.class)
+    public ResponseEntity<ErrorResponse> handleCapacidadExcedida(
+            CapacidadExcedidaException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(ErrorResponse.builder().status(400).error("Bad Request")
+                .message(ex.getMessage()).path(request.getRequestURI())
+                .timestamp(LocalDateTime.now(ZoneId.of("UTC"))).build());
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleMethodValidation(
+            HandlerMethodValidationException ex, HttpServletRequest request) {
+        var errors = ex.getAllValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream())
+                .map(org.springframework.context.MessageSourceResolvable::getDefaultMessage).toList();
+        return ResponseEntity.badRequest().body(ErrorResponse.builder().status(400).error("Bad Request")
+                .message("Error de validación en los datos de entrada").validationErrors(errors)
+                .path(request.getRequestURI()).timestamp(LocalDateTime.now(ZoneId.of("UTC"))).build());
+    }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxUploadSizeException(

@@ -22,6 +22,8 @@ public class SequenceGeneratorService {
     public static final String PRODUCTO_SEQUENCE = "productos_sequence";
     public static final String ORDER_SEQUENCE = "orders_sequence";
     public static final String CATEGORY_SEQUENCE = "categories_sequence";
+    public static final String LOTE_SEQUENCE = "lotes_sequence";
+    public static final String CONTENEDOR_SEQUENCE = "contenedores_sequence";
 
     private final MongoOperations mongoOperations;
 

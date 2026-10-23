@@ -1,6 +1,7 @@
 package com.zyozmen.products.adapter.in.web.dto;
 
 import com.zyozmen.products.domain.model.Lote;
+import com.zyozmen.products.domain.model.PresentacionInventario;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -14,20 +15,29 @@ public record LoteResponseDTO(
         BigDecimal montoPagadoLote,
         BigDecimal saldoPendienteLote,
         String estadoPago,
-        List<Presentacion> presentaciones,
-        Instant fechaIngreso) {
+        String estado,
+        List<Contenedor> contenedores,
+        Instant fechaIngreso,
+        BigDecimal costoTotalEmpaquetado) {
 
-    public record Presentacion(String presentacionId, int cantidadUnidades, BigDecimal costoUnitario,
-                               BigDecimal subtotal) {
+    public record Contenedor(String id, String tipoCepa, String unidadBase, String presentacionId,
+                             BigDecimal capacidadUnidadesBase, BigDecimal cantidadDisponible,
+                             BigDecimal costoBasePorUnidad, BigDecimal subtotal, String estado,
+                             String codigoContenedor, BigDecimal precioBaseUnidad,
+                             List<PresentacionInventario> presentaciones, String cepaId) {
     }
 
     public static LoteResponseDTO from(Lote l) {
         return new LoteResponseDTO(l.getId(), l.getProveedorId(), l.getCodigoLote(), l.getCostoTotalLote(),
                 l.getMontoPagadoLote(), l.getSaldoPendienteLote(), l.getEstadoPago().name(),
-                l.getPresentaciones().stream()
-                        .map(p -> new Presentacion(p.getPresentacionId(), p.getCantidadUnidades(),
-                                p.getCostoUnitario(), p.getSubtotal()))
+                l.getEstado(),
+                l.getContenedores().stream()
+                        .map(c -> new Contenedor(c.getId(), c.getTipoCepa(), c.getUnidadBase(), c.getPresentacionId(),
+                                c.getCapacidadUnidadesBase(), c.getCantidadDisponible(),
+                                c.getCostoBasePorUnidad(), c.getSubtotal(), c.getEstado(),
+                                c.getCodigoContenedor(), c.getPrecioBaseUnidad(), c.getPresentaciones(),
+                                c.getCepaId()))
                         .toList(),
-                l.getFechaIngreso());
+                l.getFechaIngreso(), l.getCostoTotalEmpaquetado());
     }
 }
