@@ -20,7 +20,7 @@ public class CepaMongoAdapter implements CepaRepositoryPort {
     @Override
     public Cepa save(Cepa c) {
         return toDomain(repository.save(new CepaDocument(c.id(), c.nombre(), Cepa.normalizar(c.nombre()),
-                ImagenMongoMapper.toDocument(c.fotografia()), c.createdAt(), c.updatedAt(), c.version())));
+                ImagenMongoMapper.toDocument(c.fotografia()), c.createdAt(), c.updatedAt(), c.version(), c.categoryIds())));
     }
 
     @Override
@@ -38,6 +38,6 @@ public class CepaMongoAdapter implements CepaRepositoryPort {
 
     private Cepa toDomain(CepaDocument c) {
         return new Cepa(c.id(), c.nombre(), ImagenMongoMapper.toDomain(c.fotografia()),
-                c.createdAt(), c.updatedAt(), c.version());
+                c.createdAt(), c.updatedAt(), c.version(), c.categoryIds());
     }
 }

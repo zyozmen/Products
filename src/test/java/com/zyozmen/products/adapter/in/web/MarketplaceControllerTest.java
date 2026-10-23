@@ -3,6 +3,7 @@ package com.zyozmen.products.adapter.in.web;
 import com.zyozmen.products.config.SecurityConfig;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
+import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 import com.zyozmen.products.domain.port.out.RevokedTokenRepositoryPort;
 import com.zyozmen.products.security.JwtAuthenticationFilter;
 import com.zyozmen.products.security.JwtService;
@@ -34,7 +35,7 @@ class MarketplaceControllerTest {
                 BigDecimal.TEN, "GRAMOS", new BigDecimal("15000"), 5, null);
         var cepa = new MarketplaceUseCase.ProductoCatalogo("cepa", "Tangerine", null,
                 new BigDecimal("15000"), List.of(presentacion));
-        when(marketplace.listar("10gr", 1, 2)).thenReturn(new org.springframework.data.domain.PageImpl<>(
+        when(marketplace.listar(new MarketplaceCatalogFilter("10gr", null, null, null), 1, 2)).thenReturn(new org.springframework.data.domain.PageImpl<>(
                 List.of(cepa), org.springframework.data.domain.PageRequest.of(1, 2), 5));
         mvc.perform(get("/api/marketplace/presentaciones").param("buscar", "10gr").param("page", "1").param("size", "2"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(5))
@@ -43,6 +44,29 @@ class MarketplaceControllerTest {
                 .andExpect(jsonPath("$.content[0].precioDesde").value(15000))
                 .andExpect(jsonPath("$.content[0].presentaciones[0].presentacionId").value("p1"))
                 .andExpect(jsonPath("$..costoBasePorUnidad").doesNotExist());
+    }
+
+    @Test
+    void filtrosDeCategoriaYPrecioSeRecibenSinAutenticacion() throws Exception {
+        var filtro = new MarketplaceCatalogFilter("", List.of(1L, 2L), new BigDecimal("50000"), new BigDecimal("100000"));
+        when(marketplace.listar(filtro, 0, 20)).thenReturn(org.springframework.data.domain.Page.empty());
+        mvc.perform(get("/api/marketplace/presentaciones").param("categoryIds", "1", "2")
+                        .param("minPrice", "50000").param("maxPrice", "100000"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        org.mockito.Mockito.verify(marketplace).listar(filtro, 0, 20);
+    }
+
+    @Test
+    void rechazaFiltrosInvalidosAntesDeConsultar() throws Exception {
+        for (String[] parametros : List.of(
+                new String[]{"minPrice", "-1"}, new String[]{"maxPrice", "1.001"},
+                new String[]{"categoryIds", "0"}, new String[]{"categoryIds", "abc"})) {
+            mvc.perform(get("/api/marketplace/presentaciones").param(parametros[0], parametros[1]))
+                    .andExpect(status().isBadRequest());
+        }
+        mvc.perform(get("/api/marketplace/presentaciones").param("minPrice", "20").param("maxPrice", "10"))
+                .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(marketplace);
     }
 
     @Test

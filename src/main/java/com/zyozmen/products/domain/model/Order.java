@@ -19,6 +19,7 @@ public class Order {
     private OrderStatus status;
     private boolean pqr;
     private boolean cashOnDelivery;
+    private boolean inventoryDeducted;
     private BigDecimal cashAmount;
     private BigDecimal cardAmount;
     private String notes;

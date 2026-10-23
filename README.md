@@ -120,7 +120,7 @@ $env:MONGO_DATABASE="GrowShop"
 
 Sin variables definidas, la aplicación usa una instancia local en `localhost:27017`.
 
-> **Transacciones:** el módulo de proveedores usa `@Transactional` con `MongoTransactionManager` (definido en `MongoConfig`), que exige un **replica set** (MongoDB Atlas lo cumple). Un MongoDB local *standalone* fallará en esas operaciones; arránquelo como replica set de un solo nodo.
+> **Transacciones:** proveedores y los movimientos de inventario de órdenes usan `@Transactional` con `MongoTransactionManager` (definido en `MongoConfig`), que exige un **replica set** (MongoDB Atlas lo cumple). Un MongoDB local *standalone* fallará en esas operaciones; arránquelo como replica set de un solo nodo.
 
 ## 6. Construcción y pruebas
 Requisitos: JDK 21 y una instancia de MongoDB accesible (Maven se ejecuta con el wrapper `mvnw`).
@@ -272,12 +272,18 @@ historica del contenedor o de marketplace. Las respuestas administrativas de
 lotes exponen `cepaId` en cada contenedor.
 
 **Administracion (ADMIN):**
-- `POST /api/cepas` con `{"nombre":"Tangerine"}` devuelve `201`.
+- `POST /api/cepas` con `{"nombre":"Tangerine","categoryIds":[7,8]}` devuelve `201`.
+  `categoryIds` es opcional: hasta 100 IDs numericos positivos de categorias existentes.
+  Se guardan como referencias en la cepa y son compartidas por todas sus presentaciones.
 - `GET /api/cepas?page=0&size=20` devuelve un arreglo y `X-Total-Count`;
   `GET /api/cepas/{id}` devuelve la entidad, incluida su version.
 - `PUT /api/cepas/{id}` con `{"nombre":"Nuevo nombre","version":0}` renombra
   conservando el ID y la fotografia. Version desactualizada y nombre duplicado
   normalizado: `409`; cepa inexistente: `404`. No se elimina una cepa referenciada.
+  Puede incluir `categoryIds` para reemplazar las categorias; `[]` las elimina y
+  omitirlo conserva las anteriores. IDs invalidos o categorias inexistentes: `400`.
+  Las respuestas administrativas incluyen `categoryIds`; documentos anteriores
+  sin ese campo se leen como `[]`. Renombrar o cargar fotos conserva la asignacion.
 - `POST /api/v1/images/{cepaId}?target=CEPA` acepta multipart `fotoPrincipal`.
   Reutiliza el servicio de imagenes: PNG, JPG/JPEG o WebP hasta 2 MiB, con MIME
   correspondiente. Almacena Base64 en la entidad cepa e ignora secundarias.
@@ -316,6 +322,15 @@ lotes exponen `cepaId` en cada contenedor.
   100 caracteres: `400`. Sin coincidencias o fuera de rango, `content: []`.
 - Incluye solo presentaciones `ACTIVO` con stock mayor que cero; excluye cepas
   sin opciones disponibles. `precioDesde` es el menor precio de esas opciones.
+- Filtros opcionales: `categoryIds=7&categoryIds=8` (coincide con cualquiera),
+  `minPrice=50000` y `maxPrice=100000`. Se combinan con la busqueda mediante AND,
+  antes de contar y paginar dentro de MongoDB. Las cepas sin categorias siguen
+  visibles sin este filtro, pero no coinciden con una categoria seleccionada.
+- El rango de precio es inclusivo y ambos limites deben cumplirse en una misma
+  presentacion disponible. No recorta opciones ni recalcula `precioDesde`: una
+  cepa puede coincidir por una opcion aunque su precio minimo quede fuera del rango.
+  Los precios deben ser no negativos, hasta 15 enteros y 2 decimales, y
+  `minPrice <= maxPrice`; hasta 100 IDs de categoria positivos. Valores invalidos: `400`.
 - Busca coincidencia parcial literal sin distinguir mayusculas por nombre de
   cepa o presentacion. Tambien interpreta contenido y unidad: `10gr`, `10 g`,
   `10 gramos`, `10ml` o `1 unidad`, reutilizando los alias de unidades existentes.
@@ -349,9 +364,49 @@ Sin esa variable se omiten; el resto de las pruebas no requiere MongoDB.
 
 El plan completo y el control de avance están en
 [HU-05: plan de integración](docs/hu05-plan-integracion.md). T1 incorpora
-trazabilidad y detalle. El descuento de inventario, los nuevos estados de PQR,
-la acumulación diaria y el reporte financiero pertenecen a T2 y siguientes:
-no deben considerarse implementados por esta entrega.
+trazabilidad y detalle. T2 integra los movimientos de inventario descritos abajo.
+Los nuevos estados de PQR, la acumulación diaria y el reporte financiero
+pertenecen a T3 y siguientes: no deben considerarse implementados por esta entrega.
+
+### Inventario de ordenes (HU-05/T2)
+
+- Crear una venta en `CREADA` no reserva ni descuenta existencias. Al pasar a
+  `PAGADA` se descuenta la cantidad de cada presentacion, tambien en contra
+  entrega. `EMPACADA` y `ENTREGADA` no vuelven a descontar.
+- Crear una PQR descuenta inmediatamente inventario y mantiene sus valores
+  comerciales en cero. En esta etapa conserva el estado inicial `CREADA`;
+  crearla directamente en `PAGADA` y prohibir cancelar una venta pagada son
+  cambios de T3, no de T2.
+- Una cancelacion permitida por la matriz actual restituye solo el inventario
+  previamente descontado. Repetir un cambio de estado ya aplicado devuelve
+  `409` y no modifica existencias.
+- El descuento usa la trazabilidad interna de cada item: proveedor, lote,
+  contenedor, cepa y presentacion. Agrupa items repetidos de la misma
+  presentacion; no comparte existencias entre lotes o presentaciones.
+- Solo cambia `stockDisponible` de las presentaciones empaquetadas y de
+  `productos_marketplace`. No cambia capacidad o cantidad base del contenedor,
+  unidades creadas, costos, deuda ni pagos al proveedor. Un saldo del proveedor
+  en cero no impide descontar stock.
+- El lote, las proyecciones de marketplace y la orden se guardan en una unica
+  transaccion MongoDB. Stock insuficiente, presentacion inactiva o proyeccion
+  desincronizada devuelven `409` y revierten toda la operacion. Los conflictos
+  concurrentes tambien devuelven `409`: consultar la orden antes de reintentar.
+  No hay reintentos automaticos ni clave de idempotencia para crear PQR:
+  dos POST validos representan dos PQR distintas.
+- `inventory_deducted` es una marca interna persistida en la orden, no un campo
+  de la API. Las ordenes anteriores sin esta marca no mueven stock
+  retroactivamente al empacar, entregar o cancelar. Intentar pagar una orden
+  sin trazabilidad valida devuelve `422`; no se infiere procedencia historica.
+
+Las pruebas `InventarioOrdenIntegrationTest` usan `HU05_TEST_MONGO_URI` con un
+**replica set aislado de pruebas**. Crean bases `hu05_t2_test_<UUID>` y eliminan
+solo esas bases al terminar. Cubren reversion de varios lotes, fallo al guardar
+una PQR y competencia real por existencias o por la misma orden. Sin la
+variable se omiten. Por ejemplo, tras configurar la URI:
+
+```powershell
+.\mvnw.cmd "-Dtest=InventarioOrdenIntegrationTest,InventarioOrdenServiceTest,OrderServiceTest" test
+```
 
 ### Proveedores, recepción de lotes y liquidación (HU-01 / HU-02)
 Colecciones MongoDB: `proveedores`, `lotes` y `transacciones_proveedor`. Los montos son `BigDecimal` con 2 decimales y se guardan como `Decimal128`. Los contenedores se guardan dentro del lote; el historial de movimientos se guarda por separado y solo admite inserciones desde el puerto de persistencia.

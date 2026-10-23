@@ -7,6 +7,7 @@ import com.zyozmen.products.adapter.out.mongodb.document.ImagenDocument;
 import com.zyozmen.products.adapter.out.mongodb.repository.CepaMongoRepository;
 import com.zyozmen.products.application.service.CepaService;
 import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 import org.bson.Document;
 import org.bson.types.Decimal128;
 import org.bson.types.ObjectId;
@@ -57,8 +58,8 @@ class MarketplaceCatalogoIntegrationTest {
         new MarketplaceIndexInitializer(template).run(null);
         query = new MarketplaceCatalogoQuery(template);
         template.insert(new CepaDocument("a", "Tangerine", "tangerine",
-                new ImagenDocument("cepa.webp", "webp", "AQID"), null, null, null));
-        template.insert(new CepaDocument("b", "Otra", "otra", null, null, null, null));
+                new ImagenDocument("cepa.webp", "webp", "AQID"), null, null, null, List.of(1L)));
+        template.insert(new CepaDocument("b", "Otra", "otra", null, null, null, null, List.of(2L)));
         presentacion("a", "Bolsa chica", 5, 8000, 12, "ACTIVO");
         presentacion("a", "Bolsa grande", 10, 15000, 7, "ACTIVO");
         presentacion("a", "Agotada", 1, 1, 0, "ACTIVO");
@@ -119,15 +120,50 @@ class MarketplaceCatalogoIntegrationTest {
     @Test
     void renombradoPersisteIdentidadYBusquedaUsaNombreActual() {
         var repository = new MongoRepositoryFactory(template).getRepository(CepaMongoRepository.class);
-        var service = new CepaService(new CepaMongoAdapter(repository));
+        var service = new CepaService(new CepaMongoAdapter(repository),
+                org.mockito.Mockito.mock(com.zyozmen.products.domain.port.out.CategoryRepositoryPort.class));
         var antes = service.obtener("a");
         var despues = service.actualizar("a", "Mandarina", antes.version());
         assertThat(despues.id()).isEqualTo("a");
+        assertThat(despues.categoryIds()).containsExactly(1L);
         assertThat(query.buscar("mandarina", PageRequest.of(0, 20)).getTotalElements()).isEqualTo(1);
         assertThat(query.buscar("tangerine", PageRequest.of(0, 20)).getTotalElements()).isZero();
         assertThatThrownBy(() -> service.crear("  MANDARINA ")).isInstanceOf(DuplicateKeyException.class);
         assertThat(service.guardarFotografia("a", new Imagen("nueva.png", "png", "BAUG")).fotografia().getFilepart())
                 .isEqualTo("BAUG");
+        assertThat(service.obtener("a").categoryIds()).containsExactly(1L);
+    }
+
+    @Test
+    void filtraCategoriasYPreciosAntesDePaginarSinRecortarOpcionesNiPrecioDesde() {
+        var filtro = new MarketplaceCatalogFilter("", List.of(1L), new BigDecimal("14000"), new BigDecimal("16000"));
+        var page = query.buscar(filtro, PageRequest.of(0, 1));
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        assertThat(page.getContent().getFirst().cepaId()).isEqualTo("a");
+        assertThat(page.getContent().getFirst().precioDesde()).isEqualByComparingTo("8000");
+        assertThat(page.getContent().getFirst().presentaciones()).hasSize(2);
+        assertThat(query.buscar(filtro, PageRequest.of(1, 1)).getContent()).isEmpty();
+        assertThat(query.buscar(new MarketplaceCatalogFilter("", List.of(1L, 2L), null, null),
+                PageRequest.of(0, 1)).getTotalElements()).isEqualTo(2);
+        assertThat(query.buscar(new MarketplaceCatalogFilter("", List.of(2L), null, new BigDecimal("15000")),
+                PageRequest.of(0, 20)).getTotalElements()).isZero();
+        assertThat(query.buscar(new MarketplaceCatalogFilter("", null, BigDecimal.ZERO, BigDecimal.TEN),
+                PageRequest.of(0, 20)).getTotalElements()).isZero();
+        assertThat(query.buscar(new MarketplaceCatalogFilter("otra", List.of(1L), null, null),
+                PageRequest.of(0, 20)).getTotalElements()).isZero();
+        assertThat(query.buscar(new MarketplaceCatalogFilter("grande", List.of(1L),
+                new BigDecimal("15000"), new BigDecimal("15000")),
+                PageRequest.of(0, 20)).getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void ambosLimitesDePrecioDebenCumplirseEnLaMismaPresentacion() {
+        template.insert(new CepaDocument("c", "Sin precio intermedio", "sin precio intermedio", null, null, null, null));
+        presentacion("c", "Barata", 1, 1000, 2, "ACTIVO");
+        presentacion("c", "Cara", 2, 30000, 2, "ACTIVO");
+        var result = query.buscar(new MarketplaceCatalogFilter("", null, new BigDecimal("14000"), new BigDecimal("16000")),
+                PageRequest.of(0, 20));
+        assertThat(result.getContent()).extracting(p -> p.cepaId()).containsExactly("a");
     }
 
     @Test

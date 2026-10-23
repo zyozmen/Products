@@ -6,6 +6,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -19,17 +21,18 @@ import java.util.List;
 public class CepaController {
     private final CepaUseCase useCase;
 
-    public record CepaRequest(@NotBlank @Size(max = 100) String nombre, Long version) { }
+    public record CepaRequest(@NotBlank @Size(max = 100) String nombre, Long version,
+                              @Size(max = 100) List<@NotNull @Positive Long> categoryIds) { }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Cepa crear(@Valid @RequestBody CepaRequest request) {
-        return useCase.crear(request.nombre());
+        return useCase.crear(request.nombre(), request.categoryIds());
     }
 
     @PutMapping("/{id}")
     public Cepa actualizar(@PathVariable String id, @Valid @RequestBody CepaRequest request) {
-        return useCase.actualizar(id, request.nombre(), request.version());
+        return useCase.actualizar(id, request.nombre(), request.version(), request.categoryIds());
     }
 
     @GetMapping("/{id}")

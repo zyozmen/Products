@@ -31,6 +31,8 @@ public class OrderMongoDocument {
     private boolean pqr;
     @Field("cash_on_delivery")
     private boolean cashOnDelivery;
+    @Field("inventory_deducted")
+    private boolean inventoryDeducted;
     @Field("cash_amount")
     private BigDecimal cashAmount;
     @Field("card_amount")

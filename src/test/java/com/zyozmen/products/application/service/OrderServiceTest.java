@@ -14,6 +14,7 @@ import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
 import com.zyozmen.products.domain.port.in.OrderUseCase;
 import com.zyozmen.products.domain.port.out.OrderRepositoryPort;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
+import com.zyozmen.products.domain.port.out.InventarioOrdenPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -46,6 +47,7 @@ class OrderServiceTest {
 
     @Mock
     private UserRepositoryPort userRepository;
+    @Mock private InventarioOrdenPort inventario;
 
     @InjectMocks
     private OrderService orderService;
@@ -69,6 +71,8 @@ class OrderServiceTest {
         assertThat(created.getItems().get(0).getTrazabilidad().costoPresentacion())
                 .isEqualByComparingTo("10000");
         assertThat(created.getNotes()).isEqualTo("motivo");
+        assertThat(created.isInventoryDeducted()).isTrue();
+        verify(inventario).descontar(created.getItems());
     }
 
     @Test
@@ -114,6 +118,8 @@ class OrderServiceTest {
 
         assertThat(paid.isCashOnDelivery()).isTrue();
         assertThat(paid.getPaidAt()).isNotNull();
+        assertThat(paid.isInventoryDeducted()).isTrue();
+        verify(inventario).descontar(paid.getItems());
     }
 
     @Test
@@ -240,6 +246,7 @@ class OrderServiceTest {
         assertThat(created.getDelivery().getRecipientName()).isEqualTo("Juan");
         assertThat(created.getCreatedAt()).isNotNull();
         verify(orderRepository).save(created);
+        verifyNoInteractions(inventario);
     }
 
     @Test
@@ -296,6 +303,43 @@ class OrderServiceTest {
         assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.CANCELADA, "admin"))
                 .isInstanceOf(OrderConflictException.class)
                 .hasMessageContaining("No se permite");
+    }
+
+    @Test
+    void cancelarDevuelveStockUnaSolaVezYLaSegundaSolicitudNoTocaInventario() {
+        var order = order("juan", OrderStatus.PAGADA);
+        order.setInventoryDeducted(true);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var cancelada = orderService.changeStatus(101L, OrderStatus.CANCELADA, "admin");
+
+        assertThat(cancelada.isInventoryDeducted()).isFalse();
+        verify(inventario).restituir(order.getItems());
+        assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.CANCELADA, "admin"))
+                .isInstanceOf(OrderConflictException.class);
+        org.mockito.Mockito.verifyNoMoreInteractions(inventario);
+    }
+
+    @Test
+    void cancelarCreadaNoRestituyeStockQueNuncaSeDesconto() {
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order("juan", OrderStatus.CREADA)));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        orderService.changeStatus(101L, OrderStatus.CANCELADA, "admin");
+        verifyNoInteractions(inventario);
+    }
+
+    @Test
+    void reintentarPagadaOAvanzarAEmpacadaNoDescuentaDosVeces() {
+        var order = order("juan", OrderStatus.CREADA);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        orderService.changeStatus(101L, OrderStatus.PAGADA, "admin");
+        assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.PAGADA, "admin"))
+                .isInstanceOf(OrderConflictException.class);
+        orderService.changeStatus(101L, OrderStatus.EMPACADA, "admin");
+        verify(inventario).descontar(order.getItems());
+        org.mockito.Mockito.verifyNoMoreInteractions(inventario);
     }
 
     private MarketplaceUseCase.PresentacionVenta activeProduct() {

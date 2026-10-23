@@ -13,11 +13,13 @@ import com.zyozmen.products.domain.port.in.OrderUseCase;
 import com.zyozmen.products.domain.port.out.OrderRepositoryPort;
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
+import com.zyozmen.products.domain.port.out.InventarioOrdenPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -41,6 +43,7 @@ public class OrderService implements OrderUseCase {
     private final OrderRepositoryPort orderRepository;
     private final MarketplaceUseCase marketplace;
     private final UserRepositoryPort userRepository;
+    private final InventarioOrdenPort inventario;
 
     // Zona horaria del negocio usada para delimitar los días del reporte.
     @Value("${app.report.timezone:America/Bogota}")
@@ -113,6 +116,7 @@ public class OrderService implements OrderUseCase {
     }
 
     @Override
+    @Transactional
     public Order createPqr(String username, List<PqrItemRequest> requestedItems, OrderDeliveryRequest delivery,
                            String notes) {
         if (username == null || !userRepository.existsByUsername(username)) {
@@ -138,11 +142,13 @@ public class OrderService implements OrderUseCase {
         }
         OrderDeliveryRequest safeDelivery = delivery == null
                 ? new OrderDeliveryRequest("", "", "", "") : delivery;
+        inventario.descontar(items);
         Instant now = Instant.now();
         return orderRepository.save(Order.builder()
                 .username(username)
                 .status(OrderStatus.CREADA)
                 .pqr(true)
+                .inventoryDeducted(true)
                 .notes(notes)
                 .subtotal(ZERO)
                 .taxAmount(ZERO)
@@ -184,6 +190,13 @@ public class OrderService implements OrderUseCase {
     }
 
     @Override
+    @Transactional
+    public Order changeStatus(Long id, OrderStatus status, String changedBy) {
+        return changeStatus(id, status, changedBy, StatusChangeDetails.NONE);
+    }
+
+    @Override
+    @Transactional
     public Order changeStatus(Long id, OrderStatus status, String changedBy, StatusChangeDetails details) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ORDER_NOT_FOUND));
@@ -195,6 +208,10 @@ public class OrderService implements OrderUseCase {
         Instant now = Instant.now();
         switch (status) {
             case PAGADA -> {
+                if (!order.isInventoryDeducted()) {
+                    inventario.descontar(order.getItems());
+                    order.setInventoryDeducted(true);
+                }
                 order.setCashOnDelivery(Boolean.TRUE.equals(safeDetails.cashOnDelivery()));
                 order.setPaidAt(now);
             }
@@ -203,7 +220,13 @@ public class OrderService implements OrderUseCase {
                 applyDeliveryPayment(order, safeDetails);
                 order.setDeliveredAt(now);
             }
-            case CANCELADA -> order.setCancelledAt(now);
+            case CANCELADA -> {
+                if (order.isInventoryDeducted()) {
+                    inventario.restituir(order.getItems());
+                    order.setInventoryDeducted(false);
+                }
+                order.setCancelledAt(now);
+            }
             default -> { }
         }
         List<OrderStatusChange> history = new ArrayList<>(order.getStatusHistory());

@@ -1,6 +1,7 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
 import com.zyozmen.products.domain.model.UnidadMedida;
+import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 import com.zyozmen.products.adapter.out.mongodb.document.CepaDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProductoMarketplaceDocument;
 import com.zyozmen.products.adapter.out.mongodb.mapper.ImagenMongoMapper;
@@ -35,7 +36,11 @@ public class MarketplaceCatalogoQuery {
     private final MongoTemplate template;
 
     public Page<ProductoCatalogo> buscar(String buscar, Pageable pageable) {
-        var operaciones = pipeline(buscar, pageable).stream()
+        return buscar(new MarketplaceCatalogFilter(buscar, null, null, null), pageable);
+    }
+
+    public Page<ProductoCatalogo> buscar(MarketplaceCatalogFilter filtro, Pageable pageable) {
+        var operaciones = pipeline(filtro, pageable).stream()
                 .<AggregationOperation>map(stage -> context -> stage).toList();
         var result = template.aggregate(Aggregation.newAggregation(operaciones),
                 "productos_marketplace", Document.class).getUniqueMappedResult();
@@ -81,6 +86,10 @@ public class MarketplaceCatalogoQuery {
     }
 
     static List<Document> pipeline(String buscar, Pageable pageable) {
+        return pipeline(new MarketplaceCatalogFilter(buscar, null, null, null), pageable);
+    }
+
+    static List<Document> pipeline(MarketplaceCatalogFilter filtro, Pageable pageable) {
         var stages = new ArrayList<Document>();
         stages.add(new Document("$match", new Document("estado", "ACTIVO")
                 .append("stockDisponible", new Document("$gt", 0))));
@@ -95,9 +104,19 @@ public class MarketplaceCatalogoQuery {
         stages.add(new Document("$lookup", new Document("from", "cepas")
                 .append("localField", "_id").append("foreignField", "_id")
                 .append("pipeline", List.of(new Document("$project",
-                        new Document("nombre", 1).append("nombreNormalizado", 1)))).append("as", "cepa")));
+                        new Document("nombre", 1).append("nombreNormalizado", 1).append("categoryIds", 1)))).append("as", "cepa")));
         stages.add(new Document("$unwind", "$cepa"));
-        String texto = buscar.strip().toLowerCase(Locale.ROOT);
+        if (!filtro.categoryIds().isEmpty()) {
+            stages.add(new Document("$match", new Document("cepa.categoryIds", new Document("$in", filtro.categoryIds()))));
+        }
+        if (filtro.minPrice() != null || filtro.maxPrice() != null) {
+            var limites = new Document();
+            if (filtro.minPrice() != null) limites.append("$gte", new Decimal128(filtro.minPrice()));
+            if (filtro.maxPrice() != null) limites.append("$lte", new Decimal128(filtro.maxPrice()));
+            stages.add(new Document("$match", new Document("presentaciones",
+                    new Document("$elemMatch", new Document("precioVenta", limites)))));
+        }
+        String texto = filtro.buscar().toLowerCase(Locale.ROOT);
         if (!texto.isEmpty()) {
             var condiciones = new ArrayList<Document>();
             condiciones.add(contiene("$cepa.nombreNormalizado", texto));

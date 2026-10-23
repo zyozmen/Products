@@ -3,6 +3,7 @@ package com.zyozmen.products.application.service;
 import com.zyozmen.products.domain.exception.OrderProductException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.ProductoMarketplace;
+import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 import com.zyozmen.products.domain.model.PresentacionInventario;
 import com.zyozmen.products.domain.model.TrazabilidadPresentacion;
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
@@ -55,14 +56,15 @@ public class MarketplaceService implements MarketplaceUseCase {
 
     @Override
     public Page<ProductoCatalogo> listar(String buscar, int page, int size) {
+        return listar(new MarketplaceCatalogFilter(buscar, null, null, null), page, size);
+    }
+
+    @Override
+    public Page<ProductoCatalogo> listar(MarketplaceCatalogFilter filtro, int page, int size) {
         if (page < 0 || size < 1 || size > 100) {
             throw new IllegalArgumentException("page debe ser >= 0 y size entre 1 y 100");
         }
-        String texto = buscar == null ? "" : buscar.strip();
-        if (texto.length() > 100) {
-            throw new IllegalArgumentException("La busqueda admite hasta 100 caracteres");
-        }
-        return marketplace.buscarCatalogo(texto, PageRequest.of(page, size));
+        return marketplace.buscarCatalogo(filtro, PageRequest.of(page, size));
     }
 
     private ProductoMarketplace obtenerActivo(String id) {

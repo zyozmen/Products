@@ -1,6 +1,7 @@
 package com.zyozmen.products.adapter.in.web;
 
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
+import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
 import java.util.List;
+import java.math.BigDecimal;
 
 @RestController
 @RequiredArgsConstructor
@@ -23,8 +25,11 @@ public class MarketplaceController {
     @Operation(summary = "Catalogo paginado por cepas con presentaciones activas y disponibles")
     public PaginaCatalogo listar(@RequestParam(required = false) String buscar,
                                  @RequestParam(defaultValue = "0") int page,
-                                 @RequestParam(defaultValue = "20") int size) {
-        var resultado = marketplace.listar(buscar, page, size);
+                                 @RequestParam(defaultValue = "20") int size,
+                                 @RequestParam(required = false) List<Long> categoryIds,
+                                 @RequestParam(required = false) BigDecimal minPrice,
+                                 @RequestParam(required = false) BigDecimal maxPrice) {
+        var resultado = marketplace.listar(new MarketplaceCatalogFilter(buscar, categoryIds, minPrice, maxPrice), page, size);
         return new PaginaCatalogo(resultado.getContent(), page, size,
                 resultado.getTotalElements(), resultado.getTotalPages());
     }

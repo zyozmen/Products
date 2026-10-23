@@ -14,6 +14,10 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import com.mongodb.client.result.UpdateResult;
+import com.zyozmen.products.domain.exception.OrderConflictException;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,7 +27,7 @@ class MarketplaceMongoAdapterTest {
     @Test
     void consultaPorIdDePresentacionNoPorIdDelCatalogoAnterior() {
         var repository = mock(ProductoMarketplaceMongoRepository.class);
-        var adapter = new MarketplaceMongoAdapter(repository, mock(MarketplaceCatalogoQuery.class));
+        var adapter = new MarketplaceMongoAdapter(repository, mock(MarketplaceCatalogoQuery.class), mock(MongoTemplate.class));
         String id = "650000000000000000000401";
         when(repository.findByPresentacionId(id)).thenReturn(Optional.of(
                 new ProductoMarketplaceDocument("publicacion", id, "650000000000000000000201",
@@ -40,7 +44,7 @@ class MarketplaceMongoAdapterTest {
     @Test
     void consultaDisponiblesPorIdentidadPersistidaDeCepa() {
         var repository = mock(ProductoMarketplaceMongoRepository.class);
-        var adapter = new MarketplaceMongoAdapter(repository, mock(MarketplaceCatalogoQuery.class));
+        var adapter = new MarketplaceMongoAdapter(repository, mock(MarketplaceCatalogoQuery.class), mock(MongoTemplate.class));
         when(repository.findByCepaIdAndEstadoAndStockDisponibleGreaterThan("cepa", "ACTIVO", 0))
                 .thenReturn(List.of());
         assertThat(adapter.findDisponiblesByCepaId("cepa")).isEmpty();
@@ -50,7 +54,7 @@ class MarketplaceMongoAdapterTest {
     @Test
     void insertaProyeccionSinSobrescribirStockDeOtrasPresentaciones() {
         var repository = mock(ProductoMarketplaceMongoRepository.class);
-        var adapter = new MarketplaceMongoAdapter(repository, mock(MarketplaceCatalogoQuery.class));
+        var adapter = new MarketplaceMongoAdapter(repository, mock(MarketplaceCatalogoQuery.class), mock(MongoTemplate.class));
         var p = new ProductoMarketplace("650000000000000000000401", "650000000000000000000201",
                 "Proveedor", "Sativa - Bolsa", "Sativa", "SAT-5", BigDecimal.TEN, 100,
                 new Imagen("foto.png", "png", "AQID"), "ACTIVO");
@@ -89,5 +93,30 @@ class MarketplaceMongoAdapterTest {
         assertThat(captor.getAllValues()).extracting(index -> index.getIndexKeys().keySet().iterator().next())
                 .containsExactly("presentacionId", "sku", "estado");
         verify(cepaIndexes).ensureIndex(any());
+    }
+
+    @Test
+    void actualizaStockSoloSiCoincideElValorAnteriorYLoteYEstado() {
+        var template = mock(MongoTemplate.class);
+        var adapter = new MarketplaceMongoAdapter(mock(ProductoMarketplaceMongoRepository.class),
+                mock(MarketplaceCatalogoQuery.class), template);
+        when(template.updateFirst(any(Query.class), any(Update.class), eq(ProductoMarketplaceDocument.class)))
+                .thenReturn(UpdateResult.acknowledged(1, 1L, null));
+        adapter.actualizarStock("p", "l", 5, 3);
+        adapter.actualizarStock("p", "l", 3, 5);
+        var queries = ArgumentCaptor.forClass(Query.class);
+        verify(template, times(2)).updateFirst(queries.capture(), any(Update.class), eq(ProductoMarketplaceDocument.class));
+        assertThat(queries.getAllValues().getFirst().getQueryObject())
+                .containsEntry("presentacionId", "p").containsEntry("loteId", "l")
+                .containsEntry("stockDisponible", 5).containsEntry("estado", "ACTIVO");
+        assertThat(queries.getAllValues().getLast().getQueryObject()).doesNotContainKey("estado");
+        when(template.updateFirst(any(Query.class), any(Update.class), eq(ProductoMarketplaceDocument.class)))
+                .thenReturn(UpdateResult.acknowledged(0, 0L, null));
+        assertThatThrownBy(() -> adapter.actualizarStock("p", "l", 5, 3))
+                .isInstanceOf(OrderConflictException.class);
+        assertThatThrownBy(() -> adapter.actualizarStock("p", "l", 5, 5))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> adapter.actualizarStock("p", "l", 5, -1))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

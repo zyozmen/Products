@@ -2,6 +2,7 @@ package com.zyozmen.products.domain.port.in;
 
 import com.zyozmen.products.domain.model.Imagen;
 import com.zyozmen.products.domain.model.TrazabilidadPresentacion;
+import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -13,6 +14,7 @@ public interface MarketplaceUseCase {
     DetalleProducto obtenerDetalle(String cepaId, String presentacionId);
 
     Page<ProductoCatalogo> listar(String buscar, int page, int size);
+    Page<ProductoCatalogo> listar(MarketplaceCatalogFilter filtro, int page, int size);
 
     record PresentacionVenta(String nombre, BigDecimal precioVenta, TrazabilidadPresentacion trazabilidad) { }
 

@@ -27,6 +27,7 @@ class OrderMongoMapperTest {
                 BigDecimal.TEN, "GRAMOS", new BigDecimal("1000"), new BigDecimal("10000.00"));
         item.setTrazabilidad(snapshot);
         var order = order(item);
+        order.setInventoryDeducted(true);
 
         var conversions = MongoCustomConversions.create(adapter -> {
             adapter.registerConverter(new Converter<BigDecimal, Decimal128>() {
@@ -50,8 +51,9 @@ class OrderMongoMapperTest {
         var result = mapper.toDomain(converter.read(
                 com.zyozmen.products.adapter.out.mongodb.document.OrderMongoDocument.class, bson));
         assertThat(result.getItems().getFirst().getTrazabilidad()).isEqualTo(snapshot);
+        assertThat(result.isInventoryDeducted()).isTrue();
         var json = new ObjectMapper().findAndRegisterModules().writeValueAsString(OrderResponseDTO.from(result));
-        assertThat(json).doesNotContain("trazabilidad", "costo", "proveedorId");
+        assertThat(json).doesNotContain("trazabilidad", "costo", "proveedorId", "inventoryDeducted", "inventory_deducted");
     }
 
     @Test
@@ -59,6 +61,7 @@ class OrderMongoMapperTest {
         var anterior = mapper.toDocument(order(item()));
         var result = mapper.toDomain(anterior);
         assertThat(result.getItems().getFirst().getTrazabilidad()).isNull();
+        assertThat(result.isInventoryDeducted()).isFalse();
         assertThat(result.getItems().getFirst().getProductId()).isEqualTo("12");
         assertThat(OrderResponseDTO.from(result).items()).hasSize(1);
     }

@@ -76,8 +76,8 @@ class CategoryApiTest {
     @Test
     void cepasAreAdminOnlyAndSupportCreateUpdateAndList() throws Exception {
         var cepa = new com.zyozmen.products.domain.model.Cepa("cepa-id", "Tangerine");
-        when(cepas.crear("Tangerine")).thenReturn(cepa);
-        when(cepas.actualizar("cepa-id", "Tangerine", 1L)).thenReturn(cepa);
+        when(cepas.crear("Tangerine", null)).thenReturn(cepa);
+        when(cepas.actualizar("cepa-id", "Tangerine", 1L, null)).thenReturn(cepa);
         when(cepas.listar(0, 20)).thenReturn(new PageImpl<>(List.of(cepa)));
         mvc.perform(post("/api/cepas").with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Tangerine\"}"))
@@ -89,6 +89,19 @@ class CategoryApiTest {
                 .andExpect(status().isOk()).andExpect(header().string("X-Total-Count", "1"));
         mvc.perform(get("/api/cepas")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/cepas").with(user("client").roles("CLIENTE"))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void cepaRecibeCategoriasYRechazaIdsInvalidos() throws Exception {
+        var cepa = new com.zyozmen.products.domain.model.Cepa("cepa-id", "Tangerine",
+                null, null, null, 1L, List.of(7L));
+        when(cepas.crear("Tangerine", List.of(7L))).thenReturn(cepa);
+        mvc.perform(post("/api/cepas").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Tangerine\",\"categoryIds\":[7]}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.categoryIds[0]").value(7));
+        mvc.perform(put("/api/cepas/cepa-id").with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Tangerine\",\"version\":1,\"categoryIds\":[-1]}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

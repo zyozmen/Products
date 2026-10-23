@@ -34,6 +34,17 @@ class MarketplaceServiceTest {
     }
 
     @Test
+    void delegaFiltrosCombinadosYPaginaEnElRepositorio() {
+        var filtro = new MarketplaceCatalogFilter("10gr", List.of(7L), BigDecimal.ZERO, new BigDecimal("50000"));
+        var pageable = org.springframework.data.domain.PageRequest.of(1, 20);
+        when(marketplace.buscarCatalogo(filtro, pageable)).thenReturn(org.springframework.data.domain.Page.empty(pageable));
+        assertThat(service.listar(filtro, 1, 20).getNumber()).isEqualTo(1);
+        verify(marketplace).buscarCatalogo(filtro, pageable);
+        assertThatThrownBy(() -> service.listar(filtro, -1, 20)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.listar(filtro, 0, 101)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void resuelveCostoYProcedenciaDesdeElLoteSinConfiarEnElNombreComercial() {
         var producto = producto("p1", "l1", "Tangerine");
         when(marketplace.findByPresentacionId("p1")).thenReturn(Optional.of(producto));

@@ -4,6 +4,8 @@ import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.Cepa;
 import com.zyozmen.products.domain.model.Imagen;
 import com.zyozmen.products.domain.port.out.CepaRepositoryPort;
+import com.zyozmen.products.domain.port.out.CategoryRepositoryPort;
+import com.zyozmen.products.domain.model.CatalogCategory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -13,6 +15,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -21,6 +24,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CepaServiceTest {
     @Mock private CepaRepositoryPort repository;
+    @Mock private CategoryRepositoryPort categories;
     @InjectMocks private CepaService service;
 
     @Test
@@ -36,7 +40,7 @@ class CepaServiceTest {
     @Test
     void renombrarNoCambiaIdentidadNiFotografia() {
         var foto = new Imagen("foto.png", "png", "AQID");
-        var anterior = new Cepa("id", "Anterior", foto, Instant.EPOCH, Instant.EPOCH, 3L);
+        var anterior = new Cepa("id", "Anterior", foto, Instant.EPOCH, Instant.EPOCH, 3L, List.of(7L));
         when(repository.findById("id")).thenReturn(Optional.of(anterior));
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -45,8 +49,25 @@ class CepaServiceTest {
         assertThat(nueva.fotografia()).isEqualTo(foto);
         assertThat(nueva.createdAt()).isEqualTo(Instant.EPOCH);
         assertThat(nueva.nombre()).isEqualTo("Nuevo nombre");
+        assertThat(nueva.categoryIds()).containsExactly(7L);
+        assertThat(service.guardarFotografia("id", foto).categoryIds()).containsExactly(7L);
         assertThatThrownBy(() -> service.actualizar("id", "Otro", 2L))
                 .isInstanceOf(OptimisticLockingFailureException.class);
+    }
+
+    @Test
+    void categoriasSeValidanYSePuedenAsignarOVaciar() {
+        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(categories.findById(7L)).thenReturn(Optional.of(CatalogCategory.builder().categoryId(7L).build()));
+        var creada = service.crear("Tangerine", List.of(7L, 7L));
+        assertThat(creada.categoryIds()).containsExactly(7L);
+        var anterior = new Cepa("id", creada.nombre(), null, Instant.EPOCH, Instant.EPOCH, 2L, creada.categoryIds());
+        when(repository.findById("id")).thenReturn(Optional.of(anterior));
+        assertThat(service.actualizar("id", "Tangerine", 2L, List.of()).categoryIds()).isEmpty();
+        assertThatThrownBy(() -> service.crear("Invalida", List.of(8L)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("no existe");
+        assertThatThrownBy(() -> service.crear("Invalida", List.of(0L)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
