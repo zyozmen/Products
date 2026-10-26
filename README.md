@@ -57,7 +57,7 @@ La API es stateless y autentica con tokens JWT enviados en el encabezado `Author
 - **Emisión:** el token se firma con HMAC y se emite con una vigencia de **1 hora** (`exp`). Incluye los claims `sub` (usuario), `role`, `iat` y `jti` (identificador único para revocación).
 - **Autorización:** los roles son `ADMIN` y `CLIENTE`. Las rutas `/api/admin/**` y las escrituras de `/api/productos/**` y todo `/api/proveedores/**`, `/api/lotes/**` y `/api/liquidaciones/**` requieren `ADMIN`; `/api/orders/**` y `/api/users/**` requieren autenticación.
 - **Revocación:** al cerrar sesión o renovar, el `jti` se registra en la colección `revoked_tokens`. Un índice TTL elimina cada registro cuando el token habría expirado, por lo que la lista no crece indefinidamente.
-- **Inactividad:** el límite es parametrizable (`app.session.inactivity-timeout-minutes`, 15 minutos por defecto). Como el servidor no mantiene estado por sesión, el límite se aplica en la renovación: un token que no se renueva dentro de ese lapso ya no puede refrescarse. El cliente debe llamar a `/refresh` mientras haya actividad del usuario.
+- **Inactividad:** el límite es parametrizable (`app.session.inactivity-timeout-minutes`, 60 minutos por defecto). Como el servidor no mantiene estado por sesión, el límite se aplica en la renovación: un token que no se renueva dentro de ese lapso ya no puede refrescarse. El cliente debe llamar a `/refresh` mientras haya actividad del usuario.
 - **Respuesta de sesión vencida:** cualquier token expirado, revocado o inactivo se rechaza con `401` y el cuerpo:
 
 ```json
@@ -98,7 +98,7 @@ Toda la configuración se define en `src/main/resources/application.properties` 
 | `MONGO_DATABASE` | `spring.data.mongodb.database` | `GrowShop` | Base de datos. |
 | `JWT_SECRET` | `app.jwt.secret` | clave de desarrollo | Clave de firma de los JWT. **Obligatoria en producción.** |
 | `JWT_EXPIRATION_MS` | `app.jwt.expiration-ms` | `3600000` (1 h) | Vigencia del token. |
-| `SESSION_INACTIVITY_TIMEOUT_MINUTES` | `app.session.inactivity-timeout-minutes` | `15` | Límite de inactividad para renovar sesión. |
+| `SESSION_INACTIVITY_TIMEOUT_MINUTES` | `app.session.inactivity-timeout-minutes` | `60` | Límite de inactividad para renovar sesión. |
 | `MAIL_USERNAME` | `spring.mail.username` / `app.mail.from` | `zonagreen9@gmail.com` | Cuenta SMTP y remitente de los correos. |
 | `MAIL_PASSWORD` | `spring.mail.password` | _(vacío)_ | App Password de Gmail (requiere verificación en 2 pasos). Nunca se versiona. |
 | `MAIL_ENABLED` | `app.mail.enabled` | `true` | Activa o desactiva el envío de correos. |
@@ -375,9 +375,9 @@ pertenecen a T3 y siguientes: no deben considerarse implementados por esta entre
   entrega. `EMPACADA` y `ENTREGADA` no vuelven a descontar.
 - Crear una PQR descuenta inmediatamente inventario y mantiene sus valores
   comerciales en cero. En esta etapa conserva el estado inicial `CREADA`;
-  crearla directamente en `PAGADA` y prohibir cancelar una venta pagada son
-  cambios de T3, no de T2.
-- Una cancelacion permitida por la matriz actual restituye solo el inventario
+  crearla directamente en `PAGADA` sigue fuera de esta entrega. El bloqueo de
+  cancelacion de ventas pagadas se incorpora posteriormente en HU-04/T2.
+- Una cancelacion permitida (venta CREADA o PQR segun su estado) restituye solo el inventario
   previamente descontado. Repetir un cambio de estado ya aplicado devuelve
   `409` y no modifica existencias.
 - El descuento usa la trazabilidad interna de cada item: proveedor, lote,
@@ -407,6 +407,248 @@ variable se omiten. Por ejemplo, tras configurar la URI:
 ```powershell
 .\mvnw.cmd "-Dtest=InventarioOrdenIntegrationTest,InventarioOrdenServiceTest,OrderServiceTest" test
 ```
+
+### Liquidacion diaria (HU-04/T1)
+
+Consulta administrativa real, independiente del evaluador existente
+`POST /api/liquidaciones/procesar-evento` y del reporte comercial.
+T1 incorporo la consulta y persistencia base. **T2 conecta solo ventas normales
+al pasar a PAGADA**, con la misma transaccion de inventario/orden, y bloquea
+cancelaciones de ventas ya pagadas. **T3 reconoce contra entrega al pasar a
+ENTREGADA**, usando la fecha de entrega. **T4 reconoce PQR al crearlas y revierte
+su costo al cancelarlas en la jornada original**, conservando la auditoria.
+Los pagos vinculados quedan pendientes para T5.
+No se cambian deuda, reporte comercial ni contratos de abonos.
+
+```http
+GET /api/v1/settlements/daily-summary?date=2026-10-23&providerId=6500000000000000000000ab&page=0&size=20
+Authorization: Bearer <token ADMIN>
+```
+
+| Parametro | Regla |
+|---|---|
+| `date` | Opcional, fecha ISO `yyyy-MM-dd`; por defecto hoy en `America/Bogota` |
+| `providerId` | Opcional, ObjectId de 24 caracteres hexadecimales; mayusculas aceptadas |
+| `page` | Base cero, por defecto 0, debe ser >= 0 |
+| `size` | Por defecto 20, entre 1 y 100 |
+
+La zona de esta funcionalidad es **fija y no parametrizable**:
+`America/Bogota`, UTC-05:00, equivalente a la hora de Lima.
+No depende de la zona del navegador, del servidor ni de `app.report.timezone`
+(que conserva su comportamiento en el reporte anterior). La fecha de jornada
+se devuelve sin hora. Los instantes usan ISO-8601 UTC.
+
+Respuesta real de una base sin movimientos (la fecha cambia segun el dia):
+
+```json
+{
+  "date": "2026-10-23",
+  "timezone": "America/Bogota",
+  "activationPending": false,
+  "activatedAt": "2026-10-23T20:00:00Z",
+  "content": [],
+  "page": 0,
+  "size": 20,
+  "totalElements": 0,
+  "totalPages": 0
+}
+```
+
+No se generan proveedores ficticios ni filas con ceros. Cada fila representa un
+registro persistido de proveedor/jornada; las jornadas revertidas o con pagos
+seguiran visibles. Un proveedor valido sin acumulados devuelve una pagina vacia.
+El orden estable es `providerId` ascendente; filtros y paginacion se ejecutan en
+MongoDB. El nombre y saldo actual se cargan en lote para los proveedores de la
+pagina, sin consultar uno por uno ni cargar todos los proveedores.
+
+Contrato de cada elemento de `content`:
+
+| Campo | Significado |
+|---|---|
+| `providerId`, `providerName`, `date` | Identificacion, nombre actual y jornada |
+| `totalSalesCount` | Unidades vigentes de presentaciones vendidas, no numero de ordenes |
+| `totalPqrCount` | Unidades vigentes de presentaciones PQR, descontando las revertidas |
+| `salesRecognizedAmount` | Costo bruto reconocido de ventas |
+| `pqrRecognizedAmount` | Costo bruto reconocido de PQR |
+| `reversedAmount` | Costo revertido, positivo, imputado a la jornada original |
+| `grossAccumulatedAmount` | `salesRecognizedAmount + pqrRecognizedAmount` |
+| `accumulatedAmount` | `grossAccumulatedAmount - reversedAmount` |
+| `linkedPaymentsAmount` | Pagos asociados explicitamente a esa jornada |
+| `pendingDailyAmount` | `max(accumulatedAmount - linkedPaymentsAmount, 0)` |
+| `providerOutstandingBalance` | Saldo global actual del proveedor, incluso para consultas historicas |
+| `suggestedPayableAmount` | `min(pendingDailyAmount, providerOutstandingBalance)` |
+| `overpaidAmount` | `max(linkedPaymentsAmount - accumulatedAmount, 0)` |
+
+Los importes son **numeros JSON** calculados con `BigDecimal`, expresados en COP
+con dos decimales, sin redondeos silenciosos. No son ingreso comercial ni nueva
+deuda. El costo unitario pertenece al futuro detalle de T6, no a esta fila.
+El frontend debe mostrar los calculos del servidor, no recalcular importes.
+
+Errores: `401` sin autenticacion valida, `403` sin rol ADMIN, `400` para fechas,
+IDs o paginacion invalidos, `500` ante fallos de persistencia o datos financieros
+incompletos. Los errores de validacion usan el formato global existente
+(`status`, `error`, `message`, `path`, `timestamp`); autenticacion conserva
+`message` y, si aplica, `code`. Nunca se devuelve una pagina vacia como sustituto
+de una falla.
+
+Persistencia:
+
+- `provider_daily_accumulators`: documento por proveedor/jornada, `providerId`
+  ObjectId, `date` como cadena ISO para evitar conversiones de zona horaria,
+  cantidades `long` e importes `Decimal128`. No almacena el sugerido ni detalle
+  ilimitado. Indice unico `{providerId: 1, date: 1}`; indice `{date: 1,
+  providerId: 1}` para consultar un dia completo en orden.
+- `daily_settlement_settings`: registro unico `_id: "daily-settlement"`.
+  **Por decision confirmada para T2**, el primer arranque que incorpora T2 fija
+  automaticamente `activatedAt` si el registro no existe o seguia pendiente
+  (`null` en T1). El instante real se guarda en UTC y no cambia en reinicios;
+  el ejemplo de respuesta es ilustrativo, no una fecha fija. Si ya habia un
+  instante persistido se conserva. No hay endpoint, selector de zona ni
+  parametro de activacion.
+- Las ordenes creadas antes de ese instante se excluyen aunque se paguen despues.
+  Una orden creada exactamente en el instante es elegible. No se borran ventas,
+  inventario, deuda ni acumulados existentes: empezar de cero significa no
+  importar ni reprocesar historia. No modificar ni eliminar el registro de
+  inicio para "reiniciar" la funcionalidad.
+- `provider_daily_movements`: movimientos auditables independientes, con orden,
+  indice estable del item, tipo `SALE`, `PQR` o `PQR_REVERSAL`, procedencia completa, cantidad, contenido,
+  unidad base, costo base snapshot, costo por presentacion, importe, instante de
+  reconocimiento y jornada de Bogota. Indice unico
+  `{orderId: 1, itemIndex: 1, movementType: 1}`. Las reversiones agregan
+  `originalMovementId` como referencia al movimiento PQR original.
+
+#### Reconocimiento de ventas normales (HU-04/T2)
+
+- Al confirmar `PAGADA` sin contra entrega se reconoce
+  `cantidad * costoPresentacion` del snapshot guardado al crear la orden, no el
+  costo actual del contenedor ni el precio comercial. Se verifica la coherencia
+  del snapshot con `contenidoUnidad * costoBasePorUnidad`, con el redondeo de
+  dos decimales ya usado en su creacion.
+- Items repetidos conservan movimientos separados por indice, pero sus unidades
+  e importes se suman al mismo proveedor/jornada. Varios proveedores tienen
+  acumulados independientes. El dia corresponde a `paidAt` en Bogota.
+- Un proveedor sin saldo o un lote pagado siguen generando costo bruto; el
+  sugerido se limita al saldo global vigente en cada consulta.
+- Stock, orden, movimientos e incrementos diarios se confirman en una sola
+  transaccion MongoDB (requiere replica set). Un fallo revierte todo. No hay
+  listener asincrono ni reconocimiento posterior al commit.
+- Repetir PAGADA devuelve `409`; el indice unico tambien rechaza un
+  reconocimiento duplicado y revierte la transaccion. Conflictos de escritura
+  concurrentes devuelven `409`: consultar la orden antes de reintentar; no hay
+  reintentos automaticos. Un snapshot invalido devuelve `422`, sin costos cero
+  de reemplazo ni escrituras parciales.
+- Una venta que paso por PAGADA no se cancela, incluida contra entrega o
+  EMPACADA, tambien cuando es anterior al inicio del acumulador. Intentarlo
+  devuelve `409` sin restituir stock. CREADA sigue siendo cancelable.
+- PQR conserva CREADA, stock y cancelaciones actuales; acumula y revierte
+  costos financieros desde T4. Contra entrega sigue descontando stock en PAGADA
+  pero no acumula hasta ENTREGADA, incorporado en T3.
+  Empacar/entregar una venta normal no vuelve a reconocer costo.
+- Para F2 se reutiliza `PUT /api/admin/orders/{id}/status` con el cuerpo actual
+  `{"status":"PAGADA"}` (sin `cashOnDelivery: true`). Luego consultar de nuevo
+  `daily-summary`. El cliente no debe incrementar totales de forma optimista
+  ni ofrecer cancelar ventas ya pagadas.
+
+#### Reconocimiento de contra entrega (HU-04/T3)
+
+- Se reutiliza `PUT /api/admin/orders/{id}/status`. Al confirmar PAGADA con
+  `cashOnDelivery: true` se descuenta stock como antes, sin reconocer costo.
+  EMPACADA tampoco acumula. No se cambian el instante inicial persistido ni la
+  exclusion de ordenes creadas antes de ese inicio.
+- Al pasar de EMPACADA a ENTREGADA se validan `cashAmount` y `cardAmount` como
+  hasta ahora: ambos obligatorios, no negativos y suma igual al total con la
+  tolerancia existente de 0,01. Faltantes o suma incorrecta devuelven `422`;
+  negativos devuelven `400`. No se alteran las reglas existentes para total cero.
+- El costo reconocido usa cantidad y snapshot original, no el cobro al cliente.
+  `timestamp` del movimiento es `deliveredAt` y la jornada se calcula en
+  America/Bogota. Una venta pagada un dia y entregada otro acumula solo en el
+  dia de entrega. Se mantiene tipo `SALE` y la misma clave unica por orden/item.
+- Estado, importes de entrega, movimientos y acumulado se confirman en la misma
+  transaccion. Si falla la entrega o persistencia, no quedan reconocimiento,
+  importes ni estado parcial. El stock descontado previamente en PAGADA no se
+  vuelve a mover ni se restituye al fallar una entrega.
+- Entregas repetidas o concurrentes no duplican costo: consultar la orden ante
+  `409` antes de reintentar. Entregar una venta normal no repite su costo.
+  PQR conserva sus reglas actuales y reconoce costo al crearla desde T4.
+
+Cuerpo para F3, usando los importes reales de la orden:
+
+```json
+{"status":"ENTREGADA","cashAmount":30000,"cardAmount":4800}
+```
+
+Tras exito, recargar orden y resumen de la fecha de entrega. No calcular ni
+incrementar acumulados en el navegador. No se agregan endpoints ni cambios de
+contrato JSON para esta etapa.
+
+#### Reconocimiento y reversion de PQR (HU-04/T4)
+
+- `POST /api/admin/orders/pqr` conserva contrato, estado inicial CREADA, precios,
+  subtotal, impuestos y total comerciales en cero. Descuenta inventario una vez
+  y reconoce `cantidad * costoPresentacion` del snapshot por item, tipo `PQR`,
+  usando `createdAt` para la jornada de America/Bogota. No suma ventas ni ingreso
+  comercial, ni crea deuda adicional. Reconoce incluso con proveedor sin saldo
+  o lote pagado; se conserva el corte global de activacion ya persistido.
+- Se reutiliza `PUT /api/admin/orders/{id}/status` para cancelar una PQR CREADA
+  o EMPACADA. ENTREGADA sigue sin poder cancelarse. Empacar/entregar una PQR
+  no repite su reconocimiento.
+- Cancelar restituye stock y crea movimientos `PQR_REVERSAL` separados, enlazados
+  por `originalMovementId`. Conservan cantidades, costos y procedencia del
+  reconocimiento persistido, aunque los costos actuales hayan cambiado.
+  `timestamp` registra la cancelacion real; `date` conserva la jornada original.
+- Se disminuye `totalPqrCount` y aumenta `reversedAmount`, sin reducir el bruto
+  `pqrRecognizedAmount` ni borrar movimientos o la fila de la jornada.
+  `accumulatedAmount`, pendiente y sugerido se recalculan con la reversion.
+  No se modifican pagos existentes: un exceso se muestra en `overpaidAmount`,
+  sin deshacer transferencias. El registro de pagos vinculados se implementara
+  en T5; su conservacion ya se verifica con datos persistidos de prueba.
+- Una PQR historica sin movimiento original, incluida una creada entre T2 y T4,
+  no genera reversion financiera ni importes negativos. Mantiene su restitucion
+  de inventario existente; no hay importacion retroactiva.
+- Creacion/cancelacion, orden, stock y movimientos/acumulados comparten la misma
+  transaccion. Fallos de reconocimiento o de guardado revierten todo. Un
+  acumulado original ausente/inconsistente devuelve `409`, no exito parcial.
+  Cancelaciones repetidas o concurrentes no duplican restitucion ni reversion.
+
+Ejemplo para F4 (ADMIN):
+
+```json
+{"username":"cliente","items":[{"productId":"ID_PRESENTACION","quantity":2}]}
+```
+
+Tras crear o cancelar, recargar orden, stock y
+`GET /api/v1/settlements/daily-summary?date=YYYY-MM-DD` para la jornada de
+creacion de la PQR en Bogota, no necesariamente hoy. No incrementar, descontar
+ni eliminar filas localmente. El detalle paginado de auditoria queda para T6;
+no se exponen costos internos en las respuestas de ordenes al cliente.
+No reenviar automaticamente el POST ante timeout: verificar si la PQR se creo,
+ya que dos creaciones validas representan dos ordenes distintas.
+
+Pruebas de integracion HTTP reales (servidor en puerto aleatorio, JWT real y
+MongoDB real, sin mocks de servicios/repositorios):
+
+```powershell
+$env:HU04_TEST_MONGO_URI = 'mongodb://127.0.0.1:<puerto-pruebas>/?directConnection=true'
+$env:HU05_TEST_MONGO_URI = $env:HU04_TEST_MONGO_URI
+.\mvnw.cmd "-Dtest=DailySettlementServiceTest,OrderSettlementServiceTest,OrderServiceTest,DailySettlementIntegrationTest,InventarioOrdenIntegrationTest" test
+```
+
+Usar exclusivamente una instancia aislada de pruebas. La suite crea una base
+`hu04_t1_test_<UUID>` y elimina solo esa base al terminar. Usa fixtures tecnicas
+para verificar precision, indices, filtros y formulas, y ejecuta el flujo real
+HTTP de venta normal, contra entrega, creacion/cancelacion PQR y consulta del resumen sin mocks de servicios o
+repositorios. No agrega endpoints de datos falsos para frontend. Las pruebas
+de inventario/reconocimiento usan bases aisladas `hu05_t2_test_<UUID>`.
+Sin la variable correspondiente se omite cada integracion.
+Validacion T4: 519 pruebas Surefire aprobadas, sin fallos ni omisiones; cobertura
+de lineas JaCoCo 92,90 %. Comando de regresion: `.\mvnw.cmd -DskipITs=true verify`
+con ambas variables anteriores y la configuracion general de MongoDB dirigida
+a la misma instancia aislada. Se excluyen las cinco pruebas E2E antiguas de
+productos por su problema preexistente de escrituras sin autenticacion.
+El consumo desde la aplicacion frontend debe validarse como F4 para PQR.
+
+Planes: [backend T1-T8](HU04-tareas-backend.md) y
+[frontend F1-F8](HU04-tareas-frontend.md).
 
 ### Proveedores, recepción de lotes y liquidación (HU-01 / HU-02)
 Colecciones MongoDB: `proveedores`, `lotes` y `transacciones_proveedor`. Los montos son `BigDecimal` con 2 decimales y se guardan como `Decimal128`. Los contenedores se guardan dentro del lote; el historial de movimientos se guarda por separado y solo admite inserciones desde el puerto de persistencia.

@@ -48,6 +48,7 @@ class OrderServiceTest {
     @Mock
     private UserRepositoryPort userRepository;
     @Mock private InventarioOrdenPort inventario;
+    @Mock private com.zyozmen.products.domain.port.out.OrderSettlementPort settlements;
 
     @InjectMocks
     private OrderService orderService;
@@ -73,6 +74,7 @@ class OrderServiceTest {
         assertThat(created.getNotes()).isEqualTo("motivo");
         assertThat(created.isInventoryDeducted()).isTrue();
         verify(inventario).descontar(created.getItems());
+        verify(settlements).recognizeOrderMovement(created);
     }
 
     @Test
@@ -120,6 +122,7 @@ class OrderServiceTest {
         assertThat(paid.getPaidAt()).isNotNull();
         assertThat(paid.isInventoryDeducted()).isTrue();
         verify(inventario).descontar(paid.getItems());
+        verifyNoInteractions(settlements);
     }
 
     @Test
@@ -143,6 +146,7 @@ class OrderServiceTest {
         assertThat(delivered.getCashAmount()).isNull();
         assertThat(delivered.getCardAmount()).isNull();
         assertThat(delivered.getDeliveredAt()).isNotNull();
+        verifyNoInteractions(settlements);
     }
 
     @Test
@@ -159,6 +163,8 @@ class OrderServiceTest {
         assertThat(delivered.getCashAmount()).isEqualByComparingTo("30000");
         assertThat(delivered.getCardAmount()).isEqualByComparingTo("4800");
         assertThat(delivered.getDeliveredAt()).isNotNull();
+        verify(settlements).recognizeOrderMovement(delivered);
+        verifyNoInteractions(inventario);
     }
 
     @Test
@@ -171,6 +177,7 @@ class OrderServiceTest {
                 new OrderUseCase.StatusChangeDetails(null, new BigDecimal("30000"), new BigDecimal("1000"), null)))
                 .isInstanceOf(OrderValidationException.class)
                 .hasMessageContaining("suma");
+        verifyNoInteractions(settlements);
     }
 
     @Test
@@ -307,7 +314,8 @@ class OrderServiceTest {
 
     @Test
     void cancelarDevuelveStockUnaSolaVezYLaSegundaSolicitudNoTocaInventario() {
-        var order = order("juan", OrderStatus.PAGADA);
+        var order = order("juan", OrderStatus.CREADA);
+        order.setPqr(true);
         order.setInventoryDeducted(true);
         when(orderRepository.findById(101L)).thenReturn(Optional.of(order));
         when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -316,9 +324,36 @@ class OrderServiceTest {
 
         assertThat(cancelada.isInventoryDeducted()).isFalse();
         verify(inventario).restituir(order.getItems());
+        verify(settlements).recognizeOrderMovement(cancelada);
         assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.CANCELADA, "admin"))
                 .isInstanceOf(OrderConflictException.class);
         org.mockito.Mockito.verifyNoMoreInteractions(inventario);
+    }
+
+    @Test
+    void ventasPagadasNoSeCancelanIncluyendoContraEntregaYEmpacadasHistoricas() {
+        for (var status : List.of(OrderStatus.PAGADA, OrderStatus.EMPACADA)) {
+            for (boolean cod : List.of(true, false)) {
+                var order = order("juan", status);
+                order.setCashOnDelivery(cod);
+                when(orderRepository.findById(101L)).thenReturn(Optional.of(order));
+                assertThatThrownBy(() -> orderService.changeStatus(101L, OrderStatus.CANCELADA, "admin"))
+                        .isInstanceOf(OrderConflictException.class);
+            }
+        }
+        verifyNoInteractions(inventario, settlements);
+    }
+
+    @Test
+    void pagoNormalReconoceCostoUnaVezPeroNoLoHaceAlEmpacarNiEntregar() {
+        var order = order("juan", OrderStatus.CREADA);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        orderService.changeStatus(101L, OrderStatus.PAGADA, "admin");
+        verify(settlements).recognizeOrderMovement(order);
+        orderService.changeStatus(101L, OrderStatus.EMPACADA, "admin");
+        orderService.changeStatus(101L, OrderStatus.ENTREGADA, "admin");
+        org.mockito.Mockito.verifyNoMoreInteractions(settlements);
     }
 
     @Test

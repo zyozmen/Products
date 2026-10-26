@@ -9,6 +9,8 @@ import com.zyozmen.products.domain.exception.OrderProductException;
 import com.zyozmen.products.domain.exception.OrderValidationException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.data.mongodb.MongoTransactionException;
 import org.springframework.data.mongodb.UncategorizedMongoDbException;
 import org.springframework.http.HttpStatus;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 
 @RestControllerAdvice(assignableTypes = {OrdersController.class, AdminOrdersController.class, MarketplaceController.class})
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @SuppressWarnings("null")
 public class OrderExceptionHandler {
 

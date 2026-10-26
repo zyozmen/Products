@@ -14,6 +14,7 @@ import com.zyozmen.products.domain.port.out.OrderRepositoryPort;
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
 import com.zyozmen.products.domain.port.out.InventarioOrdenPort;
+import com.zyozmen.products.domain.port.out.OrderSettlementPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -44,6 +45,7 @@ public class OrderService implements OrderUseCase {
     private final MarketplaceUseCase marketplace;
     private final UserRepositoryPort userRepository;
     private final InventarioOrdenPort inventario;
+    private final OrderSettlementPort settlements;
 
     // Zona horaria del negocio usada para delimitar los días del reporte.
     @Value("${app.report.timezone:America/Bogota}")
@@ -144,7 +146,7 @@ public class OrderService implements OrderUseCase {
                 ? new OrderDeliveryRequest("", "", "", "") : delivery;
         inventario.descontar(items);
         Instant now = Instant.now();
-        return orderRepository.save(Order.builder()
+        var created = orderRepository.save(Order.builder()
                 .username(username)
                 .status(OrderStatus.CREADA)
                 .pqr(true)
@@ -164,6 +166,8 @@ public class OrderService implements OrderUseCase {
                 .createdAt(now)
                 .updatedAt(now)
                 .build());
+        settlements.recognizeOrderMovement(created);
+        return created;
     }
 
     @Override
@@ -240,6 +244,11 @@ public class OrderService implements OrderUseCase {
         order.setStatus(status);
         order.setStatusHistory(history);
         order.setUpdatedAt(now);
+        if (order.isPqr() && status == OrderStatus.CANCELADA
+                || !order.isPqr() && (status == OrderStatus.PAGADA && !order.isCashOnDelivery()
+                || status == OrderStatus.ENTREGADA && order.isCashOnDelivery())) {
+            settlements.recognizeOrderMovement(order);
+        }
         return orderRepository.save(order);
     }
 
@@ -273,6 +282,12 @@ public class OrderService implements OrderUseCase {
     }
 
     private boolean isTransitionAllowed(Order order, OrderStatus to) {
+        if (to == OrderStatus.CANCELADA && !order.isPqr()
+                && (order.getPaidAt() != null || order.getStatus() == OrderStatus.PAGADA
+                || order.getStatus() == OrderStatus.EMPACADA
+                || order.getStatusHistory().stream().anyMatch(change -> change.getToStatus() == OrderStatus.PAGADA))) {
+            return false;
+        }
         return switch (order.getStatus()) {
             case CREADA -> to == OrderStatus.CANCELADA
                     || to == (order.isPqr() ? OrderStatus.EMPACADA : OrderStatus.PAGADA);

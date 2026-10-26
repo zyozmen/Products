@@ -34,7 +34,7 @@ class SessionServiceTest {
     private UserRepositoryPort userRepositoryPort;
 
     private SessionService service() {
-        return new SessionService(jwtService, revokedTokenPort, userRepositoryPort, 15);
+        return new SessionService(jwtService, revokedTokenPort, userRepositoryPort, 60);
     }
 
     @Test
@@ -83,7 +83,7 @@ class SessionServiceTest {
         when(jwtService.isTokenValid("t")).thenReturn(true);
         when(jwtService.extractJti("t")).thenReturn("jti");
         when(revokedTokenPort.isRevoked("jti")).thenReturn(false);
-        when(jwtService.extractIssuedAt("t")).thenReturn(Instant.now().minusSeconds(16 * 60));
+        when(jwtService.extractIssuedAt("t")).thenReturn(Instant.now().minusSeconds(61 * 60));
         when(jwtService.extractExpiration("t")).thenReturn(exp);
 
         assertThatThrownBy(() -> service().refresh("t"))

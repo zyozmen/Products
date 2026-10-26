@@ -37,7 +37,7 @@ public class SessionService implements SessionUseCase {
             JwtService jwtService,
             RevokedTokenRepositoryPort revokedTokenPort,
             UserRepositoryPort userRepositoryPort,
-            @Value("${app.session.inactivity-timeout-minutes:15}") long inactivityTimeoutMinutes) {
+            @Value("${app.session.inactivity-timeout-minutes:60}") long inactivityTimeoutMinutes) {
         this.jwtService = jwtService;
         this.revokedTokenPort = revokedTokenPort;
         this.userRepositoryPort = userRepositoryPort;
