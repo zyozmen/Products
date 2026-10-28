@@ -1,10 +1,10 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.zyozmen.products.adapter.out.mongodb.document.UserMongoDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.UserDocument;
 import com.zyozmen.products.adapter.out.mongodb.mapper.UserMongoMapper;
 import com.zyozmen.products.adapter.out.mongodb.repository.UserMongoRepository;
 import com.zyozmen.products.domain.model.Role;
-import com.zyozmen.products.domain.model.TipoIdentificacion;
+import com.zyozmen.products.domain.model.IdentificationType;
 import com.zyozmen.products.domain.model.User;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,7 +47,7 @@ class UserMongoAdapterTest {
 
     @Test
     void findByEmailShouldMapDocumentToDomain() {
-        UserMongoDocument document = UserMongoDocument.builder().id("1").email("juan@example.com").build();
+        UserDocument document = UserDocument.builder().id("1").email("juan@example.com").build();
         User domainUser = User.builder().id("1").email("juan@example.com").build();
 
         when(mongoRepository.findByEmail("juan@example.com")).thenReturn(Optional.of(document));
@@ -59,7 +59,7 @@ class UserMongoAdapterTest {
     @Test
     void existsByTipoIdentificacionAndNumeroIdentificacionShouldReturnFalseWhenArgsNull() {
         assertThat(adapter.existsByTipoIdentificacionAndNumeroIdentificacion(null, "123")).isFalse();
-        assertThat(adapter.existsByTipoIdentificacionAndNumeroIdentificacion(TipoIdentificacion.CC, null)).isFalse();
+        assertThat(adapter.existsByTipoIdentificacionAndNumeroIdentificacion(IdentificationType.CC, null)).isFalse();
     }
 
     @Test
@@ -68,14 +68,14 @@ class UserMongoAdapterTest {
                 .thenReturn(true);
 
         boolean result = adapter.existsByTipoIdentificacionAndNumeroIdentificacion(
-                TipoIdentificacion.CC, "1018234567");
+                IdentificationType.CC, "1018234567");
 
         assertThat(result).isTrue();
     }
 
     @Test
     void findByUsernameShouldMapDocumentToDomain() {
-        UserMongoDocument document = UserMongoDocument.builder().id("1").username("juan123").build();
+        UserDocument document = UserDocument.builder().id("1").username("juan123").build();
         User domainUser = User.builder().id("1").username("juan123").build();
 
         when(mongoRepository.findByUsername("juan123")).thenReturn(Optional.of(document));
@@ -89,9 +89,9 @@ class UserMongoAdapterTest {
     @Test
     void saveShouldPreserveExistingIdWhenUserAlreadyExists() {
         User user = User.builder().username("juan123").role(Role.CLIENTE).build();
-        UserMongoDocument existingDocument = UserMongoDocument.builder().id("existing-id").username("juan123").build();
-        UserMongoDocument documentToSave = UserMongoDocument.builder().id("existing-id").username("juan123").build();
-        UserMongoDocument savedDocument = UserMongoDocument.builder().id("existing-id").username("juan123").build();
+        UserDocument existingDocument = UserDocument.builder().id("existing-id").username("juan123").build();
+        UserDocument documentToSave = UserDocument.builder().id("existing-id").username("juan123").build();
+        UserDocument savedDocument = UserDocument.builder().id("existing-id").username("juan123").build();
 
         when(mongoRepository.findByUsername("juan123")).thenReturn(Optional.of(existingDocument));
         when(mapper.toDocument(user, "existing-id")).thenReturn(documentToSave);
@@ -107,8 +107,8 @@ class UserMongoAdapterTest {
     @Test
     void saveShouldUseNullIdWhenUserIsNew() {
         User user = User.builder().username("new-user").build();
-        UserMongoDocument documentToSave = UserMongoDocument.builder().username("new-user").build();
-        UserMongoDocument savedDocument = UserMongoDocument.builder().id("generated-id").username("new-user").build();
+        UserDocument documentToSave = UserDocument.builder().username("new-user").build();
+        UserDocument savedDocument = UserDocument.builder().id("generated-id").username("new-user").build();
 
         when(mongoRepository.findByUsername("new-user")).thenReturn(Optional.empty());
         when(mapper.toDocument(user, null)).thenReturn(documentToSave);
@@ -123,7 +123,7 @@ class UserMongoAdapterTest {
 
     @Test
     void findAllShouldMapEveryDocument() {
-        UserMongoDocument document = UserMongoDocument.builder().id("1").username("juan123").build();
+        UserDocument document = UserDocument.builder().id("1").username("juan123").build();
         User domainUser = User.builder().id("1").username("juan123").build();
 
         when(mongoRepository.findAll()).thenReturn(List.of(document));

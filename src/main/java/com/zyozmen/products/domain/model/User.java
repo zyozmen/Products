@@ -20,7 +20,7 @@ public class User {
     private String direccion;
     private String telefono;
     private String email;
-    private TipoIdentificacion tipoIdentificacion;
+    private IdentificationType tipoIdentificacion;
     private String numeroIdentificacion;
     private Boolean mayorDeEdad;
     private UserState state;
@@ -113,11 +113,11 @@ public class User {
         this.email = email;
     }
 
-    public TipoIdentificacion getTipoIdentificacion() {
+    public IdentificationType getTipoIdentificacion() {
         return tipoIdentificacion;
     }
 
-    public void setTipoIdentificacion(TipoIdentificacion tipoIdentificacion) {
+    public void setTipoIdentificacion(IdentificationType tipoIdentificacion) {
         this.tipoIdentificacion = tipoIdentificacion;
     }
 
@@ -207,7 +207,7 @@ public class User {
         private String direccion;
         private String telefono;
         private String email;
-        private TipoIdentificacion tipoIdentificacion;
+        private IdentificationType tipoIdentificacion;
         private String numeroIdentificacion;
         private Boolean mayorDeEdad;
         private UserState state;
@@ -253,7 +253,7 @@ public class User {
             return this;
         }
 
-        public Builder tipoIdentificacion(TipoIdentificacion tipoIdentificacion) {
+        public Builder tipoIdentificacion(IdentificationType tipoIdentificacion) {
             this.tipoIdentificacion = tipoIdentificacion;
             return this;
         }

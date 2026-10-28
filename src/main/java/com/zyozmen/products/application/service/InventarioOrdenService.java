@@ -3,8 +3,8 @@ package com.zyozmen.products.application.service;
 import com.zyozmen.products.domain.exception.OrderConflictException;
 import com.zyozmen.products.domain.exception.OrderProductException;
 import com.zyozmen.products.domain.model.OrderItem;
-import com.zyozmen.products.domain.model.PresentacionInventario;
-import com.zyozmen.products.domain.model.TrazabilidadPresentacion;
+import com.zyozmen.products.domain.model.InventoryPresentation;
+import com.zyozmen.products.domain.model.PresentationTrace;
 import com.zyozmen.products.domain.port.out.InventarioOrdenPort;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.MarketplaceRepositoryPort;
@@ -99,7 +99,7 @@ public class InventarioOrdenService implements InventarioOrdenPort {
                     throw new OrderConflictException("Stock insuficiente o presentacion no disponible: " + p.presentacionId());
                 }
                 marketplace.actualizarStock(p.presentacionId(), lote.getId(), p.stockDisponible(), (int) nuevo);
-                presentaciones.set(posicion, new PresentacionInventario(p.presentacionId(), p.sku(), p.nombre(),
+                presentaciones.set(posicion, new InventoryPresentation(p.presentacionId(), p.sku(), p.nombre(),
                         p.contenidoUnidad(), p.unidadesCreadas(), (int) nuevo, p.costoPresentacionCalculado(),
                         p.precioVenta(), p.activoMarketplace(), p.confirmacionMargenNegativo(), p.fotografia()));
                 contenedores.set(indice, contenedor.toBuilder().presentaciones(List.copyOf(presentaciones)).build());
@@ -110,5 +110,5 @@ public class InventarioOrdenService implements InventarioOrdenPort {
         }
     }
 
-    private record Movimiento(TrazabilidadPresentacion origen, int cantidad) { }
+    private record Movimiento(PresentationTrace origen, int cantidad) { }
 }

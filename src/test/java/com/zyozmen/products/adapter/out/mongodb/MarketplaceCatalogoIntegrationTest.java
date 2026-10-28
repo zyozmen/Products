@@ -2,11 +2,11 @@ package com.zyozmen.products.adapter.out.mongodb;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
-import com.zyozmen.products.adapter.out.mongodb.document.CepaDocument;
-import com.zyozmen.products.adapter.out.mongodb.document.ImagenDocument;
-import com.zyozmen.products.adapter.out.mongodb.repository.CepaMongoRepository;
-import com.zyozmen.products.application.service.CepaService;
-import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ImageDocument;
+import com.zyozmen.products.adapter.out.mongodb.repository.ProductMongoRepository;
+import com.zyozmen.products.application.service.ProductService;
+import com.zyozmen.products.domain.model.Image;
 import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 import org.bson.Document;
 import org.bson.types.Decimal128;
@@ -57,9 +57,9 @@ class MarketplaceCatalogoIntegrationTest {
         template = new MongoTemplate(factory, converter);
         new MarketplaceIndexInitializer(template).run(null);
         query = new MarketplaceCatalogoQuery(template);
-        template.insert(new CepaDocument("a", "Tangerine", "tangerine",
-                new ImagenDocument("cepa.webp", "webp", "AQID"), null, null, null, List.of(1L)));
-        template.insert(new CepaDocument("b", "Otra", "otra", null, null, null, null, List.of(2L)));
+        template.insert(new ProductDocument("a", "Tangerine", "tangerine",
+                new ImageDocument("cepa.webp", "webp", "AQID"), null, null, null, List.of(1L)));
+        template.insert(new ProductDocument("b", "Otra", "otra", null, null, null, null, List.of(2L)));
         presentacion("a", "Bolsa chica", 5, 8000, 12, "ACTIVO");
         presentacion("a", "Bolsa grande", 10, 15000, 7, "ACTIVO");
         presentacion("a", "Agotada", 1, 1, 0, "ACTIVO");
@@ -119,8 +119,8 @@ class MarketplaceCatalogoIntegrationTest {
 
     @Test
     void renombradoPersisteIdentidadYBusquedaUsaNombreActual() {
-        var repository = new MongoRepositoryFactory(template).getRepository(CepaMongoRepository.class);
-        var service = new CepaService(new CepaMongoAdapter(repository),
+        var repository = new MongoRepositoryFactory(template).getRepository(ProductMongoRepository.class);
+        var service = new ProductService(new ProductMongoAdapter(repository),
                 org.mockito.Mockito.mock(com.zyozmen.products.domain.port.out.CategoryRepositoryPort.class));
         var antes = service.obtener("a");
         var despues = service.actualizar("a", "Mandarina", antes.version());
@@ -129,7 +129,7 @@ class MarketplaceCatalogoIntegrationTest {
         assertThat(query.buscar("mandarina", PageRequest.of(0, 20)).getTotalElements()).isEqualTo(1);
         assertThat(query.buscar("tangerine", PageRequest.of(0, 20)).getTotalElements()).isZero();
         assertThatThrownBy(() -> service.crear("  MANDARINA ")).isInstanceOf(DuplicateKeyException.class);
-        assertThat(service.guardarFotografia("a", new Imagen("nueva.png", "png", "BAUG")).fotografia().getFilepart())
+        assertThat(service.guardarFotografia("a", new Image("nueva.png", "png", "BAUG")).fotografia().getFilepart())
                 .isEqualTo("BAUG");
         assertThat(service.obtener("a").categoryIds()).containsExactly(1L);
     }
@@ -158,7 +158,7 @@ class MarketplaceCatalogoIntegrationTest {
 
     @Test
     void ambosLimitesDePrecioDebenCumplirseEnLaMismaPresentacion() {
-        template.insert(new CepaDocument("c", "Sin precio intermedio", "sin precio intermedio", null, null, null, null));
+        template.insert(new ProductDocument("c", "Sin precio intermedio", "sin precio intermedio", null, null, null, null));
         presentacion("c", "Barata", 1, 1000, 2, "ACTIVO");
         presentacion("c", "Cara", 2, 30000, 2, "ACTIVO");
         var result = query.buscar(new MarketplaceCatalogFilter("", null, new BigDecimal("14000"), new BigDecimal("16000")),
@@ -170,10 +170,10 @@ class MarketplaceCatalogoIntegrationTest {
     void fotosGrandesNoSeAgrupanDentroDelDocumentoDelFacet() {
         template.updateMulti(new org.springframework.data.mongodb.core.query.Query(),
                 new org.springframework.data.mongodb.core.query.Update().set("fotografia.filepart", "A".repeat(3_000_000)),
-                CepaDocument.class);
+                ProductDocument.class);
         for (int i = 0; i < 5; i++) {
             String id = "grande" + i;
-            template.insert(new CepaDocument(id, id, id, new ImagenDocument("foto.webp", "webp",
+            template.insert(new ProductDocument(id, id, id, new ImageDocument("foto.webp", "webp",
                     "A".repeat(3_000_000)), null, null, null));
             presentacion(id, "Bolsa", 5, 10000, 1, "ACTIVO");
         }

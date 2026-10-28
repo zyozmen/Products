@@ -2,14 +2,14 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.exception.OrderProductException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
-import com.zyozmen.products.domain.model.ProductoMarketplace;
+import com.zyozmen.products.domain.model.ProductMarketplace;
 import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
-import com.zyozmen.products.domain.model.PresentacionInventario;
-import com.zyozmen.products.domain.model.TrazabilidadPresentacion;
+import com.zyozmen.products.domain.model.InventoryPresentation;
+import com.zyozmen.products.domain.model.PresentationTrace;
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.MarketplaceRepositoryPort;
-import com.zyozmen.products.domain.port.in.CepaUseCase;
+import com.zyozmen.products.domain.port.in.ProductUseCase;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +23,7 @@ import java.util.Comparator;
 public class MarketplaceService implements MarketplaceUseCase {
     private final MarketplaceRepositoryPort marketplace;
     private final LoteRepositoryPort lotes;
-    private final CepaUseCase cepas;
+    private final ProductUseCase cepas;
 
     @Override
     public PresentacionVenta resolverPresentacion(String presentacionId) {
@@ -67,7 +67,7 @@ public class MarketplaceService implements MarketplaceUseCase {
         return marketplace.buscarCatalogo(filtro, PageRequest.of(page, size));
     }
 
-    private ProductoMarketplace obtenerActivo(String id) {
+    private ProductMarketplace obtenerActivo(String id) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("El ID de presentacion es obligatorio");
         }
@@ -76,7 +76,7 @@ public class MarketplaceService implements MarketplaceUseCase {
                 .orElseThrow(() -> new ResourceNotFoundException("Presentacion no encontrada o inactiva"));
     }
 
-    private Origen resolverOrigen(ProductoMarketplace producto) {
+    private Origen resolverOrigen(ProductMarketplace producto) {
         var lote = lotes.findLoteById(producto.loteId())
                 .orElseThrow(() -> new OrderProductException("La presentacion no tiene un lote valido"));
         if (lote.getProveedorId() == null || lote.getProveedorId().isBlank() || lote.getContenedores() == null) {
@@ -99,7 +99,7 @@ public class MarketplaceService implements MarketplaceUseCase {
                 }
                 var costo = contenedor.getCostoBasePorUnidad().multiply(presentacion.contenidoUnidad())
                         .setScale(2, RoundingMode.HALF_UP);
-                var trazabilidad = new TrazabilidadPresentacion(lote.getProveedorId(), lote.getId(),
+                var trazabilidad = new PresentationTrace(lote.getProveedorId(), lote.getId(),
                         contenedor.getId(), contenedor.getCepaId(),
                         presentacion.presentacionId(), presentacion.contenidoUnidad(), contenedor.getUnidadBase(),
                         contenedor.getCostoBasePorUnidad(), costo);
@@ -109,6 +109,6 @@ public class MarketplaceService implements MarketplaceUseCase {
         throw new OrderProductException("La presentacion no pertenece al lote publicado");
     }
 
-    private record Origen(String nombre, PresentacionInventario presentacion,
-                          TrazabilidadPresentacion trazabilidad) { }
+    private record Origen(String nombre, InventoryPresentation presentacion,
+                          PresentationTrace trazabilidad) { }
 }

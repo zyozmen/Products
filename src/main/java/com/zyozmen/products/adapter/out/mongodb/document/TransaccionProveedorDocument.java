@@ -13,7 +13,7 @@ import org.springframework.data.mongodb.core.mapping.FieldType;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-@Document(collection = "transacciones_proveedor")
+@Document(collection = "Provider_Transactions")
 @Data
 @Builder
 @NoArgsConstructor

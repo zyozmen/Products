@@ -23,7 +23,7 @@ class OrderMongoMapperTest {
     @Test
     void snapshotSeConservaEnDocumentoMongoYNoSeExponeAlCliente() throws Exception {
         var item = item();
-        var snapshot = new TrazabilidadPresentacion("proveedor", "lote", "contenedor", "cepa", "presentacion",
+        var snapshot = new PresentationTrace("proveedor", "lote", "contenedor", "cepa", "presentacion",
                 BigDecimal.TEN, "GRAMOS", new BigDecimal("1000"), new BigDecimal("10000.00"));
         item.setTrazabilidad(snapshot);
         var order = order(item);
@@ -49,7 +49,7 @@ class OrderMongoMapperTest {
         var stored = bson.getList("items", Document.class).getFirst().get("trazabilidad", Document.class);
         assertThat(stored.get("costoPresentacion")).isEqualTo(new Decimal128(new BigDecimal("10000.00")));
         var result = mapper.toDomain(converter.read(
-                com.zyozmen.products.adapter.out.mongodb.document.OrderMongoDocument.class, bson));
+                com.zyozmen.products.adapter.out.mongodb.document.OrderDocument.class, bson));
         assertThat(result.getItems().getFirst().getTrazabilidad()).isEqualTo(snapshot);
         assertThat(result.isInventoryDeducted()).isTrue();
         var json = new ObjectMapper().findAndRegisterModules().writeValueAsString(OrderResponseDTO.from(result));

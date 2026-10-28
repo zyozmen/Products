@@ -2,7 +2,7 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.CatalogCategory;
-import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.domain.model.Image;
 import com.zyozmen.products.domain.port.out.CategoryRepositoryPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,7 +43,7 @@ class CategoryServiceTest {
     @Test
     void updatesCategoryPreservingIdentityCreatedAtAndImage() {
         var created = LocalDateTime.of(2026, 1, 1, 0, 0);
-        var image = new Imagen("test.png", "png", "AQID");
+        var image = new Image("test.png", "png", "AQID");
         var existing = CatalogCategory.builder().categoryId(1L).name("Old").createdAt(created)
                 .image(image).imageUrl("/api/v1/categories/1/image").build();
         when(repository.findById(1L)).thenReturn(Optional.of(existing));
@@ -62,7 +62,7 @@ class CategoryServiceTest {
 
     @Test
     void updateWithExternalUrlRemovesStoredImage() {
-        var existing = CatalogCategory.builder().categoryId(1L).image(new Imagen()).build();
+        var existing = CatalogCategory.builder().categoryId(1L).image(new Image()).build();
         when(repository.findById(1L)).thenReturn(Optional.of(existing));
         when(repository.save(existing)).thenReturn(existing);
 
@@ -95,7 +95,7 @@ class CategoryServiceTest {
     @Test
     void savesMainImageAndExposesPublicUrl() {
         var category = CatalogCategory.builder().categoryId(2L).name("Audio").build();
-        var image = new Imagen("audio.png", "png", "AQID");
+        var image = new Image("audio.png", "png", "AQID");
         when(repository.findById(2L)).thenReturn(Optional.of(category));
         when(repository.save(category)).thenReturn(category);
 

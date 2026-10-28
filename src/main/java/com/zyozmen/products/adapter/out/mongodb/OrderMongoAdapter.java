@@ -1,6 +1,6 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.zyozmen.products.adapter.out.mongodb.document.OrderMongoDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.OrderDocument;
 import com.zyozmen.products.adapter.out.mongodb.mapper.OrderMongoMapper;
 import com.zyozmen.products.adapter.out.mongodb.repository.OrderMongoRepository;
 import com.zyozmen.products.adapter.out.mongodb.sequence.SequenceGeneratorService;
@@ -75,12 +75,12 @@ public class OrderMongoAdapter implements OrderRepositoryPort {
         if (!criteria.isEmpty()) {
             query.addCriteria(new Criteria().andOperator(criteria.toArray(Criteria[]::new)));
         }
-        long count = mongoTemplate.count(query, OrderMongoDocument.class);
+        long count = mongoTemplate.count(query, OrderDocument.class);
         query.with(Sort.by(Sort.Direction.DESC, "created_at"));
         if (pageable != null) {
             query.with(pageable);
         }
-        List<Order> orders = mongoTemplate.find(query, OrderMongoDocument.class).stream().map(mapper::toDomain).toList();
+        List<Order> orders = mongoTemplate.find(query, OrderDocument.class).stream().map(mapper::toDomain).toList();
         Pageable page = pageable == null ? Pageable.unpaged() : pageable;
         return new PageImpl<>(orders, page, count);
     }

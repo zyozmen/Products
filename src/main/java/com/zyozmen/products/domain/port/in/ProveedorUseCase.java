@@ -1,9 +1,9 @@
 package com.zyozmen.products.domain.port.in;
 
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.Proveedor;
-import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
-import com.zyozmen.products.domain.model.TransaccionProveedor;
+import com.zyozmen.products.domain.model.Provider;
+import com.zyozmen.products.domain.model.ProviderTransactionType;
+import com.zyozmen.products.domain.model.ProviderTransaction;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -11,13 +11,13 @@ import org.springframework.data.domain.Page;
 
 public interface ProveedorUseCase {
 
-    Proveedor crear(CrearProveedorCommand command);
+    Provider crear(CrearProveedorCommand command);
 
-    Proveedor obtener(String id);
+    Provider obtener(String id);
 
     DetalleProveedor obtenerDetalle(String id);
 
-    Page<Proveedor> buscar(String buscar, int page, int size);
+    Page<Provider> buscar(String buscar, int page, int size);
 
     Lote recibirLote(RecibirLoteCommand command);
 
@@ -25,15 +25,15 @@ public interface ProveedorUseCase {
 
     Page<Lote> listarLotes(String proveedorId, String buscar, int page, int size, String sort);
 
-    Page<TransaccionProveedor> listarAbonos(String proveedorId, int page, int size);
+    Page<ProviderTransaction> listarAbonos(String proveedorId, int page, int size);
 
     /** Registra un abono posterior; si loteId es nulo se aplica a los lotes pendientes, del más antiguo al más reciente. */
-    Proveedor registrarPago(RegistrarPagoCommand command);
+    Provider registrarPago(RegistrarPagoCommand command);
 
     record CrearProveedorCommand(String nombre, String nit, String telefono, String email) {
     }
 
-    record DetalleProveedor(Proveedor proveedor, long lotesPagados, long lotesPorPagar) {
+    record DetalleProveedor(Provider proveedor, long lotesPagados, long lotesPorPagar) {
     }
 
     record ContenedorCommand(String cepaId, String unidadBase, String presentacionId,
@@ -50,6 +50,6 @@ public interface ProveedorUseCase {
     }
 
     record RegistrarPagoCommand(String proveedorId, String loteId, BigDecimal monto,
-                                TipoTransaccionProveedor tipo, String observaciones) {
+                                ProviderTransactionType tipo, String observaciones) {
     }
 }

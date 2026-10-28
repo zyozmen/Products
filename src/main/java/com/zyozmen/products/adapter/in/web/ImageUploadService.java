@@ -1,47 +1,39 @@
 package com.zyozmen.products.adapter.in.web;
 
-import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.domain.model.Image;
 import com.zyozmen.products.domain.model.Images;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Base64;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 @Service
 public class ImageUploadService {
-    public enum Target { PRODUCT, CATEGORY, CEPA }
+    public enum Target {CATEGORY, PRODUCT}
 
     public static final long MAX_SIZE = 2L * 1024 * 1024;
     private static final Map<String, String> CONTENT_TYPES = Map.of(
             "png", "image/png", "jpg", "image/jpeg", "jpeg", "image/jpeg", "webp", "image/webp");
 
-    public Images prepare(Target target, MultipartFile main, List<MultipartFile> secondary) {
+    public Images prepare(Target target, MultipartFile main) {
         if (target == null) {
             throw new IllegalArgumentException("El destino de las imagenes es obligatorio");
         }
-        if (target == Target.CATEGORY || target == Target.CEPA) {
-            Imagen image = convert(main);
+        if (target == Target.CATEGORY || target == Target.PRODUCT) {
+            Image image = convert(main);
             if (image == null) {
                 throw new IllegalArgumentException("La foto principal es obligatoria para "
-                        + (target == Target.CEPA ? "cepas" : "categorias"));
+                        + (target == Target.PRODUCT ? "productos" : "categorias"));
             }
-            return Images.builder().fotoPrincipal(image).fotosSecundarias(List.of()).build();
+            return Images.builder().fotoPrincipal(image).build();
         }
-        List<MultipartFile> files = secondary == null ? List.of() : secondary.stream()
-                .filter(Objects::nonNull).filter(file -> !file.isEmpty()).toList();
-        if (files.size() > 5) {
-            throw new IllegalArgumentException("No se permiten mas de 5 fotos secundarias.");
-        }
-        return Images.builder().fotoPrincipal(convert(main))
-                .fotosSecundarias(files.stream().map(this::convert).toList()).build();
+        return Images.builder().fotoPrincipal(convert(main)).build();
     }
 
-    private Imagen convert(MultipartFile file) {
+    private Image convert(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             return null;
         }
@@ -60,7 +52,7 @@ public class ImageUploadService {
             if (bytes.length > MAX_SIZE || bytes.length == 0) {
                 throw new IllegalArgumentException("La imagen debe contener datos y no superar 2 MB");
             }
-            return new Imagen(name, extension, Base64.getEncoder().encodeToString(bytes));
+            return new Image(name, extension, Base64.getEncoder().encodeToString(bytes));
         } catch (IOException exception) {
             throw new IllegalArgumentException("No se pudo leer el archivo de imagen.", exception);
         }

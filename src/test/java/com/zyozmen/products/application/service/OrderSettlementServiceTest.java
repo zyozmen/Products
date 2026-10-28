@@ -119,7 +119,7 @@ class OrderSettlementServiceTest {
         assertInvalid(order);
         var t = item(1).getTrazabilidad();
         order = order();
-        order.getItems().getFirst().setTrazabilidad(new TrazabilidadPresentacion(t.proveedorId(), t.loteId(),
+        order.getItems().getFirst().setTrazabilidad(new PresentationTrace(t.proveedorId(), t.loteId(),
                 t.contenedorId(), t.cepaId(), t.presentacionId(), t.contenidoUnidad(), t.unidadBase(),
                 t.costoBasePorUnidad(), new BigDecimal("1")));
         assertInvalid(order);
@@ -131,7 +131,7 @@ class OrderSettlementServiceTest {
         when(repository.activationAt()).thenReturn(Optional.of(START));
         var order = order();
         var t = item(1).getTrazabilidad();
-        order.getItems().getFirst().setTrazabilidad(new TrazabilidadPresentacion(t.proveedorId(), t.loteId(),
+        order.getItems().getFirst().setTrazabilidad(new PresentationTrace(t.proveedorId(), t.loteId(),
                 t.contenedorId(), t.cepaId(), t.presentacionId(), new BigDecimal("0.333"), t.unidadBase(),
                 BigDecimal.ONE, new BigDecimal("0.33")));
         service.recognizeOrderMovement(order);
@@ -253,7 +253,7 @@ class OrderSettlementServiceTest {
 
     private OrderItem item(int quantity) {
         return OrderItem.builder().quantity(quantity).productId("650000000000000000000401")
-                .trazabilidad(new TrazabilidadPresentacion("650000000000000000000101", "650000000000000000000201",
+                .trazabilidad(new PresentationTrace("650000000000000000000101", "650000000000000000000201",
                         "650000000000000000000301", "cepa", "650000000000000000000401",
                         BigDecimal.TEN, "GRAMOS", new BigDecimal("1000"), new BigDecimal("10000"))).build();
     }

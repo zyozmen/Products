@@ -1,8 +1,8 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementAccumulatorDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementSettingsDocument;
-import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementMovementDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsDocument;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -22,11 +22,11 @@ public class DailySettlementIndexInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        var indexes = template.indexOps(DailySettlementAccumulatorDocument.class);
+        var indexes = template.indexOps(ProviderAccumulatorsDocument.class);
         indexes.ensureIndex(new Index().on("providerId", Sort.Direction.ASC)
                 .on("date", Sort.Direction.ASC).unique());
         indexes.ensureIndex(new Index().on("date", Sort.Direction.ASC).on("providerId", Sort.Direction.ASC));
-        template.indexOps(DailySettlementMovementDocument.class).ensureIndex(new Index()
+        template.indexOps(ProviderDailyMovementsDocument.class).ensureIndex(new Index()
                 .on("orderId", Sort.Direction.ASC).on("itemIndex", Sort.Direction.ASC)
                 .on("movementType", Sort.Direction.ASC).unique());
         template.upsert(Query.query(Criteria.where("id").is(DailySettlementSettingsDocument.ID)),

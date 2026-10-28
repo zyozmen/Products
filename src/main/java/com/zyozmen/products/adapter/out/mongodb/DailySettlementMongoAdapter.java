@@ -1,9 +1,9 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementAccumulatorDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementSettingsDocument;
-import com.zyozmen.products.adapter.out.mongodb.document.ProveedorDocument;
-import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementMovementDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProviderDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsDocument;
 import com.zyozmen.products.domain.model.DailySettlementAccumulator;
 import com.zyozmen.products.domain.model.DailySettlementMovement;
 import com.zyozmen.products.domain.exception.OrderConflictException;
@@ -43,16 +43,16 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
             filter.and("providerId").is(providerId);
         }
         var query = Query.query(filter);
-        long total = template.count(query, DailySettlementAccumulatorDocument.class);
-        var accumulators = template.find(query.with(pageable), DailySettlementAccumulatorDocument.class);
+        long total = template.count(query, ProviderAccumulatorsDocument.class);
+        var accumulators = template.find(query.with(pageable), ProviderAccumulatorsDocument.class);
         if (accumulators.isEmpty()) {
             return new PageImpl<>(java.util.List.of(), pageable, total);
         }
         var providersQuery = Query.query(Criteria.where("id").in(accumulators.stream()
-                .map(DailySettlementAccumulatorDocument::providerId).toList()));
+                .map(ProviderAccumulatorsDocument::providerId).toList()));
         providersQuery.fields().include("nombre").include("financiero.saldoPendiente");
-        var providers = template.find(providersQuery, ProveedorDocument.class).stream()
-                .collect(Collectors.toMap(ProveedorDocument::getId, Function.identity()));
+        var providers = template.find(providersQuery, ProviderDocument.class).stream()
+                .collect(Collectors.toMap(ProviderDocument::getId, Function.identity()));
         var content = accumulators.stream().map(a -> {
             var provider = providers.get(a.providerId());
             if (provider == null || provider.getFinanciero() == null) {
@@ -94,11 +94,11 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
         var sorted = movements.stream().sorted(Comparator.comparing(DailySettlementMovement::providerId)
                 .thenComparingInt(DailySettlementMovement::itemIndex)).toList();
         try {
-            template.insert(sorted.stream().map(m -> new DailySettlementMovementDocument(null, m.orderId(),
+            template.insert(sorted.stream().map(m -> new ProviderDailyMovementsDocument(null, m.orderId(),
                     m.itemIndex(), m.movementType(), m.providerId(), m.lotId(), m.containerId(), m.strainId(),
                     m.presentationId(), m.quantity(), m.contentPerUnit(), m.baseUnit(), m.baseUnitCost(),
                     m.unitCost(), m.amount(), m.timestamp(), m.date().toString(), null)).toList(),
-                    DailySettlementMovementDocument.class);
+                    ProviderDailyMovementsDocument.class);
             var providers = new TreeMap<String, List<DailySettlementMovement>>();
             for (var movement : sorted) {
                 providers.computeIfAbsent(movement.providerId(), id -> new java.util.ArrayList<>()).add(movement);
@@ -118,7 +118,7 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
                             .setOnInsert(pqr ? "salesRecognizedAmount" : "pqrRecognizedAmount", BigDecimal.ZERO)
                             .setOnInsert("reversedAmount", BigDecimal.ZERO)
                             .setOnInsert("linkedPaymentsAmount", BigDecimal.ZERO);
-                    template.upsert(filter, update, DailySettlementAccumulatorDocument.class);
+                    template.upsert(filter, update, ProviderAccumulatorsDocument.class);
                 }
             }
         } catch (DuplicateKeyException exception) {
@@ -130,7 +130,7 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
     @Transactional(propagation = Propagation.MANDATORY)
     public void reversePqr(Long orderId, Instant cancelledAt) {
         var originals = template.find(Query.query(Criteria.where("orderId").is(orderId)
-                        .and("movementType").is("PQR")), DailySettlementMovementDocument.class);
+                        .and("movementType").is("PQR")), ProviderDailyMovementsDocument.class);
         // Las PQR historicas sin reconocimiento no tienen costo financiero que revertir.
         if (originals.isEmpty()) {
             return;
@@ -139,19 +139,19 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
             throw new OrderConflictException("La cancelacion no puede ser anterior al reconocimiento de la PQR");
         }
         try {
-            template.insert(originals.stream().map(m -> new DailySettlementMovementDocument(null, m.orderId(),
+            template.insert(originals.stream().map(m -> new ProviderDailyMovementsDocument(null, m.orderId(),
                     m.itemIndex(), "PQR_REVERSAL", m.providerId(), m.lotId(), m.containerId(), m.strainId(),
                     m.presentationId(), m.quantity(), m.contentPerUnit(), m.baseUnit(), m.baseUnitCost(),
                     m.unitCost(), m.amount(), cancelledAt, m.date(), m.id())).toList(),
-                    DailySettlementMovementDocument.class);
+                    ProviderDailyMovementsDocument.class);
             var byProvider = originals.stream().collect(Collectors.groupingBy(
-                    DailySettlementMovementDocument::providerId, TreeMap::new, Collectors.toList()));
+                    ProviderDailyMovementsDocument::providerId, TreeMap::new, Collectors.toList()));
             for (var provider : byProvider.entrySet()) {
                 var byDate = provider.getValue().stream().collect(Collectors.groupingBy(
-                        DailySettlementMovementDocument::date, TreeMap::new, Collectors.toList()));
+                        ProviderDailyMovementsDocument::date, TreeMap::new, Collectors.toList()));
                 for (var day : byDate.entrySet()) {
-                    long count = day.getValue().stream().mapToLong(DailySettlementMovementDocument::quantity).sum();
-                    BigDecimal amount = day.getValue().stream().map(DailySettlementMovementDocument::amount)
+                    long count = day.getValue().stream().mapToLong(ProviderDailyMovementsDocument::quantity).sum();
+                    BigDecimal amount = day.getValue().stream().map(ProviderDailyMovementsDocument::amount)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
                     var filter = Query.query(Criteria.where("providerId").is(provider.getKey())
                             .and("date").is(day.getKey()).and("totalPqrCount").gte(count));
@@ -159,7 +159,7 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
                             new org.bson.Document("$subtract", List.of("$pqrRecognizedAmount", "$reversedAmount")),
                             new org.bson.types.Decimal128(amount)))));
                     var result = template.updateFirst(filter, new Update().inc("totalPqrCount", -count)
-                            .inc("reversedAmount", amount), DailySettlementAccumulatorDocument.class);
+                            .inc("reversedAmount", amount), ProviderAccumulatorsDocument.class);
                     if (result.getModifiedCount() != 1) {
                         throw new OrderConflictException("El acumulado original de la PQR no permite esta reversion");
                     }

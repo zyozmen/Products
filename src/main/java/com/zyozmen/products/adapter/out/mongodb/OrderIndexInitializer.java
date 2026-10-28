@@ -1,6 +1,6 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.zyozmen.products.adapter.out.mongodb.document.OrderMongoDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.OrderDocument;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -20,7 +20,7 @@ public class OrderIndexInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        var indexes = mongoTemplate.indexOps(OrderMongoDocument.class);
+        var indexes = mongoTemplate.indexOps(OrderDocument.class);
         indexes.ensureIndex(new Index()
                 .on("username", Sort.Direction.ASC)
                 .on("created_at", Sort.Direction.DESC)
@@ -37,13 +37,13 @@ public class OrderIndexInitializer implements ApplicationRunner {
         mongoTemplate.updateMulti(
                 new Query(Criteria.where("status").is("DESPACHADA")),
                 new Update().set("status", OrderStatus.EMPACADA.name()),
-                OrderMongoDocument.class);
+                OrderDocument.class);
         for (String field : new String[] {"from_status", "to_status"}) {
             mongoTemplate.updateMulti(
                     new Query(Criteria.where("status_history." + field).is("DESPACHADA")),
                     new Update().set("status_history.$[entry]." + field, OrderStatus.EMPACADA.name())
                             .filterArray(Criteria.where("entry." + field).is("DESPACHADA")),
-                    OrderMongoDocument.class);
+                    OrderDocument.class);
         }
     }
 }

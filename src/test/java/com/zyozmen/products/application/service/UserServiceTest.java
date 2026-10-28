@@ -8,7 +8,7 @@ import com.zyozmen.products.domain.exception.UserAlreadyExistsException;
 import com.zyozmen.products.domain.exception.UserInactiveException;
 import com.zyozmen.products.domain.model.AuthResult;
 import com.zyozmen.products.domain.model.Role;
-import com.zyozmen.products.domain.model.TipoIdentificacion;
+import com.zyozmen.products.domain.model.IdentificationType;
 import com.zyozmen.products.domain.model.User;
 import com.zyozmen.products.domain.model.UserState;
 import com.zyozmen.products.domain.exception.UserPendingApprovalException;
@@ -67,7 +67,7 @@ class UserServiceTest {
                 .apellido("Pérez")
                 .direccion("Calle 45 # 12-34")
                 .telefono("3124567890").email("Juan@Example.com")
-                .tipoIdentificacion(TipoIdentificacion.CC)
+                .tipoIdentificacion(IdentificationType.CC)
                 .numeroIdentificacion("1018234567")
                 .mayorDeEdad(true)
                 .build();
@@ -78,7 +78,7 @@ class UserServiceTest {
         User request = buildClienteRegistration();
         when(userRepositoryPort.existsByUsername("juan123")).thenReturn(false);
         when(userRepositoryPort.existsByTipoIdentificacionAndNumeroIdentificacion(
-                TipoIdentificacion.CC, "1018234567")).thenReturn(false);
+                IdentificationType.CC, "1018234567")).thenReturn(false);
         when(passwordEncoder.encode("raw-password")).thenReturn("hashed-password");
         when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -139,7 +139,7 @@ class UserServiceTest {
         User request = buildClienteRegistration();
         when(userRepositoryPort.existsByUsername("juan123")).thenReturn(false);
         when(userRepositoryPort.existsByTipoIdentificacionAndNumeroIdentificacion(
-                TipoIdentificacion.CC, "1018234567")).thenReturn(true);
+                IdentificationType.CC, "1018234567")).thenReturn(true);
 
         assertThatThrownBy(() -> userService.registrar(request))
                 .isInstanceOf(UserAlreadyExistsException.class)
@@ -154,7 +154,7 @@ class UserServiceTest {
         request.setMayorDeEdad(false);
         when(userRepositoryPort.existsByUsername("juan123")).thenReturn(false);
         when(userRepositoryPort.existsByTipoIdentificacionAndNumeroIdentificacion(
-                TipoIdentificacion.CC, "1018234567")).thenReturn(false);
+                IdentificationType.CC, "1018234567")).thenReturn(false);
 
         assertThatThrownBy(() -> userService.registrar(request))
                 .isInstanceOf(UnderageRegistrationException.class);

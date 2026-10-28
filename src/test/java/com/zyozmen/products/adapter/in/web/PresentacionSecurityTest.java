@@ -1,7 +1,7 @@
 package com.zyozmen.products.adapter.in.web;
 
 import com.zyozmen.products.config.SecurityConfig;
-import com.zyozmen.products.domain.model.EstadoPagoLote;
+import com.zyozmen.products.domain.model.LotePaymentState;
 import com.zyozmen.products.domain.model.Lote;
 import com.zyozmen.products.domain.port.in.PresentacionUseCase;
 import com.zyozmen.products.domain.port.out.RevokedTokenRepositoryPort;
@@ -54,7 +54,7 @@ class PresentacionSecurityTest {
     @Test
     void administradorPuedeEmpaquetar() throws Exception {
         when(useCase.empaquetar(anyString(), anyString(), anyList())).thenReturn(
-                Lote.builder().id("l1").estadoPago(EstadoPagoLote.PENDIENTE).contenedores(List.of()).build());
+                Lote.builder().id("l1").estadoPago(LotePaymentState.PENDIENTE).contenedores(List.of()).build());
         mvc.perform(post(URL).with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isCreated());

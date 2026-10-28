@@ -1,10 +1,10 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.zyozmen.products.domain.model.UnidadMedida;
+import com.zyozmen.products.domain.model.UnitMeasurement;
 import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
-import com.zyozmen.products.adapter.out.mongodb.document.CepaDocument;
-import com.zyozmen.products.adapter.out.mongodb.document.ProductoMarketplaceDocument;
-import com.zyozmen.products.adapter.out.mongodb.mapper.ImagenMongoMapper;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductMarketplaceDocument;
+import com.zyozmen.products.adapter.out.mongodb.mapper.ImageMongoMapper;
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase.ProductoCatalogo;
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase.PresentacionDetalle;
 import lombok.RequiredArgsConstructor;
@@ -55,16 +55,16 @@ public class MarketplaceCatalogoQuery {
             return new PageImpl<>(content, pageable, total);
         }
         var cepas = template.find(Query.query(Criteria.where("id")
-                        .in(content.stream().map(ProductoCatalogo::cepaId).toList())), CepaDocument.class)
-                .stream().collect(Collectors.toMap(CepaDocument::id, Function.identity()));
-        var fotos = template.find(fotosQuery(content), ProductoMarketplaceDocument.class)
-                .stream().collect(Collectors.toMap(ProductoMarketplaceDocument::presentacionId, Function.identity()));
+                        .in(content.stream().map(ProductoCatalogo::cepaId).toList())), ProductDocument.class)
+                .stream().collect(Collectors.toMap(ProductDocument::id, Function.identity()));
+        var fotos = template.find(fotosQuery(content), ProductMarketplaceDocument.class)
+                .stream().collect(Collectors.toMap(ProductMarketplaceDocument::presentacionId, Function.identity()));
         var conFotos = content.stream().map(p -> {
             var cepa = cepas.get(p.cepaId());
             if (cepa == null) {
                 throw new IllegalStateException("La cepa del catalogo ya no existe");
             }
-            return new ProductoCatalogo(p.cepaId(), p.nombre(), ImagenMongoMapper.toDomain(cepa.fotografia()),
+            return new ProductoCatalogo(p.cepaId(), p.nombre(), ImageMongoMapper.toDomain(cepa.fotografia()),
                     p.precioDesde(), p.presentaciones().stream().map(opcion -> {
                         var foto = fotos.get(opcion.presentacionId());
                         if (foto == null) {
@@ -72,7 +72,7 @@ public class MarketplaceCatalogoQuery {
                         }
                         return new PresentacionDetalle(opcion.presentacionId(), opcion.sku(), opcion.nombre(),
                                 opcion.contenidoUnidad(), opcion.unidadBase(), opcion.precioVenta(),
-                                opcion.stockDisponible(), ImagenMongoMapper.toDomain(foto.fotografia()));
+                                opcion.stockDisponible(), ImageMongoMapper.toDomain(foto.fotografia()));
                     }).toList());
         }).toList();
         return new PageImpl<>(conFotos, pageable, total);
@@ -128,7 +128,7 @@ public class MarketplaceCatalogoQuery {
                 var coincide = new Document("$and", List.of(
                         new Document("$eq", List.of("$$p.contenidoUnidad",
                                 new Decimal128(new BigDecimal(medida.group(1).replace(',', '.'))))),
-                        new Document("$eq", List.of("$$p.unidadBase", UnidadMedida.desde(medida.group(2)).name()))));
+                        new Document("$eq", List.of("$$p.unidadBase", UnitMeasurement.desde(medida.group(2)).name()))));
                 condiciones.add(new Document("$anyElementTrue", List.of(new Document("$map",
                         new Document("input", "$presentaciones").append("as", "p").append("in", coincide)))));
             }

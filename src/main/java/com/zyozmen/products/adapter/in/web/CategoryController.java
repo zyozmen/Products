@@ -4,7 +4,7 @@ import com.zyozmen.products.adapter.in.web.dto.CategoryRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.CategoryResponseDTO;
 import com.zyozmen.products.adapter.in.web.mapper.CategoryWebMapper;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
-import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.domain.model.Image;
 import com.zyozmen.products.domain.port.in.CategoryUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +46,7 @@ public class CategoryController {
 
     @GetMapping("/{id}/image")
     public ResponseEntity<byte[]> image(@PathVariable Long id) {
-        Imagen image = categoryUseCase.getCategoryById(id).getImage();
+        Image image = categoryUseCase.getCategoryById(id).getImage();
         if (image == null) {
             throw new ResourceNotFoundException("La categoria no tiene una imagen almacenada");
         }

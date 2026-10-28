@@ -1,10 +1,10 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.zyozmen.products.adapter.out.mongodb.document.ProductoMarketplaceDocument;
-import com.zyozmen.products.adapter.out.mongodb.mapper.ImagenMongoMapper;
-import com.zyozmen.products.adapter.out.mongodb.repository.ProductoMarketplaceMongoRepository;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductMarketplaceDocument;
+import com.zyozmen.products.adapter.out.mongodb.mapper.ImageMongoMapper;
+import com.zyozmen.products.adapter.out.mongodb.repository.ProductMarketplaceMongoRepository;
 import com.zyozmen.products.domain.exception.OrderConflictException;
-import com.zyozmen.products.domain.model.ProductoMarketplace;
+import com.zyozmen.products.domain.model.ProductMarketplace;
 import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase.ProductoCatalogo;
 import com.zyozmen.products.domain.port.out.MarketplaceRepositoryPort;
@@ -24,7 +24,7 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 public class MarketplaceMongoAdapter implements MarketplaceRepositoryPort {
-    private final ProductoMarketplaceMongoRepository repository;
+    private final ProductMarketplaceMongoRepository repository;
     private final MarketplaceCatalogoQuery catalogo;
     private final MongoTemplate template;
 
@@ -39,15 +39,15 @@ public class MarketplaceMongoAdapter implements MarketplaceRepositoryPort {
     }
 
     @Override
-    public void insert(ProductoMarketplace p) {
-        repository.insert(new ProductoMarketplaceDocument(null, p.presentacionId(), p.loteId(), p.proveedorNombre(),
+    public void insert(ProductMarketplace p) {
+        repository.insert(new ProductMarketplaceDocument(null, p.presentacionId(), p.loteId(), p.proveedorNombre(),
                 p.nombreProducto(), p.cepaNombre(), p.sku(), p.precioVenta(), p.stockDisponible(),
-                ImagenMongoMapper.toDocument(p.fotografia()), p.estado(), p.cepaId(), p.presentacionNombre(),
+                ImageMongoMapper.toDocument(p.fotografia()), p.estado(), p.cepaId(), p.presentacionNombre(),
                 p.contenidoUnidad(), p.unidadBase()));
     }
 
     @Override
-    public Optional<ProductoMarketplace> findByPresentacionId(String presentacionId) {
+    public Optional<ProductMarketplace> findByPresentacionId(String presentacionId) {
         if (presentacionId == null || !ObjectId.isValid(presentacionId)) {
             throw new IllegalArgumentException("El ID de presentacion debe ser un ObjectId valido");
         }
@@ -55,7 +55,7 @@ public class MarketplaceMongoAdapter implements MarketplaceRepositoryPort {
     }
 
     @Override
-    public List<ProductoMarketplace> findDisponiblesByCepaId(String cepaId) {
+    public List<ProductMarketplace> findDisponiblesByCepaId(String cepaId) {
         return repository.findByCepaIdAndEstadoAndStockDisponibleGreaterThan(cepaId, "ACTIVO", 0)
                 .stream().map(this::toDomain).toList();
     }
@@ -81,17 +81,17 @@ public class MarketplaceMongoAdapter implements MarketplaceRepositoryPort {
             filtro.and("estado").is("ACTIVO");
         }
         var resultado = template.updateFirst(Query.query(filtro),
-                Update.update("stockDisponible", nuevo), ProductoMarketplaceDocument.class);
+                Update.update("stockDisponible", nuevo), ProductMarketplaceDocument.class);
         if (resultado.getModifiedCount() != 1) {
             throw new OrderConflictException(
                     "El stock de marketplace cambio o no coincide con el lote; vuelva a consultar la presentacion");
         }
     }
 
-    private ProductoMarketplace toDomain(ProductoMarketplaceDocument p) {
-        return new ProductoMarketplace(p.presentacionId(), p.loteId(), p.proveedorNombre(), p.nombreProducto(),
+    private ProductMarketplace toDomain(ProductMarketplaceDocument p) {
+        return new ProductMarketplace(p.presentacionId(), p.loteId(), p.proveedorNombre(), p.nombreProducto(),
                 p.cepaNombre(), p.sku(), p.precioVenta(), p.stockDisponible(),
-                ImagenMongoMapper.toDomain(p.fotografia()), p.estado(), p.cepaId(), p.presentacionNombre(),
+                ImageMongoMapper.toDomain(p.fotografia()), p.estado(), p.cepaId(), p.presentacionNombre(),
                 p.contenidoUnidad(), p.unidadBase());
     }
 }

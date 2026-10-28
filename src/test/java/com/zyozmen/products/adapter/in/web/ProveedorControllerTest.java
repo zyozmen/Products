@@ -1,13 +1,13 @@
 package com.zyozmen.products.adapter.in.web;
 
-import com.zyozmen.products.domain.model.Contenedor;
+import com.zyozmen.products.domain.model.Container;
 import com.zyozmen.products.domain.exception.BusinessRuleException;
-import com.zyozmen.products.domain.model.EstadoPagoLote;
+import com.zyozmen.products.domain.model.LotePaymentState;
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.Proveedor;
-import com.zyozmen.products.domain.model.EstadoProveedor;
-import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
-import com.zyozmen.products.domain.model.TransaccionProveedor;
+import com.zyozmen.products.domain.model.Provider;
+import com.zyozmen.products.domain.model.ProviderState;
+import com.zyozmen.products.domain.model.ProviderTransactionType;
+import com.zyozmen.products.domain.model.ProviderTransaction;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase;
 import com.zyozmen.products.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,8 +51,8 @@ class ProveedorControllerTest {
 
     @Test
     void consultaProveedorConservaContratoYAgregaCantidadesDeLotes() throws Exception {
-        var proveedor = Proveedor.builder().id("p1").nombre("Distribuidora Cannabis SAS").nit("900123456")
-                .telefono("3001234567").email("proveedor@example.com").estado(EstadoProveedor.ACTIVO)
+        var proveedor = Provider.builder().id("p1").nombre("Distribuidora Cannabis SAS").nit("900123456")
+                .telefono("3001234567").email("proveedor@example.com").estado(ProviderState.ACTIVO)
                 .totalDeuda(new BigDecimal("8000000.00")).totalPagado(new BigDecimal("3000000.00"))
                 .saldoPendiente(new BigDecimal("5000000.00"))
                 .fechaCreacion(Instant.parse("2026-10-21T15:00:00Z")).build();
@@ -78,7 +78,7 @@ class ProveedorControllerTest {
 
     @Test
     void consultaProveedorSinLotesExponeCantidadesCero() throws Exception {
-        var proveedor = Proveedor.builder().id("p1").estado(EstadoProveedor.ACTIVO).build();
+        var proveedor = Provider.builder().id("p1").estado(ProviderState.ACTIVO).build();
         when(useCase.obtenerDetalle("p1"))
                 .thenReturn(new ProveedorUseCase.DetalleProveedor(proveedor, 0, 0));
 
@@ -168,9 +168,9 @@ class ProveedorControllerTest {
 
     @Test
     void consultaHistorialConFechaMontoProveedorYLote() throws Exception {
-        when(useCase.listarAbonos("p1", 0, 20)).thenReturn(new PageImpl<>(List.of(TransaccionProveedor.builder()
+        when(useCase.listarAbonos("p1", 0, 20)).thenReturn(new PageImpl<>(List.of(ProviderTransaction.builder()
                 .id("t1").proveedorId("p1").loteId("l1").monto(new BigDecimal("1000000.00"))
-                .fecha(Instant.parse("2026-10-21T15:00:00Z")).tipo(TipoTransaccionProveedor.ABONO).build())));
+                .fecha(Instant.parse("2026-10-21T15:00:00Z")).tipo(ProviderTransactionType.ABONO).build())));
         mvc.perform(get("/api/proveedores/p1/abonos")).andExpect(status().isOk())
                 .andExpect(header().string("X-Total-Count", "1"))
                 .andExpect(jsonPath("$[0].monto").value(1000000))
@@ -212,8 +212,8 @@ class ProveedorControllerTest {
 
     @Test
     void buscaPorNombreONitConPaginaYTotalEnEncabezado() throws Exception {
-        var proveedor = Proveedor.builder().id("p1").nombre("Distribuidora Cannabis SAS")
-                .nit("900123456").estado(EstadoProveedor.ACTIVO).build();
+        var proveedor = Provider.builder().id("p1").nombre("Distribuidora Cannabis SAS")
+                .nit("900123456").estado(ProviderState.ACTIVO).build();
         for (String texto : List.of("distribuidora", "900123")) {
             when(useCase.buscar(texto, 1, 10))
                     .thenReturn(new PageImpl<>(List.of(proveedor), PageRequest.of(1, 10), 11));
@@ -248,9 +248,9 @@ class ProveedorControllerTest {
 
     private Lote lote() {
         return Lote.builder().id("l1").proveedorId("p1").codigoLote("LOT-20261021-ABC")
-                .estado("RECIBIDO").estadoPago(EstadoPagoLote.PENDIENTE)
+                .estado("RECIBIDO").estadoPago(LotePaymentState.PENDIENTE)
                 .fechaIngreso(Instant.parse("2026-10-21T15:00:00Z"))
-                .contenedores(List.of(Contenedor.builder().id("c1").tipoCepa("Sativa Premium")
+                .contenedores(List.of(Container.builder().id("c1").tipoCepa("Sativa Premium")
                         .unidadBase("gramo").capacidadUnidadesBase(new BigDecimal("1000"))
                         .cantidadDisponible(new BigDecimal("1000")).estado("RECIBIDO").build())).build();
     }

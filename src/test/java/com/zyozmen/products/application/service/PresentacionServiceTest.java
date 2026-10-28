@@ -6,7 +6,7 @@ import com.zyozmen.products.domain.exception.MargenNegativoException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.*;
 import com.zyozmen.products.domain.port.in.PresentacionUseCase.CrearPresentacionCommand;
-import com.zyozmen.products.domain.port.in.CepaUseCase;
+import com.zyozmen.products.domain.port.in.ProductUseCase;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.MarketplaceRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
@@ -35,26 +35,26 @@ class PresentacionServiceTest {
     @Mock private LoteRepositoryPort lotes;
     @Mock private ProveedorRepositoryPort proveedores;
     @Mock private MarketplaceRepositoryPort marketplace;
-    @Mock private CepaUseCase cepas;
+    @Mock private ProductUseCase cepas;
     @InjectMocks private PresentacionService service;
     private Lote lote;
-    private Proveedor proveedor;
+    private Provider proveedor;
 
     @BeforeEach
     void setUp() {
         lote = Lote.builder().id(LOTE).proveedorId("p1").estado("RECIBIDO").version(2L)
                 .costoTotalLote(bd("5000000")).montoPagadoLote(bd("1000000"))
-                .saldoPendienteLote(bd("4000000")).estadoPago(EstadoPagoLote.PAGO_PARCIAL)
-                .contenedores(List.of(Contenedor.builder().id(CONTENEDOR).tipoCepa("Sativa Premium").cepaId("cepa")
+                .saldoPendienteLote(bd("4000000")).estadoPago(LotePaymentState.PAGO_PARCIAL)
+                .contenedores(List.of(Container.builder().id(CONTENEDOR).tipoCepa("Sativa Premium").cepaId("cepa")
                         .unidadBase("GRAMOS").capacidadUnidadesBase(bd("1000"))
                         .cantidadDisponible(bd("1000")).costoBasePorUnidad(bd("5000")).build())).build();
-        proveedor = Proveedor.builder().id("p1").nombre("AgroSustentable S.A.S")
+        proveedor = Provider.builder().id("p1").nombre("AgroSustentable S.A.S")
                 .totalDeuda(bd("5000000")).totalPagado(bd("1000000"))
                 .saldoPendiente(bd("4000000")).build();
         when(lotes.findLoteById(LOTE)).thenReturn(Optional.of(lote));
         lenient().when(proveedores.findById("p1")).thenReturn(Optional.of(proveedor));
         lenient().when(lotes.save(any())).thenAnswer(i -> i.getArgument(0));
-        lenient().when(cepas.obtener("cepa")).thenReturn(new Cepa("cepa", "Sativa Premium"));
+        lenient().when(cepas.obtener("cepa")).thenReturn(new Product("cepa", "Sativa Premium"));
     }
 
     @Test
@@ -70,12 +70,12 @@ class PresentacionServiceTest {
         assertThat(resultado.getEstado()).isEqualTo("PROCESADO");
         assertThat(resultado.getUpdatedAt()).isNotNull();
         var ps = resultado.getContenedores().getFirst().getPresentaciones();
-        assertThat(ps).extracting(PresentacionInventario::stockDisponible).containsExactly(100, 50);
+        assertThat(ps).extracting(InventoryPresentation::stockDisponible).containsExactly(100, 50);
         assertThat(ps.getFirst().costoPresentacionCalculado()).isEqualByComparingTo("25000");
         assertThat(ps.getLast().costoPresentacionCalculado()).isEqualByComparingTo("50000");
-        var productos = ArgumentCaptor.forClass(ProductoMarketplace.class);
+        var productos = ArgumentCaptor.forClass(ProductMarketplace.class);
         verify(marketplace, times(2)).insert(productos.capture());
-        assertThat(productos.getAllValues()).extracting(ProductoMarketplace::stockDisponible).containsExactly(100, 50);
+        assertThat(productos.getAllValues()).extracting(ProductMarketplace::stockDisponible).containsExactly(100, 50);
         assertThat(productos.getValue().nombreProducto()).isEqualTo("Sativa Premium");
         assertThat(productos.getValue().estado()).isEqualTo("ACTIVO");
         verify(proveedores, never()).save(any());
@@ -106,7 +106,7 @@ class PresentacionServiceTest {
         proveedor.setSaldoPendiente(bd("0"));
         lote.setMontoPagadoLote(bd("5000000"));
         lote.setSaldoPendienteLote(bd("0"));
-        lote.setEstadoPago(EstadoPagoLote.PAGADO_TOTAL);
+        lote.setEstadoPago(LotePaymentState.PAGADO_TOTAL);
 
         var resultado = service.empaquetar(LOTE, CONTENEDOR,
                 List.of(command("SAT-5", "5", 100, "20000", true)));
@@ -122,7 +122,7 @@ class PresentacionServiceTest {
 
     @Test
     void capacidadIncluyeExistentesAunqueSuStockSeHayaVendido() {
-        var existente = new PresentacionInventario("650000000000000000000401", "EX", "Existente",
+        var existente = new InventoryPresentation("650000000000000000000401", "EX", "Existente",
                 bd("10"), 50, 0, bd("50000"), bd("80000"), true, false, null);
         lote.setContenedores(List.of(lote.getContenedores().getFirst().toBuilder()
                 .presentaciones(List.of(existente)).cantidadDisponible(bd("500")).build()));
@@ -134,10 +134,10 @@ class PresentacionServiceTest {
 
     @Test
     void agregaSinReiniciarStockExistenteYAcumulaCostosDeTodosLosContenedores() {
-        var existente = new PresentacionInventario("650000000000000000000401", "EX", "Existente",
+        var existente = new InventoryPresentation("650000000000000000000401", "EX", "Existente",
                 bd("10"), 50, 12, bd("50000"), bd("80000"), true, false, null);
         lote.setContenedores(List.of(lote.getContenedores().getFirst(),
-                Contenedor.builder().id("otro").presentaciones(List.of(existente)).build()));
+                Container.builder().id("otro").presentaciones(List.of(existente)).build()));
         var result = service.empaquetar(LOTE, CONTENEDOR, List.of(command("NUEVA", "5", 10, "30000", false)));
         assertThat(result.getCostoTotalEmpaquetado()).isEqualByComparingTo("2750000");
         assertThat(result.getContenedores().getLast().getPresentaciones().getFirst().stockDisponible()).isEqualTo(12);
@@ -146,7 +146,7 @@ class PresentacionServiceTest {
 
     @Test
     void agregaAlMismoContenedorSinReiniciarStockVendido() {
-        var existente = new PresentacionInventario("650000000000000000000401", "EX", "Existente",
+        var existente = new InventoryPresentation("650000000000000000000401", "EX", "Existente",
                 bd("10"), 50, 12, bd("50000"), bd("80000"), true, false, null);
         lote.setContenedores(List.of(lote.getContenedores().getFirst().toBuilder()
                 .presentaciones(List.of(existente)).cantidadDisponible(bd("500")).build()));
@@ -199,7 +199,7 @@ class PresentacionServiceTest {
                 bd("625"), false, false, null);
         var r = service.empaquetar(LOTE, CONTENEDOR, List.of(c));
         assertThat(r.getCostoTotalEmpaquetado()).isEqualByComparingTo("1250");
-        var captor = ArgumentCaptor.forClass(ProductoMarketplace.class);
+        var captor = ArgumentCaptor.forClass(ProductMarketplace.class);
         verify(marketplace).insert(captor.capture());
         assertThat(captor.getValue().estado()).isEqualTo("INACTIVO");
     }
@@ -222,15 +222,15 @@ class PresentacionServiceTest {
 
     @Test
     void conservaFotografiaBase64EnLoteYMarketplace() {
-        var foto = new Imagen("bolsa.png", "PNG", "AQID");
+        var foto = new Image("bolsa.png", "PNG", "AQID");
         var comando = new CrearPresentacionCommand(null, "FOTO", "Bolsa", bd("5"), 1,
                 bd("30000"), true, false, foto);
 
         var resultado = service.empaquetar(LOTE, CONTENEDOR, List.of(comando));
 
         var guardada = resultado.getContenedores().getFirst().getPresentaciones().getFirst().fotografia();
-        assertThat(guardada).isEqualTo(new Imagen("bolsa.png", "png", "AQID"));
-        var captor = ArgumentCaptor.forClass(ProductoMarketplace.class);
+        assertThat(guardada).isEqualTo(new Image("bolsa.png", "png", "AQID"));
+        var captor = ArgumentCaptor.forClass(ProductMarketplace.class);
         verify(marketplace).insert(captor.capture());
         assertThat(captor.getValue().fotografia()).isEqualTo(guardada);
     }
@@ -240,7 +240,7 @@ class PresentacionServiceTest {
         for (String filepart : List.of("data:image/png;base64,AQID", "%%%",
                 java.util.Base64.getEncoder().encodeToString(new byte[204801]))) {
             var comando = new CrearPresentacionCommand(null, "FOTO", "Bolsa", bd("5"), 1,
-                    bd("30000"), true, false, new Imagen("foto.png", "png", filepart));
+                    bd("30000"), true, false, new Image("foto.png", "png", filepart));
             assertThatThrownBy(() -> service.empaquetar(LOTE, CONTENEDOR, List.of(comando)))
                     .isInstanceOf(IllegalArgumentException.class);
         }

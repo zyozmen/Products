@@ -1,11 +1,11 @@
 package com.zyozmen.products.application.service;
 
-import com.zyozmen.products.domain.model.Contenedor;
+import com.zyozmen.products.domain.model.Container;
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.Proveedor;
+import com.zyozmen.products.domain.model.Provider;
 import com.zyozmen.products.domain.port.in.PresentacionUseCase;
-import com.zyozmen.products.domain.port.in.CepaUseCase;
-import com.zyozmen.products.domain.model.Cepa;
+import com.zyozmen.products.domain.port.in.ProductUseCase;
+import com.zyozmen.products.domain.model.Product;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.MarketplaceRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
@@ -31,16 +31,16 @@ class PresentacionTransactionTest {
         var lotes = mock(LoteRepositoryPort.class);
         var proveedores = mock(ProveedorRepositoryPort.class);
         var marketplace = mock(MarketplaceRepositoryPort.class);
-        var cepas = mock(CepaUseCase.class);
-        when(cepas.obtener("cepa")).thenReturn(new Cepa("cepa", "Sativa"));
+        var cepas = mock(ProductUseCase.class);
+        when(cepas.obtener("cepa")).thenReturn(new Product("cepa", "Sativa"));
         var manager = mock(PlatformTransactionManager.class);
         var status = new SimpleTransactionStatus();
         when(manager.getTransaction(any())).thenReturn(status);
         var lote = Lote.builder().id("l1").proveedorId("p1").contenedores(List.of(
-                Contenedor.builder().id("c1").tipoCepa("Sativa").cepaId("cepa").unidadBase("GRAMOS")
+                Container.builder().id("c1").tipoCepa("Sativa").cepaId("cepa").unidadBase("GRAMOS")
                         .capacidadUnidadesBase(BigDecimal.TEN).costoBasePorUnidad(BigDecimal.ONE).build())).build();
         when(lotes.findLoteById("l1")).thenReturn(Optional.of(lote));
-        when(proveedores.findById("p1")).thenReturn(Optional.of(Proveedor.builder().nombre("Proveedor").build()));
+        when(proveedores.findById("p1")).thenReturn(Optional.of(Provider.builder().nombre("Proveedor").build()));
         when(lotes.save(any())).thenAnswer(i -> i.getArgument(0));
         doThrow(new DuplicateKeyException("publicacion concurrente")).when(marketplace).insert(any());
         var interceptor = new TransactionInterceptor();

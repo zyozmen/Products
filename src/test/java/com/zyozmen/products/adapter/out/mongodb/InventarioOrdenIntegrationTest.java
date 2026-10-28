@@ -4,7 +4,7 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.zyozmen.products.adapter.out.mongodb.document.*;
 import com.zyozmen.products.adapter.out.mongodb.mapper.OrderMongoMapper;
-import com.zyozmen.products.adapter.out.mongodb.mapper.ProveedorMongoMapper;
+import com.zyozmen.products.adapter.out.mongodb.mapper.ProviderMongoMapper;
 import com.zyozmen.products.adapter.out.mongodb.repository.*;
 import com.zyozmen.products.adapter.out.mongodb.sequence.SequenceGeneratorService;
 import com.zyozmen.products.application.service.InventarioOrdenService;
@@ -54,7 +54,7 @@ class InventarioOrdenIntegrationTest {
     private MongoTemplate template;
     private MongoTransactionManager manager;
     private OrderMongoAdapter orders;
-    private ProveedorMongoAdapter lotes;
+    private ProviderMongoAdapter lotes;
     private MarketplaceMongoAdapter marketplace;
     private MarketplaceUseCase catalogo;
     private UserRepositoryPort usuarios;
@@ -90,14 +90,14 @@ class InventarioOrdenIntegrationTest {
         settlementProxy.addAdvice(transactionInterceptor());
         settlements = (com.zyozmen.products.domain.port.out.OrderSettlementPort) settlementProxy.getProxy();
         var repositories = new MongoRepositoryFactory(template);
-        lotes = new ProveedorMongoAdapter(repositories.getRepository(ProveedorMongoRepository.class),
+        lotes = new ProviderMongoAdapter(repositories.getRepository(ProviderMongoRepository.class),
                 repositories.getRepository(LoteMongoRepository.class),
-                repositories.getRepository(TransaccionProveedorMongoRepository.class), new ProveedorMongoMapper());
-        marketplace = new MarketplaceMongoAdapter(repositories.getRepository(ProductoMarketplaceMongoRepository.class),
+                repositories.getRepository(TransaccionProveedorMongoRepository.class), new ProviderMongoMapper());
+        marketplace = new MarketplaceMongoAdapter(repositories.getRepository(ProductMarketplaceMongoRepository.class),
                 new MarketplaceCatalogoQuery(template), template);
         orders = new OrderMongoAdapter(repositories.getRepository(OrderMongoRepository.class), new OrderMongoMapper(),
                 new SequenceGeneratorService(template), template);
-        for (Class<?> type : List.of(OrderMongoDocument.class, LoteDocument.class, ProductoMarketplaceDocument.class)) {
+        for (Class<?> type : List.of(OrderDocument.class, LoteDocument.class, ProductMarketplaceDocument.class)) {
             template.createCollection(type);
         }
         template.createCollection("sequences");
@@ -105,8 +105,8 @@ class InventarioOrdenIntegrationTest {
         catalogo = mock(MarketplaceUseCase.class);
         usuarios = mock(UserRepositoryPort.class);
         service = proxied(new OrderService(orders, catalogo, usuarios, inventario(lotes), settlements));
-        lotes.save(Proveedor.builder().id(PROVEEDOR).nombre("Proveedor").nit(PROVEEDOR)
-                .estado(EstadoProveedor.ACTIVO).totalDeuda(new BigDecimal("100"))
+        lotes.save(Provider.builder().id(PROVEEDOR).nombre("Proveedor").nit(PROVEEDOR)
+                .estado(ProviderState.ACTIVO).totalDeuda(new BigDecimal("100"))
                 .totalPagado(BigDecimal.ZERO).saldoPendiente(new BigDecimal("100")).build());
         seed(LOTE, CONTENEDOR, PRESENTACION, 10);
     }
@@ -188,7 +188,7 @@ class InventarioOrdenIntegrationTest {
         lotes.save(otro);
         var item2 = item(l2, CONTENEDOR, p2, 2);
         var t = item2.getTrazabilidad();
-        item2.setTrazabilidad(new TrazabilidadPresentacion(otro.getProveedorId(), t.loteId(), t.contenedorId(),
+        item2.setTrazabilidad(new PresentationTrace(otro.getProveedorId(), t.loteId(), t.contenedorId(),
                 t.cepaId(), t.presentacionId(), t.contenidoUnidad(), t.unidadBase(),
                 t.costoBasePorUnidad(), t.costoPresentacion()));
         var orden = orders.save(orden(List.of(item(LOTE, CONTENEDOR, PRESENTACION, 2), item2)));
@@ -227,7 +227,7 @@ class InventarioOrdenIntegrationTest {
                 List.of(new OrderUseCase.PqrItemRequest(PRESENTACION, null, 2)), null, null))
                 .isInstanceOf(IllegalStateException.class).hasMessage("fallo de persistencia");
         stock(PRESENTACION, LOTE, 8);
-        assertThat(template.count(new org.springframework.data.mongodb.core.query.Query(), OrderMongoDocument.class)).isEqualTo(1);
+        assertThat(template.count(new org.springframework.data.mongodb.core.query.Query(), OrderDocument.class)).isEqualTo(1);
     }
 
     @Test
@@ -406,7 +406,7 @@ class InventarioOrdenIntegrationTest {
     void snapshotInvalidoRevierteDescuentoSinReconocerCostoCero() {
         var invalid = item(LOTE, CONTENEDOR, PRESENTACION, 2);
         var t = invalid.getTrazabilidad();
-        invalid.setTrazabilidad(new TrazabilidadPresentacion(t.proveedorId(), t.loteId(), t.contenedorId(),
+        invalid.setTrazabilidad(new PresentationTrace(t.proveedorId(), t.loteId(), t.contenedorId(),
                 t.cepaId(), t.presentacionId(), t.contenidoUnidad(), t.unidadBase(),
                 t.costoBasePorUnidad(), new BigDecimal("999")));
         var order = orders.save(orden(List.of(invalid)));
@@ -621,7 +621,7 @@ class InventarioOrdenIntegrationTest {
         when(catalogo.resolverPresentacion(PRESENTACION)).thenReturn(new MarketplaceUseCase.PresentacionVenta(
                 "Tangerine", BigDecimal.TEN, item(LOTE, CONTENEDOR, PRESENTACION, 1).getTrazabilidad()));
         when(catalogo.resolverPresentacion(secondPresentation)).thenReturn(new MarketplaceUseCase.PresentacionVenta(
-                "Tangerine", BigDecimal.TEN, new TrazabilidadPresentacion(secondProvider,
+                "Tangerine", BigDecimal.TEN, new PresentationTrace(secondProvider,
                 snapshot.loteId(), snapshot.contenedorId(), snapshot.cepaId(), snapshot.presentacionId(),
                 snapshot.contenidoUnidad(), snapshot.unidadBase(), snapshot.costoBasePorUnidad(),
                 snapshot.costoPresentacion())));
@@ -830,21 +830,21 @@ class InventarioOrdenIntegrationTest {
     private OrderItem item(String lote, String contenedor, String presentacion, int cantidad) {
         return OrderItem.builder().productId(presentacion).quantity(cantidad).name("Tangerine")
                 .unitPrice(BigDecimal.TEN).lineTotal(BigDecimal.TEN)
-                .trazabilidad(new TrazabilidadPresentacion(PROVEEDOR, lote, contenedor, "cepa", presentacion,
+                .trazabilidad(new PresentationTrace(PROVEEDOR, lote, contenedor, "cepa", presentacion,
                         BigDecimal.TEN, "GRAMOS", BigDecimal.ONE, BigDecimal.TEN)).build();
     }
 
     private void seed(String loteId, String contenedorId, String presentacionId, int stock) {
-        var p = new PresentacionInventario(presentacionId, presentacionId, "10g", BigDecimal.TEN, stock, stock,
+        var p = new InventoryPresentation(presentacionId, presentacionId, "10g", BigDecimal.TEN, stock, stock,
                 BigDecimal.TEN, BigDecimal.TEN, true, false, null);
         lotes.save(Lote.builder().id(loteId).proveedorId(PROVEEDOR).estado("PROCESADO")
-                .estadoPago(EstadoPagoLote.PENDIENTE).costoTotalLote(new BigDecimal("100"))
+                .estadoPago(LotePaymentState.PENDIENTE).costoTotalLote(new BigDecimal("100"))
                 .saldoPendienteLote(new BigDecimal("100")).montoPagadoLote(BigDecimal.ZERO)
-                .contenedores(List.of(Contenedor.builder().id(contenedorId).cepaId("cepa").tipoCepa("Tangerine")
+                .contenedores(List.of(Container.builder().id(contenedorId).cepaId("cepa").tipoCepa("Tangerine")
                         .unidadBase("GRAMOS").capacidadUnidadesBase(new BigDecimal("150"))
                         .cantidadDisponible(new BigDecimal("50")).costoBasePorUnidad(BigDecimal.ONE)
                         .presentaciones(List.of(p)).build())).build());
-        marketplace.insert(new ProductoMarketplace(presentacionId, loteId, "Proveedor", "Tangerine", "Tangerine",
+        marketplace.insert(new ProductMarketplace(presentacionId, loteId, "Proveedor", "Tangerine", "Tangerine",
                 presentacionId, BigDecimal.TEN, stock, null, "ACTIVO", "cepa", "10g", BigDecimal.TEN, "GRAMOS"));
     }
 }

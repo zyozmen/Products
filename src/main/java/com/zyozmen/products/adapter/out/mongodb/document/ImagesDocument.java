@@ -14,8 +14,8 @@ import lombok.NoArgsConstructor;
 public class ImagesDocument {
 
     @Field("foto_principal")
-    private ImagenDocument fotoPrincipal;
+    private ImageDocument fotoPrincipal;
 
     @Field("fotos_secundarias")
-    private List<ImagenDocument> fotosSecundarias;
+    private List<ImageDocument> fotosSecundarias;
 }

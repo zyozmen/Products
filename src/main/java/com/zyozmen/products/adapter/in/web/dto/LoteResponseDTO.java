@@ -1,7 +1,7 @@
 package com.zyozmen.products.adapter.in.web.dto;
 
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.PresentacionInventario;
+import com.zyozmen.products.domain.model.InventoryPresentation;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -24,7 +24,7 @@ public record LoteResponseDTO(
                              BigDecimal capacidadUnidadesBase, BigDecimal cantidadDisponible,
                              BigDecimal costoBasePorUnidad, BigDecimal subtotal, String estado,
                              String codigoContenedor, BigDecimal precioBaseUnidad,
-                             List<PresentacionInventario> presentaciones, String cepaId) {
+                             List<InventoryPresentation> presentaciones, String cepaId) {
     }
 
     public static LoteResponseDTO from(Lote l) {

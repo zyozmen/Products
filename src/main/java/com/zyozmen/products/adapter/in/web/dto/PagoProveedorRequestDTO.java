@@ -1,6 +1,6 @@
 package com.zyozmen.products.adapter.in.web.dto;
 
-import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
+import com.zyozmen.products.domain.model.ProviderTransactionType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
@@ -14,6 +14,6 @@ public record PagoProveedorRequestDTO(
         @Digits(integer = 15, fraction = 2, message = "El monto admite máximo 2 decimales")
         BigDecimal monto,
         String loteId,
-        TipoTransaccionProveedor tipo,
+        ProviderTransactionType tipo,
         @Size(max = 500, message = "Las observaciones son demasiado largas") String observaciones) {
 }

@@ -15,7 +15,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-@Document(collection = "lotes")
+@Document(collection = "Lotes")
 @Data
 @Builder
 @NoArgsConstructor
@@ -80,7 +80,7 @@ public class LoteDocument {
             @Field(targetType = FieldType.OBJECT_ID) String presentacionId,
             String sku, String nombre, BigDecimal contenidoUnidad, int unidadesCreadas,
             int stockDisponible, BigDecimal costoPresentacionCalculado, BigDecimal precioVenta,
-            boolean activoMarketplace, boolean confirmacionMargenNegativo, ImagenDocument fotografia) {
+            boolean activoMarketplace, boolean confirmacionMargenNegativo, ImageDocument fotografia) {
     }
 
     @Data

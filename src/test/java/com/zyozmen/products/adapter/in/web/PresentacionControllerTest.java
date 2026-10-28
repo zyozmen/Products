@@ -2,9 +2,9 @@ package com.zyozmen.products.adapter.in.web;
 
 import com.zyozmen.products.domain.exception.CapacidadExcedidaException;
 import com.zyozmen.products.domain.exception.MargenNegativoException;
-import com.zyozmen.products.domain.model.Contenedor;
-import com.zyozmen.products.domain.model.Cepa;
-import com.zyozmen.products.domain.model.EstadoPagoLote;
+import com.zyozmen.products.domain.model.Container;
+import com.zyozmen.products.domain.model.Product;
+import com.zyozmen.products.domain.model.LotePaymentState;
 import com.zyozmen.products.domain.model.Lote;
 import com.zyozmen.products.domain.port.in.PresentacionUseCase;
 import com.zyozmen.products.exception.GlobalExceptionHandler;
@@ -46,13 +46,13 @@ class PresentacionControllerTest {
     @Test
     void recibeArregloYDevuelveLoteConPresentaciones() throws Exception {
         when(useCase.empaquetar(eq("l1"), eq("c1"), anyList())).thenReturn(Lote.builder().id("l1")
-                .estadoPago(EstadoPagoLote.PENDIENTE).estado("PROCESADO")
-                .contenedores(List.of(Contenedor.builder().id("c1").tipoCepa("Sativa")
-                        .cepaId(Cepa.desdeNombre("Sativa").id()).build())).build());
+                .estadoPago(LotePaymentState.PENDIENTE).estado("PROCESADO")
+                .contenedores(List.of(Container.builder().id("c1").tipoCepa("Sativa")
+                        .cepaId(Product.desdeNombre("Sativa").id()).build())).build());
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(VALID))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.estado").value("PROCESADO"))
                 .andExpect(jsonPath("$.contenedores[0].presentaciones").isArray())
-                .andExpect(jsonPath("$.contenedores[0].cepaId").value(Cepa.desdeNombre("Sativa").id()));
+                .andExpect(jsonPath("$.contenedores[0].cepaId").value(Product.desdeNombre("Sativa").id()));
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<PresentacionUseCase.CrearPresentacionCommand>> captor = ArgumentCaptor.forClass(List.class);
         verify(useCase).empaquetar(eq("l1"), eq("c1"), captor.capture());

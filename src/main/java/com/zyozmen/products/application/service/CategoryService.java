@@ -2,7 +2,7 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.CatalogCategory;
-import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.domain.model.Image;
 import com.zyozmen.products.domain.port.in.CategoryUseCase;
 import com.zyozmen.products.domain.port.out.CategoryRepositoryPort;
 import lombok.RequiredArgsConstructor;
@@ -52,7 +52,7 @@ public class CategoryService implements CategoryUseCase {
     }
 
     @Override
-    public CatalogCategory saveImage(Long id, Imagen image) {
+    public CatalogCategory saveImage(Long id, Image image) {
         if (image == null) {
             throw new IllegalArgumentException("La foto principal es obligatoria para categorias");
         }

@@ -1,9 +1,9 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.zyozmen.products.adapter.out.mongodb.document.ProductoMarketplaceDocument;
-import com.zyozmen.products.adapter.out.mongodb.repository.ProductoMarketplaceMongoRepository;
-import com.zyozmen.products.domain.model.ProductoMarketplace;
-import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductMarketplaceDocument;
+import com.zyozmen.products.adapter.out.mongodb.repository.ProductMarketplaceMongoRepository;
+import com.zyozmen.products.domain.model.ProductMarketplace;
+import com.zyozmen.products.domain.model.Image;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -26,11 +26,11 @@ import static org.mockito.Mockito.*;
 class MarketplaceMongoAdapterTest {
     @Test
     void consultaPorIdDePresentacionNoPorIdDelCatalogoAnterior() {
-        var repository = mock(ProductoMarketplaceMongoRepository.class);
+        var repository = mock(ProductMarketplaceMongoRepository.class);
         var adapter = new MarketplaceMongoAdapter(repository, mock(MarketplaceCatalogoQuery.class), mock(MongoTemplate.class));
         String id = "650000000000000000000401";
         when(repository.findByPresentacionId(id)).thenReturn(Optional.of(
-                new ProductoMarketplaceDocument("publicacion", id, "650000000000000000000201",
+                new ProductMarketplaceDocument("publicacion", id, "650000000000000000000201",
                         "Proveedor", "Tangerine", "Tangerine", "TAN10", BigDecimal.TEN, 5, null, "ACTIVO")));
 
         var result = adapter.findByPresentacionId(id).orElseThrow();
@@ -43,7 +43,7 @@ class MarketplaceMongoAdapterTest {
 
     @Test
     void consultaDisponiblesPorIdentidadPersistidaDeCepa() {
-        var repository = mock(ProductoMarketplaceMongoRepository.class);
+        var repository = mock(ProductMarketplaceMongoRepository.class);
         var adapter = new MarketplaceMongoAdapter(repository, mock(MarketplaceCatalogoQuery.class), mock(MongoTemplate.class));
         when(repository.findByCepaIdAndEstadoAndStockDisponibleGreaterThan("cepa", "ACTIVO", 0))
                 .thenReturn(List.of());
@@ -53,22 +53,22 @@ class MarketplaceMongoAdapterTest {
 
     @Test
     void insertaProyeccionSinSobrescribirStockDeOtrasPresentaciones() {
-        var repository = mock(ProductoMarketplaceMongoRepository.class);
+        var repository = mock(ProductMarketplaceMongoRepository.class);
         var adapter = new MarketplaceMongoAdapter(repository, mock(MarketplaceCatalogoQuery.class), mock(MongoTemplate.class));
-        var p = new ProductoMarketplace("650000000000000000000401", "650000000000000000000201",
+        var p = new ProductMarketplace("650000000000000000000401", "650000000000000000000201",
                 "Proveedor", "Sativa - Bolsa", "Sativa", "SAT-5", BigDecimal.TEN, 100,
-                new Imagen("foto.png", "png", "AQID"), "ACTIVO");
+                new Image("foto.png", "png", "AQID"), "ACTIVO");
 
         adapter.insert(p);
 
-        var captor = ArgumentCaptor.forClass(ProductoMarketplaceDocument.class);
+        var captor = ArgumentCaptor.forClass(ProductMarketplaceDocument.class);
         verify(repository).insert(captor.capture());
         assertThat(captor.getValue().presentacionId()).isEqualTo(p.presentacionId());
         assertThat(captor.getValue().stockDisponible()).isEqualTo(100);
         assertThat(captor.getValue().sku()).isEqualTo("SAT-5");
         assertThat(captor.getValue().fotografia().getFilepart()).isEqualTo("AQID");
         assertThat(captor.getValue().fotografia().getNombre()).isEqualTo("foto.png");
-        verify(repository, never()).save(any(ProductoMarketplaceDocument.class));
+        verify(repository, never()).save(any(ProductMarketplaceDocument.class));
         when(repository.existsBySku("SAT-5")).thenReturn(true);
         when(repository.existsByPresentacionId(p.presentacionId())).thenReturn(true);
         assertThat(adapter.existsBySku("SAT-5")).isTrue();
@@ -79,9 +79,9 @@ class MarketplaceMongoAdapterTest {
     void indicesUnicosBloqueanDuplicadosConcurrentes() {
         var template = mock(MongoTemplate.class);
         var indexes = mock(IndexOperations.class);
-        when(template.indexOps(ProductoMarketplaceDocument.class)).thenReturn(indexes);
+        when(template.indexOps(ProductMarketplaceDocument.class)).thenReturn(indexes);
         var cepaIndexes = mock(IndexOperations.class);
-        when(template.indexOps(com.zyozmen.products.adapter.out.mongodb.document.CepaDocument.class))
+        when(template.indexOps(com.zyozmen.products.adapter.out.mongodb.document.ProductDocument.class))
                 .thenReturn(cepaIndexes);
 
         new MarketplaceIndexInitializer(template).run(null);
@@ -98,19 +98,19 @@ class MarketplaceMongoAdapterTest {
     @Test
     void actualizaStockSoloSiCoincideElValorAnteriorYLoteYEstado() {
         var template = mock(MongoTemplate.class);
-        var adapter = new MarketplaceMongoAdapter(mock(ProductoMarketplaceMongoRepository.class),
+        var adapter = new MarketplaceMongoAdapter(mock(ProductMarketplaceMongoRepository.class),
                 mock(MarketplaceCatalogoQuery.class), template);
-        when(template.updateFirst(any(Query.class), any(Update.class), eq(ProductoMarketplaceDocument.class)))
+        when(template.updateFirst(any(Query.class), any(Update.class), eq(ProductMarketplaceDocument.class)))
                 .thenReturn(UpdateResult.acknowledged(1, 1L, null));
         adapter.actualizarStock("p", "l", 5, 3);
         adapter.actualizarStock("p", "l", 3, 5);
         var queries = ArgumentCaptor.forClass(Query.class);
-        verify(template, times(2)).updateFirst(queries.capture(), any(Update.class), eq(ProductoMarketplaceDocument.class));
+        verify(template, times(2)).updateFirst(queries.capture(), any(Update.class), eq(ProductMarketplaceDocument.class));
         assertThat(queries.getAllValues().getFirst().getQueryObject())
                 .containsEntry("presentacionId", "p").containsEntry("loteId", "l")
                 .containsEntry("stockDisponible", 5).containsEntry("estado", "ACTIVO");
         assertThat(queries.getAllValues().getLast().getQueryObject()).doesNotContainKey("estado");
-        when(template.updateFirst(any(Query.class), any(Update.class), eq(ProductoMarketplaceDocument.class)))
+        when(template.updateFirst(any(Query.class), any(Update.class), eq(ProductMarketplaceDocument.class)))
                 .thenReturn(UpdateResult.acknowledged(0, 0L, null));
         assertThatThrownBy(() -> adapter.actualizarStock("p", "l", 5, 3))
                 .isInstanceOf(OrderConflictException.class);

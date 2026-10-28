@@ -4,7 +4,7 @@ import com.zyozmen.products.adapter.in.web.dto.LoginResponseDTO;
 import com.zyozmen.products.adapter.in.web.dto.RegisterRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.UserResponseDTO;
 import com.zyozmen.products.domain.model.AuthResult;
-import com.zyozmen.products.domain.model.TipoIdentificacion;
+import com.zyozmen.products.domain.model.IdentificationType;
 import com.zyozmen.products.domain.model.User;
 import org.springframework.stereotype.Component;
 
@@ -27,7 +27,7 @@ public class UserWebMapper {
                 .telefono(dto.getTelefono())
                 .email(dto.getEmail() != null ? dto.getEmail().trim().toLowerCase() : null)
                 .tipoIdentificacion(dto.getTipoIdentificacion() != null
-                        ? TipoIdentificacion.valueOf(dto.getTipoIdentificacion())
+                        ? IdentificationType.valueOf(dto.getTipoIdentificacion())
                         : null)
                 .numeroIdentificacion(dto.getNumeroIdentificacion())
                 .mayorDeEdad(dto.getMayorDeEdad())

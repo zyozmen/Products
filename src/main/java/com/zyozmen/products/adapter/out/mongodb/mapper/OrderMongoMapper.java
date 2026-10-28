@@ -1,6 +1,6 @@
 package com.zyozmen.products.adapter.out.mongodb.mapper;
 
-import com.zyozmen.products.adapter.out.mongodb.document.OrderMongoDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.OrderDocument;
 import com.zyozmen.products.domain.model.Order;
 import com.zyozmen.products.domain.model.OrderDelivery;
 import com.zyozmen.products.domain.model.OrderItem;
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class OrderMongoMapper {
-    public Order toDomain(OrderMongoDocument document) {
+    public Order toDomain(OrderDocument document) {
         return Order.builder()
                 .id(document.getId() == null ? null : Long.valueOf(document.getId()))
                 .username(document.getUsername())
@@ -55,8 +55,8 @@ public class OrderMongoMapper {
                 .build();
     }
 
-    public OrderMongoDocument toDocument(Order order) {
-        return OrderMongoDocument.builder()
+    public OrderDocument toDocument(Order order) {
+        return OrderDocument.builder()
                 .id(order.getId() == null ? null : order.getId().toString())
                 .username(order.getUsername())
                 .status(order.getStatus().name())
@@ -69,13 +69,13 @@ public class OrderMongoMapper {
                 .subtotal(order.getSubtotal())
                 .taxAmount(order.getTaxAmount())
                 .total(order.getTotal())
-                .delivery(OrderMongoDocument.DeliveryDocument.builder()
+                .delivery(OrderDocument.DeliveryDocument.builder()
                         .recipientName(order.getDelivery().getRecipientName())
                         .address(order.getDelivery().getAddress())
                         .addressComplement(order.getDelivery().getAddressComplement())
                         .contactPhone(order.getDelivery().getContactPhone())
                         .build())
-                .items(order.getItems().stream().map(item -> OrderMongoDocument.ItemDocument.builder()
+                .items(order.getItems().stream().map(item -> OrderDocument.ItemDocument.builder()
                         .productId(item.getProductId())
                         .name(item.getName())
                         .quantity(item.getQuantity())
@@ -84,7 +84,7 @@ public class OrderMongoMapper {
                         .trazabilidad(item.getTrazabilidad())
                         .build()).toList())
                 .statusHistory(order.getStatusHistory().stream().map(change ->
-                        OrderMongoDocument.StatusChangeDocument.builder()
+                        OrderDocument.StatusChangeDocument.builder()
                                 .fromStatus(change.getFromStatus().name())
                                 .toStatus(change.getToStatus().name())
                                 .changedBy(change.getChangedBy())

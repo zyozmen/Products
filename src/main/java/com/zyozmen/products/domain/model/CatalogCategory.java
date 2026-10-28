@@ -16,7 +16,7 @@ public class CatalogCategory {
     private String name;
     private String description;
     private String imageUrl;
-    private Imagen image;
+    private Image image;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

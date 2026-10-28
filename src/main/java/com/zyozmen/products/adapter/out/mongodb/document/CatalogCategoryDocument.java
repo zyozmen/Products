@@ -10,7 +10,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 
-@Document(collection = "categories")
+@Document(collection = "Categories")
 @Data
 @Builder
 @NoArgsConstructor
@@ -22,7 +22,7 @@ public class CatalogCategoryDocument {
     private String name;
     private String description;
     private String imageUrl;
-    private ImagenDocument image;
+    private ImageDocument image;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

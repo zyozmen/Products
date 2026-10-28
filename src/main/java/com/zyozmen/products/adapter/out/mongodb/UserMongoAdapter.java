@@ -2,7 +2,7 @@ package com.zyozmen.products.adapter.out.mongodb;
 
 import com.zyozmen.products.adapter.out.mongodb.mapper.UserMongoMapper;
 import com.zyozmen.products.adapter.out.mongodb.repository.UserMongoRepository;
-import com.zyozmen.products.domain.model.TipoIdentificacion;
+import com.zyozmen.products.domain.model.IdentificationType;
 import com.zyozmen.products.domain.model.User;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +39,7 @@ public class UserMongoAdapter implements UserRepositoryPort {
 
     @Override
     public boolean existsByTipoIdentificacionAndNumeroIdentificacion(
-            TipoIdentificacion tipoIdentificacion, String numeroIdentificacion) {
+            IdentificationType tipoIdentificacion, String numeroIdentificacion) {
         if (tipoIdentificacion == null || numeroIdentificacion == null) {
             return false;
         }
@@ -55,7 +55,7 @@ public class UserMongoAdapter implements UserRepositoryPort {
     @Override
     public User save(User user) {
         String existingId = mongoRepository.findByUsername(user.getUsername())
-                .map(com.zyozmen.products.adapter.out.mongodb.document.UserMongoDocument::getId)
+                .map(com.zyozmen.products.adapter.out.mongodb.document.UserDocument::getId)
                 .orElse(null);
         return mapper.toDomain(mongoRepository.save(mapper.toDocument(user, existingId)));
     }

@@ -4,13 +4,13 @@ import com.zyozmen.products.domain.exception.BusinessRuleException;
 import com.zyozmen.products.domain.exception.CapacidadExcedidaException;
 import com.zyozmen.products.domain.exception.MargenNegativoException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
-import com.zyozmen.products.domain.model.Contenedor;
+import com.zyozmen.products.domain.model.Container;
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.PresentacionInventario;
-import com.zyozmen.products.domain.model.ProductoMarketplace;
-import com.zyozmen.products.domain.model.FotografiaPresentacion;
+import com.zyozmen.products.domain.model.InventoryPresentation;
+import com.zyozmen.products.domain.model.ProductMarketplace;
+import com.zyozmen.products.domain.model.PresentationPicture;
 import com.zyozmen.products.domain.port.in.PresentacionUseCase;
-import com.zyozmen.products.domain.port.in.CepaUseCase;
+import com.zyozmen.products.domain.port.in.ProductUseCase;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.MarketplaceRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
@@ -32,7 +32,7 @@ public class PresentacionService implements PresentacionUseCase {
     private final LoteRepositoryPort loteRepository;
     private final ProveedorRepositoryPort proveedorRepository;
     private final MarketplaceRepositoryPort marketplaceRepository;
-    private final CepaUseCase cepas;
+    private final ProductUseCase cepas;
 
     @Override
     @Transactional
@@ -42,7 +42,7 @@ public class PresentacionService implements PresentacionUseCase {
         }
         Lote lote = loteRepository.findLoteById(loteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lote no encontrado"));
-        Contenedor contenedor = lote.getContenedores().stream()
+        Container contenedor = lote.getContenedores().stream()
                 .filter(c -> c.getId().equals(contenedorId)).findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Contenedor no encontrado en el lote"));
         if (contenedor.getCepaId() == null) {
@@ -58,7 +58,7 @@ public class PresentacionService implements PresentacionUseCase {
             ids.add(p.presentacionId());
             skus.add(p.sku());
         }));
-        List<PresentacionInventario> nuevas = new ArrayList<>();
+        List<InventoryPresentation> nuevas = new ArrayList<>();
         BigDecimal total = contenidoEmpaquetado(contenedor.getPresentaciones());
         for (CrearPresentacionCommand command : comandos) {
             validar(command);
@@ -77,10 +77,10 @@ public class PresentacionService implements PresentacionUseCase {
                         + ") es menor al costo base de la presentación (" + numero(costo) + ")");
             }
             total = total.add(command.contenidoUnidad().multiply(BigDecimal.valueOf(command.unidadesCreadas())));
-            nuevas.add(new PresentacionInventario(id, sku, command.nombre().strip(), command.contenidoUnidad(),
+            nuevas.add(new InventoryPresentation(id, sku, command.nombre().strip(), command.contenidoUnidad(),
                     command.unidadesCreadas(), command.unidadesCreadas(), costo, precio,
                     command.activoMarketplace(), command.confirmacionMargenNegativo(),
-                    FotografiaPresentacion.validar(command.fotografia())));
+                    PresentationPicture.validar(command.fotografia())));
         }
         if (total.compareTo(contenedor.getCapacidadUnidadesBase()) > 0) {
             throw new CapacidadExcedidaException("El total empaquetado (" + numero(total) + contenedor.getUnidadBase()
@@ -89,7 +89,7 @@ public class PresentacionService implements PresentacionUseCase {
         }
         var presentaciones = new ArrayList<>(contenedor.getPresentaciones());
         presentaciones.addAll(nuevas);
-        Contenedor actualizado = contenedor.toBuilder().presentaciones(List.copyOf(presentaciones))
+        Container actualizado = contenedor.toBuilder().presentaciones(List.copyOf(presentaciones))
                 .cantidadDisponible(contenedor.getCapacidadUnidadesBase().subtract(total)).build();
         lote.setContenedores(lote.getContenedores().stream()
                 .map(c -> c.getId().equals(contenedorId) ? actualizado : c).toList());
@@ -99,8 +99,8 @@ public class PresentacionService implements PresentacionUseCase {
         lote.setEstado("PROCESADO");
         lote.setUpdatedAt(Instant.now());
         Lote guardado = loteRepository.save(lote);
-        for (PresentacionInventario p : nuevas) {
-            marketplaceRepository.insert(new ProductoMarketplace(p.presentacionId(), lote.getId(),
+        for (InventoryPresentation p : nuevas) {
+            marketplaceRepository.insert(new ProductMarketplace(p.presentacionId(), lote.getId(),
                     proveedor.getNombre(), cepa.nombre(), cepa.nombre(),
                     p.sku(), p.precioVenta(), p.stockDisponible(), p.fotografia(),
                     p.activoMarketplace() ? "ACTIVO" : "INACTIVO", cepa.id(), p.nombre(),
@@ -109,7 +109,7 @@ public class PresentacionService implements PresentacionUseCase {
         return guardado;
     }
 
-    private BigDecimal contenidoEmpaquetado(List<PresentacionInventario> presentaciones) {
+    private BigDecimal contenidoEmpaquetado(List<InventoryPresentation> presentaciones) {
         return presentaciones.stream().map(p -> p.contenidoUnidad().multiply(BigDecimal.valueOf(p.unidadesCreadas())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }

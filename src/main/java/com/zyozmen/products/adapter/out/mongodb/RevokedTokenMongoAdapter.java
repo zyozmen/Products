@@ -1,6 +1,6 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
-import com.zyozmen.products.adapter.out.mongodb.document.RevokedTokenMongoDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.RevokedTokenDocument;
 import com.zyozmen.products.adapter.out.mongodb.repository.RevokedTokenMongoRepository;
 import com.zyozmen.products.domain.port.out.RevokedTokenRepositoryPort;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +20,7 @@ public class RevokedTokenMongoAdapter implements RevokedTokenRepositoryPort {
 
     @Override
     public void revoke(String tokenId, Instant expiresAt) {
-        mongoRepository.save(new RevokedTokenMongoDocument(tokenId, Date.from(expiresAt)));
+        mongoRepository.save(new RevokedTokenDocument(tokenId, Date.from(expiresAt)));
     }
 
     @Override

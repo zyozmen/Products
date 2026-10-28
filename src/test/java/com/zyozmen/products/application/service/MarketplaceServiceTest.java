@@ -5,7 +5,7 @@ import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.*;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.MarketplaceRepositoryPort;
-import com.zyozmen.products.domain.port.in.CepaUseCase;
+import com.zyozmen.products.domain.port.in.ProductUseCase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,13 +24,13 @@ import static org.mockito.Mockito.*;
 class MarketplaceServiceTest {
     @Mock private MarketplaceRepositoryPort marketplace;
     @Mock private LoteRepositoryPort lotes;
-    @Mock private CepaUseCase cepas;
+    @Mock private ProductUseCase cepas;
     @InjectMocks private MarketplaceService service;
 
     @BeforeEach
     void cepaPersistida() {
-        lenient().when(cepas.obtener(Cepa.desdeNombre("Tangerine").id()))
-                .thenReturn(new Cepa(Cepa.desdeNombre("Tangerine").id(), "Tangerine"));
+        lenient().when(cepas.obtener(Product.desdeNombre("Tangerine").id()))
+                .thenReturn(new Product(Product.desdeNombre("Tangerine").id(), "Tangerine"));
     }
 
     @Test
@@ -58,7 +58,7 @@ class MarketplaceServiceTest {
         assertThat(venta.trazabilidad().contenidoUnidad()).isEqualByComparingTo("10");
         assertThat(venta.trazabilidad().proveedorId()).isEqualTo("proveedor-l1");
         assertThat(venta.trazabilidad().contenedorId()).isEqualTo("c1");
-        assertThat(venta.trazabilidad().cepaId()).isEqualTo(Cepa.desdeNombre("tangerine").id());
+        assertThat(venta.trazabilidad().cepaId()).isEqualTo(Product.desdeNombre("tangerine").id());
         verify(lotes, never()).save(any());
     }
 
@@ -67,11 +67,11 @@ class MarketplaceServiceTest {
         var p1 = producto("p1", "l1", "Tangerine");
         var p2 = producto("p2", "l2", " tangerine ");
         when(marketplace.findByPresentacionId("p1")).thenReturn(Optional.of(p1));
-        when(marketplace.findDisponiblesByCepaId(Cepa.desdeNombre("Tangerine").id())).thenReturn(List.of(p2, p1));
+        when(marketplace.findDisponiblesByCepaId(Product.desdeNombre("Tangerine").id())).thenReturn(List.of(p2, p1));
         when(lotes.findLoteById("l1")).thenReturn(Optional.of(lote("l1", "c1", "p1", "Tangerine")));
         when(lotes.findLoteById("l2")).thenReturn(Optional.of(lote("l2", "c2", "p2", "TANGERINE")));
 
-        var detalle = service.obtenerDetalle(Cepa.desdeNombre("Tangerine").id(), "p1");
+        var detalle = service.obtenerDetalle(Product.desdeNombre("Tangerine").id(), "p1");
 
         assertThat(detalle.nombre()).isEqualTo("Tangerine");
         assertThat(detalle.presentacionSeleccionadaId()).isEqualTo("p1");
@@ -87,7 +87,7 @@ class MarketplaceServiceTest {
         when(marketplace.findByPresentacionId("p1"))
                 .thenReturn(Optional.of(producto("p1", "l1", "Tangerine")));
 
-        assertThatThrownBy(() -> service.obtenerDetalle(Cepa.desdeNombre("Otra").id(), "p1"))
+        assertThatThrownBy(() -> service.obtenerDetalle(Product.desdeNombre("Otra").id(), "p1"))
                 .isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(lotes);
     }
@@ -113,7 +113,7 @@ class MarketplaceServiceTest {
     @Test
     void rechazaPublicacionInactivaAunqueExistaElLote() {
         var p = producto("p1", "l1", "Tangerine");
-        when(marketplace.findByPresentacionId("p1")).thenReturn(Optional.of(new ProductoMarketplace(
+        when(marketplace.findByPresentacionId("p1")).thenReturn(Optional.of(new ProductMarketplace(
                 p.presentacionId(), p.loteId(), p.proveedorNombre(), p.nombreProducto(), p.cepaNombre(),
                 p.sku(), p.precioVenta(), p.stockDisponible(), p.fotografia(), "INACTIVO")));
 
@@ -138,23 +138,23 @@ class MarketplaceServiceTest {
 
     @Test
     void identidadDeCepaComparteMayusculasYEspaciosPeroNoNombresDistintos() {
-        assertThat(Cepa.desdeNombre("  Tangerine   Dream ").id())
-                .isEqualTo(Cepa.desdeNombre("tangerine dream").id())
-                .isNotEqualTo(Cepa.desdeNombre("tangerine").id());
-        assertThatThrownBy(() -> Cepa.desdeNombre(" ")).isInstanceOf(IllegalArgumentException.class);
+        assertThat(Product.desdeNombre("  Tangerine   Dream ").id())
+                .isEqualTo(Product.desdeNombre("tangerine dream").id())
+                .isNotEqualTo(Product.desdeNombre("tangerine").id());
+        assertThatThrownBy(() -> Product.desdeNombre(" ")).isInstanceOf(IllegalArgumentException.class);
     }
 
-    private ProductoMarketplace producto(String id, String lote, String cepa) {
-        return new ProductoMarketplace(id, lote, "Proveedor", "Nombre legado", cepa, id,
-                new BigDecimal("15000"), 5, null, "ACTIVO", Cepa.desdeNombre(cepa).id(),
+    private ProductMarketplace producto(String id, String lote, String cepa) {
+        return new ProductMarketplace(id, lote, "Proveedor", "Nombre legado", cepa, id,
+                new BigDecimal("15000"), 5, null, "ACTIVO", Product.desdeNombre(cepa).id(),
                 "Bolsa 10g", BigDecimal.TEN, "GRAMOS");
     }
 
     private Lote lote(String id, String contenedor, String presentacion, String cepa) {
-        var p = new PresentacionInventario(presentacion, presentacion, "Bolsa 10g", BigDecimal.TEN,
+        var p = new InventoryPresentation(presentacion, presentacion, "Bolsa 10g", BigDecimal.TEN,
                 5, 5, new BigDecimal("10000"), new BigDecimal("15000"), true, false, null);
         return Lote.builder().id(id).proveedorId("proveedor-" + id).contenedores(List.of(
-                Contenedor.builder().id(contenedor).tipoCepa(cepa).cepaId(Cepa.desdeNombre(cepa).id()).unidadBase("GRAMOS")
+                Container.builder().id(contenedor).tipoCepa(cepa).cepaId(Product.desdeNombre(cepa).id()).unidadBase("GRAMOS")
                         .costoBasePorUnidad(new BigDecimal("1000")).presentaciones(List.of(p)).build())).build();
     }
 }

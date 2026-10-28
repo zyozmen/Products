@@ -2,17 +2,17 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.exception.BusinessRuleException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
-import com.zyozmen.products.domain.model.EstadoPagoLote;
-import com.zyozmen.products.domain.model.EstadoProveedor;
+import com.zyozmen.products.domain.model.LotePaymentState;
+import com.zyozmen.products.domain.model.ProviderState;
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.Contenedor;
-import com.zyozmen.products.domain.model.UnidadMedida;
+import com.zyozmen.products.domain.model.Container;
+import com.zyozmen.products.domain.model.UnitMeasurement;
 import org.bson.types.ObjectId;
-import com.zyozmen.products.domain.model.Proveedor;
-import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
-import com.zyozmen.products.domain.model.TransaccionProveedor;
+import com.zyozmen.products.domain.model.Provider;
+import com.zyozmen.products.domain.model.ProviderTransactionType;
+import com.zyozmen.products.domain.model.ProviderTransaction;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase;
-import com.zyozmen.products.domain.port.in.CepaUseCase;
+import com.zyozmen.products.domain.port.in.ProductUseCase;
 import com.zyozmen.products.domain.port.out.CodigoInventarioGeneratorPort;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
@@ -43,16 +43,16 @@ public class ProveedorService implements ProveedorUseCase {
     private final LoteRepositoryPort loteRepository;
     private final TransaccionProveedorRepositoryPort transaccionRepository;
     private final CodigoInventarioGeneratorPort codigoInventarioGenerator;
-    private final CepaUseCase cepas;
+    private final ProductUseCase cepas;
 
     @Override
     @Transactional
-    public Proveedor crear(CrearProveedorCommand command) {
+    public Provider crear(CrearProveedorCommand command) {
         if (proveedorRepository.existsByNit(command.nit())) {
             throw new BusinessRuleException("Ya existe un proveedor con el NIT " + command.nit());
         }
         Instant now = Instant.now();
-        return proveedorRepository.save(Proveedor.builder()
+        return proveedorRepository.save(Provider.builder()
                 .nombre(command.nombre())
                 .nit(command.nit())
                 .telefono(command.telefono())
@@ -60,28 +60,28 @@ public class ProveedorService implements ProveedorUseCase {
                 .totalDeuda(ZERO)
                 .totalPagado(ZERO)
                 .saldoPendiente(ZERO)
-                .estado(EstadoProveedor.ACTIVO)
+                .estado(ProviderState.ACTIVO)
                 .fechaCreacion(now)
                 .ultimaActualizacion(now)
                 .build());
     }
 
     @Override
-    public Proveedor obtener(String id) {
+    public Provider obtener(String id) {
         return proveedorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(PROVEEDOR_NO_ENCONTRADO));
     }
 
     @Override
     public DetalleProveedor obtenerDetalle(String id) {
-        Proveedor proveedor = obtener(id);
+        Provider proveedor = obtener(id);
         return new DetalleProveedor(proveedor,
                 loteRepository.countPagadosByProveedorId(proveedor.getId()),
                 loteRepository.countPorPagarByProveedorId(proveedor.getId()));
     }
 
     @Override
-    public Page<Proveedor> buscar(String buscar, int page, int size) {
+    public Page<Provider> buscar(String buscar, int page, int size) {
         var pageable = crearPaginacion(page, size);
         String texto = buscar == null ? "" : buscar.strip();
         return proveedorRepository.buscar(texto, pageable);
@@ -90,8 +90,8 @@ public class ProveedorService implements ProveedorUseCase {
     @Override
     @Transactional
     public Lote recibirLote(RecibirLoteCommand command) {
-        Proveedor proveedor = obtener(command.proveedorId());
-        if (proveedor.getEstado() != EstadoProveedor.ACTIVO) {
+        Provider proveedor = obtener(command.proveedorId());
+        if (proveedor.getEstado() != ProviderState.ACTIVO) {
             throw new BusinessRuleException("El proveedor no estÃ¡ activo");
         }
         if (command.contenedores() == null || command.contenedores().isEmpty()) {
@@ -99,7 +99,7 @@ public class ProveedorService implements ProveedorUseCase {
                     "Debe agregar al menos un contenedor con su capacidad en unidades base para registrar el lote");
         }
 
-        List<Contenedor> contenedores = new ArrayList<>();
+        List<Container> contenedores = new ArrayList<>();
         BigDecimal costoTotal = ZERO;
         for (ContenedorCommand item : command.contenedores()) {
             validarContenedor(item);
@@ -107,12 +107,12 @@ public class ProveedorService implements ProveedorUseCase {
             BigDecimal costoUnitario = money(item.costoBasePorUnidad());
             BigDecimal subtotal = costoUnitario.multiply(item.capacidadUnidadesBase())
                     .setScale(2, RoundingMode.HALF_UP);
-            contenedores.add(Contenedor.builder()
+            contenedores.add(Container.builder()
                     .id(new ObjectId().toHexString())
                     .codigoContenedor(formatearCodigo("CONT-", codigoInventarioGenerator.siguienteNumeroContenedor()))
                     .tipoCepa(cepa.nombre())
                     .cepaId(cepa.id())
-                    .unidadBase(UnidadMedida.desde(item.unidadBase()).name())
+                    .unidadBase(UnitMeasurement.desde(item.unidadBase()).name())
                     .presentacionId(item.presentacionId())
                     .capacidadUnidadesBase(item.capacidadUnidadesBase())
                     .cantidadDisponible(item.capacidadUnidadesBase())
@@ -155,11 +155,11 @@ public class ProveedorService implements ProveedorUseCase {
                 .createdAt(now).updatedAt(now)
                 .build());
 
-        registrarTransaccion(proveedor.getId(), lote.getId(), TipoTransaccionProveedor.DEUDA_LOTE, costoTotal,
+        registrarTransaccion(proveedor.getId(), lote.getId(), ProviderTransactionType.DEUDA_LOTE, costoTotal,
                 "Deuda generada por el lote " + lote.getCodigoLote(), now);
         proveedor.setTotalDeuda(proveedor.getTotalDeuda().add(costoTotal));
         if (abono.signum() > 0) {
-            registrarTransaccion(proveedor.getId(), lote.getId(), TipoTransaccionProveedor.ABONO_INICIAL, abono,
+            registrarTransaccion(proveedor.getId(), lote.getId(), ProviderTransactionType.ABONO_INICIAL, abono,
                     "Abono inicial al recibir el lote " + lote.getCodigoLote(), now);
             proveedor.setTotalPagado(proveedor.getTotalPagado().add(abono));
         }
@@ -197,28 +197,28 @@ public class ProveedorService implements ProveedorUseCase {
         Sort.Direction orden = Sort.Direction.fromString(direccion);
         var pageable = PageRequest.of(paginacion.getPageNumber(), paginacion.getPageSize(),
                 Sort.by(orden, campo).and(Sort.by(orden, "id")));
-        Proveedor proveedor = obtener(proveedorId);
+        Provider proveedor = obtener(proveedorId);
         return loteRepository.findLotesByProveedorId(proveedor.getId(), buscar == null ? "" : buscar.strip(), pageable);
     }
 
     @Override
-    public Page<TransaccionProveedor> listarAbonos(String proveedorId, int page, int size) {
+    public Page<ProviderTransaction> listarAbonos(String proveedorId, int page, int size) {
         var pageable = crearPaginacion(page, size);
-        Proveedor proveedor = obtener(proveedorId);
+        Provider proveedor = obtener(proveedorId);
         return transaccionRepository.findAbonosByProveedorId(proveedor.getId(), pageable);
     }
 
     @Override
     @Transactional
-    public Proveedor registrarPago(RegistrarPagoCommand command) {
-        TipoTransaccionProveedor tipo = command.tipo() == null ? TipoTransaccionProveedor.ABONO : command.tipo();
-        if (tipo == TipoTransaccionProveedor.DEUDA_LOTE || tipo == TipoTransaccionProveedor.ABONO_INICIAL) {
+    public Provider registrarPago(RegistrarPagoCommand command) {
+        ProviderTransactionType tipo = command.tipo() == null ? ProviderTransactionType.ABONO : command.tipo();
+        if (tipo == ProviderTransactionType.DEUDA_LOTE || tipo == ProviderTransactionType.ABONO_INICIAL) {
             throw new BusinessRuleException("El tipo " + tipo + " no es vÃ¡lido para un pago posterior");
         }
         validarMonto(command.monto(), false, "El monto del pago");
         BigDecimal monto = money(command.monto());
 
-        Proveedor proveedor = obtener(command.proveedorId());
+        Provider proveedor = obtener(command.proveedorId());
         if (monto.compareTo(proveedor.getSaldoPendiente()) > 0) {
             throw new BusinessRuleException("El pago no puede superar el saldo pendiente del proveedor");
         }
@@ -255,7 +255,7 @@ public class ProveedorService implements ProveedorUseCase {
         return proveedorRepository.save(proveedor);
     }
 
-    private void aplicarPagoALote(Lote lote, BigDecimal monto, TipoTransaccionProveedor tipo, String observaciones,
+    private void aplicarPagoALote(Lote lote, BigDecimal monto, ProviderTransactionType tipo, String observaciones,
                                   Instant now) {
         lote.setMontoPagadoLote(lote.getMontoPagadoLote().add(monto));
         lote.setSaldoPendienteLote(lote.getCostoTotalLote().subtract(lote.getMontoPagadoLote()).max(ZERO));
@@ -265,9 +265,9 @@ public class ProveedorService implements ProveedorUseCase {
         registrarTransaccion(lote.getProveedorId(), lote.getId(), tipo, monto, observaciones, now);
     }
 
-    private void registrarTransaccion(String proveedorId, String loteId, TipoTransaccionProveedor tipo,
+    private void registrarTransaccion(String proveedorId, String loteId, ProviderTransactionType tipo,
                                       BigDecimal monto, String observaciones, Instant fecha) {
-        transaccionRepository.insert(TransaccionProveedor.builder()
+        transaccionRepository.insert(ProviderTransaction.builder()
                 .proveedorId(proveedorId)
                 .loteId(loteId)
                 .tipo(tipo)
@@ -277,16 +277,16 @@ public class ProveedorService implements ProveedorUseCase {
                 .build());
     }
 
-    private void actualizarSaldo(Proveedor proveedor, Instant now) {
+    private void actualizarSaldo(Provider proveedor, Instant now) {
         proveedor.setSaldoPendiente(proveedor.getTotalDeuda().subtract(proveedor.getTotalPagado()).max(ZERO));
         proveedor.setUltimaActualizacion(now);
     }
 
-    private EstadoPagoLote estadoPago(BigDecimal pagado, BigDecimal saldo) {
+    private LotePaymentState estadoPago(BigDecimal pagado, BigDecimal saldo) {
         if (saldo.signum() == 0) {
-            return EstadoPagoLote.PAGADO_TOTAL;
+            return LotePaymentState.PAGADO_TOTAL;
         }
-        return pagado.signum() > 0 ? EstadoPagoLote.PAGO_PARCIAL : EstadoPagoLote.PENDIENTE;
+        return pagado.signum() > 0 ? LotePaymentState.PAGO_PARCIAL : LotePaymentState.PENDIENTE;
     }
 
     private BigDecimal money(BigDecimal value) {
@@ -312,7 +312,7 @@ public class ProveedorService implements ProveedorUseCase {
             throw new BusinessRuleException("La capacidad debe ser positiva y admitir maximo 15 enteros y 3 decimales");
         }
         validarMonto(item.costoBasePorUnidad(), false, "El costo base por unidad");
-        UnidadMedida.desde(item.unidadBase());
+        UnitMeasurement.desde(item.unidadBase());
         if (item.precioBaseUnidad() != null) {
             validarMonto(item.precioBaseUnidad(), true, "El precio base por unidad");
         }

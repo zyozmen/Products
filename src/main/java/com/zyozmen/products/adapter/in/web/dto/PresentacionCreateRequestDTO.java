@@ -3,7 +3,7 @@ package com.zyozmen.products.adapter.in.web.dto;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.zyozmen.products.domain.port.in.PresentacionUseCase.CrearPresentacionCommand;
-import com.zyozmen.products.domain.model.Imagen;
+import com.zyozmen.products.domain.model.Image;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -39,8 +39,8 @@ public record PresentacionCreateRequestDTO(
             @NotBlank @Pattern(regexp = "(?i:png|jpg|jpeg|webp)") String extension,
             @NotBlank @Size(max = 273068, message = "La fotografia no puede superar 200 KiB")
             String filepart) {
-        public Imagen toDomain() {
-            return new Imagen(nombre, extension, filepart);
+        public Image toDomain() {
+            return new Image(nombre, extension, filepart);
         }
     }
 

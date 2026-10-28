@@ -24,11 +24,11 @@ class InventarioOrdenServiceTest {
 
     @BeforeEach
     void setUp() {
-        var presentacion = new PresentacionInventario("p", "SKU", "10g", BigDecimal.TEN, 10, 8,
+        var presentacion = new InventoryPresentation("p", "SKU", "10g", BigDecimal.TEN, 10, 8,
                 BigDecimal.TEN, BigDecimal.TEN, true, false, null);
         lote = Lote.builder().id("l").proveedorId("proveedor").costoTotalLote(new BigDecimal("100"))
                 .saldoPendienteLote(new BigDecimal("100")).contenedores(List.of(
-                        Contenedor.builder().id("c").cepaId("cepa").tipoCepa("Tangerine")
+                        Container.builder().id("c").cepaId("cepa").tipoCepa("Tangerine")
                                 .cantidadDisponible(new BigDecimal("50"))
                                 .presentaciones(List.of(presentacion)).build())).build();
         lenient().when(lotes.findLoteById("l")).thenReturn(Optional.of(lote));
@@ -89,7 +89,7 @@ class InventarioOrdenServiceTest {
                 .isInstanceOf(OrderProductException.class);
         var original = item(1).getTrazabilidad();
         var otroProveedor = item(1);
-        otroProveedor.setTrazabilidad(new TrazabilidadPresentacion("otro", "l", "c", "cepa", "p",
+        otroProveedor.setTrazabilidad(new PresentationTrace("otro", "l", "c", "cepa", "p",
                 original.contenidoUnidad(), original.unidadBase(), original.costoBasePorUnidad(),
                 original.costoPresentacion()));
         assertThatThrownBy(() -> service.descontar(List.of(otroProveedor)))
@@ -110,7 +110,7 @@ class InventarioOrdenServiceTest {
     @Test
     void rechazaTrazabilidadesDistintasParaUnaMismaPresentacion() {
         var otro = item(1);
-        otro.setTrazabilidad(new TrazabilidadPresentacion("proveedor", "l", "otro", "cepa", "p",
+        otro.setTrazabilidad(new PresentationTrace("proveedor", "l", "otro", "cepa", "p",
                 BigDecimal.TEN, "GRAMOS", BigDecimal.ONE, BigDecimal.TEN));
         assertThatThrownBy(() -> service.descontar(List.of(item(1), otro))).isInstanceOf(OrderProductException.class);
         verifyNoInteractions(lotes, marketplace);
@@ -119,7 +119,7 @@ class InventarioOrdenServiceTest {
     @Test
     void presentacionInactivaNoSeVendePeroPermiteRestituir() {
         var p = lote.getContenedores().getFirst().getPresentaciones().getFirst();
-        lote.setContenedores(List.of(lote.getContenedores().getFirst().toBuilder().presentaciones(List.of(new PresentacionInventario(
+        lote.setContenedores(List.of(lote.getContenedores().getFirst().toBuilder().presentaciones(List.of(new InventoryPresentation(
                 p.presentacionId(), p.sku(), p.nombre(), p.contenidoUnidad(), p.unidadesCreadas(), p.stockDisponible(),
                 p.costoPresentacionCalculado(), p.precioVenta(), false, p.confirmacionMargenNegativo(), p.fotografia())))
                 .build()));
@@ -150,7 +150,7 @@ class InventarioOrdenServiceTest {
     }
 
     private OrderItem item(int cantidad) {
-        return OrderItem.builder().productId("p").quantity(cantidad).trazabilidad(new TrazabilidadPresentacion(
+        return OrderItem.builder().productId("p").quantity(cantidad).trazabilidad(new PresentationTrace(
                 "proveedor", "l", "c", "cepa", "p", BigDecimal.TEN, "GRAMOS", BigDecimal.ONE, BigDecimal.TEN)).build();
     }
 }

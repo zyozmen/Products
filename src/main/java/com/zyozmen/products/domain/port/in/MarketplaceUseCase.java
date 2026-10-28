@@ -1,7 +1,7 @@
 package com.zyozmen.products.domain.port.in;
 
-import com.zyozmen.products.domain.model.Imagen;
-import com.zyozmen.products.domain.model.TrazabilidadPresentacion;
+import com.zyozmen.products.domain.model.Image;
+import com.zyozmen.products.domain.model.PresentationTrace;
 import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 
 import java.math.BigDecimal;
@@ -16,19 +16,19 @@ public interface MarketplaceUseCase {
     Page<ProductoCatalogo> listar(String buscar, int page, int size);
     Page<ProductoCatalogo> listar(MarketplaceCatalogFilter filtro, int page, int size);
 
-    record PresentacionVenta(String nombre, BigDecimal precioVenta, TrazabilidadPresentacion trazabilidad) { }
+    record PresentacionVenta(String nombre, BigDecimal precioVenta, PresentationTrace trazabilidad) { }
 
     record DetalleProducto(String cepaId, String nombre, String presentacionSeleccionadaId,
-                           List<PresentacionDetalle> presentaciones, Imagen fotografia, BigDecimal precioDesde) {
+                           List<PresentacionDetalle> presentaciones, Image fotografia, BigDecimal precioDesde) {
         public DetalleProducto(String cepaId, String nombre, String seleccionada, List<PresentacionDetalle> ps) {
             this(cepaId, nombre, seleccionada, ps, null, null);
         }
     }
 
-    record ProductoCatalogo(String cepaId, String nombre, Imagen fotografia, BigDecimal precioDesde,
+    record ProductoCatalogo(String cepaId, String nombre, Image fotografia, BigDecimal precioDesde,
                             List<PresentacionDetalle> presentaciones) { }
 
     record PresentacionDetalle(String presentacionId, String sku, String nombre,
                                BigDecimal contenidoUnidad, String unidadBase, BigDecimal precioVenta,
-                               int stockDisponible, Imagen fotografia) { }
+                               int stockDisponible, Image fotografia) { }
 }

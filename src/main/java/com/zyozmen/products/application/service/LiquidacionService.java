@@ -2,7 +2,7 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.Proveedor;
+import com.zyozmen.products.domain.model.Provider;
 import com.zyozmen.products.domain.port.in.LiquidacionUseCase;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
@@ -23,7 +23,7 @@ public class LiquidacionService implements LiquidacionUseCase {
 
     @Override
     public EvaluacionLiquidacion evaluarEvento(EventoLiquidacionCommand command) {
-        Proveedor proveedor = proveedorRepository.findById(command.proveedorId())
+        Provider proveedor = proveedorRepository.findById(command.proveedorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Proveedor no encontrado"));
         Lote lote = loteRepository.findLoteById(command.loteId())
                 .filter(value -> proveedor.getId().equals(value.getProveedorId()))

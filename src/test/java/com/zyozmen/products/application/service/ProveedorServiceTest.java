@@ -2,14 +2,14 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.exception.BusinessRuleException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
-import com.zyozmen.products.domain.model.EstadoPagoLote;
-import com.zyozmen.products.domain.model.EstadoProveedor;
+import com.zyozmen.products.domain.model.LotePaymentState;
+import com.zyozmen.products.domain.model.ProviderState;
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.Proveedor;
-import com.zyozmen.products.domain.model.Cepa;
-import com.zyozmen.products.domain.port.in.CepaUseCase;
-import com.zyozmen.products.domain.model.TipoTransaccionProveedor;
-import com.zyozmen.products.domain.model.TransaccionProveedor;
+import com.zyozmen.products.domain.model.Provider;
+import com.zyozmen.products.domain.model.Product;
+import com.zyozmen.products.domain.port.in.ProductUseCase;
+import com.zyozmen.products.domain.model.ProviderTransactionType;
+import com.zyozmen.products.domain.model.ProviderTransaction;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.CrearProveedorCommand;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.ContenedorCommand;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.RecibirLoteCommand;
@@ -59,26 +59,26 @@ class ProveedorServiceTest {
     private TransaccionProveedorRepositoryPort transaccionRepository;
     @Mock
     private CodigoInventarioGeneratorPort codigoInventarioGenerator;
-    @Mock private CepaUseCase cepas;
+    @Mock private ProductUseCase cepas;
     @InjectMocks
     private ProveedorService service;
 
-    private Proveedor proveedor;
+    private Provider proveedor;
     private final AtomicLong siguienteLote = new AtomicLong(1);
     private final AtomicLong siguienteContenedor = new AtomicLong(1);
 
     @BeforeEach
     void setUp() {
         when(cepas.obtener(org.mockito.ArgumentMatchers.anyString()))
-                .thenAnswer(i -> new Cepa(i.getArgument(0), i.getArgument(0)));
+                .thenAnswer(i -> new Product(i.getArgument(0), i.getArgument(0)));
         when(codigoInventarioGenerator.siguienteNumeroLote()).thenAnswer(i -> siguienteLote.getAndIncrement());
         when(codigoInventarioGenerator.siguienteNumeroContenedor())
                 .thenAnswer(i -> siguienteContenedor.getAndIncrement());
-        proveedor = Proveedor.builder().id(PROVEEDOR_ID).nombre("CafÃ© Colombia").nit("900123456-1")
+        proveedor = Provider.builder().id(PROVEEDOR_ID).nombre("CafÃ© Colombia").nit("900123456-1")
                 .totalDeuda(bd("0.00")).totalPagado(bd("0.00")).saldoPendiente(bd("0.00"))
-                .estado(EstadoProveedor.ACTIVO).fechaCreacion(Instant.now()).build();
+                .estado(ProviderState.ACTIVO).fechaCreacion(Instant.now()).build();
         when(proveedorRepository.findById(PROVEEDOR_ID)).thenReturn(Optional.of(proveedor));
-        when(proveedorRepository.save(any(Proveedor.class))).thenAnswer(i -> i.getArgument(0));
+        when(proveedorRepository.save(any(Provider.class))).thenAnswer(i -> i.getArgument(0));
         when(loteRepository.save(any(Lote.class))).thenAnswer(i -> {
             Lote lote = i.getArgument(0);
             if (lote.getId() == null) {
@@ -86,7 +86,7 @@ class ProveedorServiceTest {
             }
             return lote;
         });
-        when(transaccionRepository.insert(any(TransaccionProveedor.class))).thenAnswer(i -> i.getArgument(0));
+        when(transaccionRepository.insert(any(ProviderTransaction.class))).thenAnswer(i -> i.getArgument(0));
     }
 
     @Test
@@ -109,7 +109,7 @@ class ProveedorServiceTest {
 
     @Test
     void recibirLoteExigeCepaExistenteYUsaSuNombreReal() {
-        when(cepas.obtener("cepa-id")).thenReturn(new Cepa("cepa-id", "Tangerine"));
+        when(cepas.obtener("cepa-id")).thenReturn(new Product("cepa-id", "Tangerine"));
         var lote = service.recibirLote(new RecibirLoteCommand(PROVEEDOR_ID,
                 List.of(new ContenedorCommand("cepa-id", "g", null, bd("100"), bd("1000"))), null));
         assertThat(lote.getContenedores().getFirst().getCepaId()).isEqualTo("cepa-id");
@@ -137,12 +137,12 @@ class ProveedorServiceTest {
     void crearInicializaSaldosEnCero() {
         when(proveedorRepository.existsByNit("111")).thenReturn(false);
 
-        Proveedor creado = service.crear(new CrearProveedorCommand("Nuevo", "111", "+573001234567", "a@b.com"));
+        Provider creado = service.crear(new CrearProveedorCommand("Nuevo", "111", "+573001234567", "a@b.com"));
 
         assertEquals(bd("0.00"), creado.getTotalDeuda());
         assertEquals(bd("0.00"), creado.getTotalPagado());
         assertEquals(bd("0.00"), creado.getSaldoPendiente());
-        assertEquals(EstadoProveedor.ACTIVO, creado.getEstado());
+        assertEquals(ProviderState.ACTIVO, creado.getEstado());
     }
 
     @Test
@@ -160,31 +160,31 @@ class ProveedorServiceTest {
         assertEquals(bd("300000.00"), lote.getCostoTotalLote());
         assertEquals(bd("100000.00"), lote.getMontoPagadoLote());
         assertEquals(bd("200000.00"), lote.getSaldoPendienteLote());
-        assertEquals(EstadoPagoLote.PAGO_PARCIAL, lote.getEstadoPago());
+        assertEquals(LotePaymentState.PAGO_PARCIAL, lote.getEstadoPago());
         assertEquals(bd("300000.00"), proveedor.getTotalDeuda());
         assertEquals(bd("100000.00"), proveedor.getTotalPagado());
         assertEquals(bd("200000.00"), proveedor.getSaldoPendiente());
 
-        ArgumentCaptor<TransaccionProveedor> captor = ArgumentCaptor.forClass(TransaccionProveedor.class);
+        ArgumentCaptor<ProviderTransaction> captor = ArgumentCaptor.forClass(ProviderTransaction.class);
         verify(transaccionRepository, org.mockito.Mockito.times(2)).insert(captor.capture());
-        assertEquals(TipoTransaccionProveedor.DEUDA_LOTE, captor.getAllValues().get(0).getTipo());
-        assertEquals(TipoTransaccionProveedor.ABONO_INICIAL, captor.getAllValues().get(1).getTipo());
+        assertEquals(ProviderTransactionType.DEUDA_LOTE, captor.getAllValues().get(0).getTipo());
+        assertEquals(ProviderTransactionType.ABONO_INICIAL, captor.getAllValues().get(1).getTipo());
     }
 
     @Test
     void recibirLoteSinAbonoQuedaPendiente() {
         Lote lote = service.recibirLote(comandoLote(null));
 
-        assertEquals(EstadoPagoLote.PENDIENTE, lote.getEstadoPago());
+        assertEquals(LotePaymentState.PENDIENTE, lote.getEstadoPago());
         assertEquals(bd("300000.00"), proveedor.getSaldoPendiente());
-        verify(transaccionRepository).insert(any(TransaccionProveedor.class));
+        verify(transaccionRepository).insert(any(ProviderTransaction.class));
     }
 
     @Test
     void recibirLoteConAbonoTotalQuedaPagadoTotal() {
         Lote lote = service.recibirLote(comandoLote(bd("300000")));
 
-        assertEquals(EstadoPagoLote.PAGADO_TOTAL, lote.getEstadoPago());
+        assertEquals(LotePaymentState.PAGADO_TOTAL, lote.getEstadoPago());
         assertEquals(bd("0.00"), lote.getSaldoPendienteLote());
         assertEquals(bd("0.00"), proveedor.getSaldoPendiente());
     }
@@ -198,7 +198,7 @@ class ProveedorServiceTest {
 
     @Test
     void recibirLoteRechazaProveedorInactivo() {
-        proveedor.setEstado(EstadoProveedor.INACTIVO);
+        proveedor.setEstado(ProviderState.INACTIVO);
 
         assertThrows(BusinessRuleException.class, () -> service.recibirLote(comandoLote(null)));
     }
@@ -218,10 +218,10 @@ class ProveedorServiceTest {
         Lote lote = loteConSaldo("lote-1", "300000.00", "100000.00", "2026-10-17T11:00:00Z");
         when(loteRepository.findLoteById("lote-1")).thenReturn(Optional.of(lote));
 
-        Proveedor resultado = service.registrarPago(
+        Provider resultado = service.registrarPago(
                 new RegistrarPagoCommand(PROVEEDOR_ID, "lote-1", bd("200000"), null, "final"));
 
-        assertEquals(EstadoPagoLote.PAGADO_TOTAL, lote.getEstadoPago());
+        assertEquals(LotePaymentState.PAGADO_TOTAL, lote.getEstadoPago());
         assertEquals(bd("0.00"), lote.getSaldoPendienteLote());
         assertEquals(bd("300000.00"), resultado.getTotalPagado());
         assertEquals(bd("0.00"), resultado.getSaldoPendiente());
@@ -234,18 +234,18 @@ class ProveedorServiceTest {
         Lote reciente = loteConSaldo("l2", "300000.00", "0.00", "2026-10-02T00:00:00Z");
         when(loteRepository.findPendientesByProveedorId(PROVEEDOR_ID)).thenReturn(List.of(antiguo, reciente));
 
-        Proveedor resultado = service.registrarPago(
-                new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("250000"), TipoTransaccionProveedor.ABONO, null));
+        Provider resultado = service.registrarPago(
+                new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("250000"), ProviderTransactionType.ABONO, null));
 
-        assertEquals(EstadoPagoLote.PAGADO_TOTAL, antiguo.getEstadoPago());
-        assertEquals(EstadoPagoLote.PAGO_PARCIAL, reciente.getEstadoPago());
+        assertEquals(LotePaymentState.PAGADO_TOTAL, antiguo.getEstadoPago());
+        assertEquals(LotePaymentState.PAGO_PARCIAL, reciente.getEstadoPago());
         assertEquals(bd("250000.00"), reciente.getSaldoPendienteLote());
         assertEquals(bd("250000.00"), resultado.getSaldoPendiente());
-        ArgumentCaptor<TransaccionProveedor> movimientos = ArgumentCaptor.forClass(TransaccionProveedor.class);
+        ArgumentCaptor<ProviderTransaction> movimientos = ArgumentCaptor.forClass(ProviderTransaction.class);
         verify(transaccionRepository, org.mockito.Mockito.times(2)).insert(movimientos.capture());
-        assertThat(movimientos.getAllValues()).extracting(TransaccionProveedor::getLoteId)
+        assertThat(movimientos.getAllValues()).extracting(ProviderTransaction::getLoteId)
                 .containsExactly("l1", "l2");
-        assertThat(movimientos.getAllValues()).extracting(TransaccionProveedor::getMonto)
+        assertThat(movimientos.getAllValues()).extracting(ProviderTransaction::getMonto)
                 .containsExactly(bd("200000"), bd("50000"));
     }
 
@@ -270,7 +270,7 @@ class ProveedorServiceTest {
     @Test
     void pagoRechazaTiposInvalidosYMontosNoPositivos() {
         assertThrows(BusinessRuleException.class, () -> service.registrarPago(
-                new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("10"), TipoTransaccionProveedor.DEUDA_LOTE, null)));
+                new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("10"), ProviderTransactionType.DEUDA_LOTE, null)));
         assertThrows(BusinessRuleException.class, () -> service.registrarPago(
                 new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("0"), null, null)));
     }
@@ -422,9 +422,9 @@ class ProveedorServiceTest {
         assertEquals(bd("12000000"), proveedor.getTotalDeuda());
         assertEquals(bd("4000000"), proveedor.getTotalPagado());
         assertEquals(bd("8000000"), proveedor.getSaldoPendiente());
-        ArgumentCaptor<TransaccionProveedor> captor = ArgumentCaptor.forClass(TransaccionProveedor.class);
+        ArgumentCaptor<ProviderTransaction> captor = ArgumentCaptor.forClass(ProviderTransaction.class);
         verify(transaccionRepository, org.mockito.Mockito.times(2)).insert(captor.capture());
-        TransaccionProveedor abono = captor.getAllValues().get(1);
+        ProviderTransaction abono = captor.getAllValues().get(1);
         assertEquals(bd("3000000"), abono.getMonto());
         assertEquals(PROVEEDOR_ID, abono.getProveedorId());
         assertEquals(lote.getId(), abono.getLoteId());
@@ -491,7 +491,7 @@ class ProveedorServiceTest {
 
         service.registrarPago(new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("1000000"), null, null));
 
-        ArgumentCaptor<TransaccionProveedor> captor = ArgumentCaptor.forClass(TransaccionProveedor.class);
+        ArgumentCaptor<ProviderTransaction> captor = ArgumentCaptor.forClass(ProviderTransaction.class);
         verify(transaccionRepository).insert(captor.capture());
         var movimiento = captor.getValue();
         assertEquals("l1", movimiento.getLoteId());
@@ -527,7 +527,7 @@ class ProveedorServiceTest {
     @Test
     void historialConservaPaginaYTotalDeMovimientos() {
         var pageable = PageRequest.of(2, 10);
-        var movimiento = TransaccionProveedor.builder().id("t21").build();
+        var movimiento = ProviderTransaction.builder().id("t21").build();
         when(transaccionRepository.findAbonosByProveedorId(PROVEEDOR_ID, pageable))
                 .thenReturn(new PageImpl<>(List.of(movimiento), pageable, 21));
 
@@ -568,7 +568,7 @@ class ProveedorServiceTest {
         return Lote.builder().id(id).proveedorId(PROVEEDOR_ID).codigoLote("C-" + id)
                 .costoTotalLote(bd(costo)).montoPagadoLote(bd(pagado))
                 .saldoPendienteLote(bd(costo).subtract(bd(pagado)))
-                .estadoPago(EstadoPagoLote.PENDIENTE).fechaIngreso(Instant.parse(fecha)).build();
+                .estadoPago(LotePaymentState.PENDIENTE).fechaIngreso(Instant.parse(fecha)).build();
     }
 
     private static BigDecimal bd(String value) {

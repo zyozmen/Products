@@ -1,9 +1,9 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
 import com.zyozmen.products.adapter.out.mongodb.document.LoteDocument;
-import com.zyozmen.products.adapter.out.mongodb.document.ProductoMarketplaceDocument;
-import com.zyozmen.products.adapter.out.mongodb.document.ProveedorDocument;
-import com.zyozmen.products.adapter.out.mongodb.mapper.ProveedorMongoMapper;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductMarketplaceDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProviderDocument;
+import com.zyozmen.products.adapter.out.mongodb.mapper.ProviderMongoMapper;
 import com.zyozmen.products.domain.model.*;
 import org.bson.Document;
 import org.bson.types.ObjectId;
@@ -48,15 +48,15 @@ class Hu03SchemaMappingTest {
 
     @Test
     void escribeEsquemaAnidadoConObjectIdsYDecimal128YConservaVersion() throws Exception {
-        var mapper = new ProveedorMongoMapper();
-        var p = new PresentacionInventario(PRESENTACION, "SAT-5", "Bolsa 5g", new BigDecimal("5"),
+        var mapper = new ProviderMongoMapper();
+        var p = new InventoryPresentation(PRESENTACION, "SAT-5", "Bolsa 5g", new BigDecimal("5"),
                 100, 100, new BigDecimal("25000"), new BigDecimal("45000"), true, false,
-                new Imagen("foto.png", "png", "AQID"));
+                new Image("foto.png", "png", "AQID"));
         var lote = Lote.builder().id(LOTE).proveedorId(PROVEEDOR).codigoLote("LOT-1")
                 .costoTotalLote(new BigDecimal("5000000")).montoPagadoLote(new BigDecimal("0.00"))
-                .saldoPendienteLote(new BigDecimal("5000000")).estadoPago(EstadoPagoLote.PENDIENTE)
+                .saldoPendienteLote(new BigDecimal("5000000")).estadoPago(LotePaymentState.PENDIENTE)
                 .estado("RECIBIDO").fechaIngreso(Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS)).version(3L)
-                .contenedores(List.of(Contenedor.builder().id(CONTENEDOR).codigoContenedor("CONT-1")
+                .contenedores(List.of(Container.builder().id(CONTENEDOR).codigoContenedor("CONT-1")
                         .tipoCepa("Sativa").unidadBase("GRAMOS").capacidadUnidadesBase(new BigDecimal("1000"))
                         .costoBasePorUnidad(new BigDecimal("5000")).cantidadDisponible(new BigDecimal("500"))
                         .subtotal(new BigDecimal("5000000")).presentaciones(List.of(p)).build())).build();
@@ -85,11 +85,11 @@ class Hu03SchemaMappingTest {
 
     @Test
     void proveedorUsaFinancieroYContactoPlanoSinCambiarRespuestaDeDominio() throws Exception {
-        var proveedor = Proveedor.builder().id(PROVEEDOR).nombre("Proveedor").nit("900123")
-                .telefono("123").email("a@example.com").estado(EstadoProveedor.ACTIVO)
+        var proveedor = Provider.builder().id(PROVEEDOR).nombre("Proveedor").nit("900123")
+                .telefono("123").email("a@example.com").estado(ProviderState.ACTIVO)
                 .totalDeuda(BigDecimal.TEN).totalPagado(BigDecimal.ONE).saldoPendiente(new BigDecimal("9"))
                 .version(1L).build();
-        var mapper = new ProveedorMongoMapper();
+        var mapper = new ProviderMongoMapper();
         var raw = new Document();
         var converter = converter();
         converter.write(mapper.toDocument(proveedor), raw);
@@ -97,13 +97,13 @@ class Hu03SchemaMappingTest {
                 .doesNotContainKeys("contacto", "totalDeuda", "totalPagado", "saldoPendiente");
         assertThat(raw.get("financiero", Document.class).get("totalDeuda"))
                 .isInstanceOf(org.bson.types.Decimal128.class);
-        assertThat(mapper.toDomain(converter.read(ProveedorDocument.class, raw))).isEqualTo(proveedor);
+        assertThat(mapper.toDomain(converter.read(ProviderDocument.class, raw))).isEqualTo(proveedor);
     }
 
     @Test
     void marketplaceUsaObjectIdsYCamposDelContrato() throws Exception {
         var raw = new Document();
-        converter().write(new ProductoMarketplaceDocument(null, PRESENTACION, LOTE, "Proveedor",
+        converter().write(new ProductMarketplaceDocument(null, PRESENTACION, LOTE, "Proveedor",
                 "Sativa - Bolsa", "Sativa", "SAT-5", new BigDecimal("45000"), 100, null, "ACTIVO"), raw);
         assertThat(raw.get("presentacionId")).isEqualTo(new ObjectId(PRESENTACION));
         assertThat(raw.get("loteId")).isEqualTo(new ObjectId(LOTE));

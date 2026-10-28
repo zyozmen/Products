@@ -1,8 +1,8 @@
 package com.zyozmen.products.adapter.out.mongodb.mapper;
 
-import com.zyozmen.products.adapter.out.mongodb.document.UserMongoDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.UserDocument;
 import com.zyozmen.products.domain.model.Role;
-import com.zyozmen.products.domain.model.TipoIdentificacion;
+import com.zyozmen.products.domain.model.IdentificationType;
 import com.zyozmen.products.domain.model.User;
 import com.zyozmen.products.domain.model.UserState;
 import org.springframework.stereotype.Component;
@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class UserMongoMapper {
 
-    public User toDomain(UserMongoDocument document) {
+    public User toDomain(UserDocument document) {
         if (document == null) {
             return null;
         }
@@ -27,7 +27,7 @@ public class UserMongoMapper {
                 .telefono(document.getTelefono())
                 .email(document.getEmail())
                 .tipoIdentificacion(document.getTipoIdentificacion() != null
-                        ? TipoIdentificacion.valueOf(document.getTipoIdentificacion())
+                        ? IdentificationType.valueOf(document.getTipoIdentificacion())
                         : null)
                 .numeroIdentificacion(document.getNumeroIdentificacion())
                 .mayorDeEdad(document.getMayorDeEdad())
@@ -36,15 +36,15 @@ public class UserMongoMapper {
                 .build();
     }
 
-    public UserMongoDocument toDocument(User user) {
+    public UserDocument toDocument(User user) {
         return toDocument(user, null);
     }
 
-    public UserMongoDocument toDocument(User user, String existingId) {
+    public UserDocument toDocument(User user, String existingId) {
         if (user == null) {
             return null;
         }
-        return UserMongoDocument.builder()
+        return UserDocument.builder()
                 .id(existingId != null ? existingId : user.getId())
                 .username(user.getUsername())
                 .password(user.getPassword())
@@ -63,7 +63,7 @@ public class UserMongoMapper {
                 .build();
     }
 
-    private UserState resolveState(UserMongoDocument document) {
+    private UserState resolveState(UserDocument document) {
         if (document.getState() != null) {
             return UserState.valueOf(document.getState());
         }

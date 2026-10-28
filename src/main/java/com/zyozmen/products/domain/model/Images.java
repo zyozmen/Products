@@ -8,35 +8,25 @@ import java.util.Objects;
  */
 public class Images {
 
-    private Imagen fotoPrincipal;
-    private List<Imagen> fotosSecundarias;
+    private Image fotoPrincipal;
 
     public Images() {
     }
 
-    public Images(Imagen fotoPrincipal, List<Imagen> fotosSecundarias) {
+    public Images(Image fotoPrincipal) {
         this.fotoPrincipal = fotoPrincipal;
-        this.fotosSecundarias = fotosSecundarias;
     }
 
     public static Builder builder() {
         return new Builder();
     }
 
-    public Imagen getFotoPrincipal() {
+    public Image getFotoPrincipal() {
         return fotoPrincipal;
     }
 
-    public void setFotoPrincipal(Imagen fotoPrincipal) {
+    public void setFotoPrincipal(Image fotoPrincipal) {
         this.fotoPrincipal = fotoPrincipal;
-    }
-
-    public List<Imagen> getFotosSecundarias() {
-        return fotosSecundarias;
-    }
-
-    public void setFotosSecundarias(List<Imagen> fotosSecundarias) {
-        this.fotosSecundarias = fotosSecundarias;
     }
 
     @Override
@@ -44,39 +34,30 @@ public class Images {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Images images = (Images) o;
-        return Objects.equals(fotoPrincipal, images.fotoPrincipal)
-                && Objects.equals(fotosSecundarias, images.fotosSecundarias);
+        return Objects.equals(fotoPrincipal, images.fotoPrincipal);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(fotoPrincipal, fotosSecundarias);
+        return Objects.hash(fotoPrincipal);
     }
 
     @Override
     public String toString() {
         return "Images{" +
                 "fotoPrincipal=" + fotoPrincipal +
-                ", fotosSecundarias=" + fotosSecundarias +
                 '}';
     }
 
     public static class Builder {
-        private Imagen fotoPrincipal;
-        private List<Imagen> fotosSecundarias;
-
-        public Builder fotoPrincipal(Imagen fotoPrincipal) {
+        private Image fotoPrincipal;
+        public Builder fotoPrincipal(Image fotoPrincipal) {
             this.fotoPrincipal = fotoPrincipal;
             return this;
         }
 
-        public Builder fotosSecundarias(List<Imagen> fotosSecundarias) {
-            this.fotosSecundarias = fotosSecundarias;
-            return this;
-        }
-
         public Images build() {
-            return new Images(fotoPrincipal, fotosSecundarias);
+            return new Images(fotoPrincipal);
         }
     }
 }

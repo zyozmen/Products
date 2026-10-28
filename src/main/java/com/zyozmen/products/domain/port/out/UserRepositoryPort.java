@@ -16,7 +16,7 @@ public interface UserRepositoryPort {
     boolean existsByEmail(String email);
 
     boolean existsByTipoIdentificacionAndNumeroIdentificacion(
-            com.zyozmen.products.domain.model.TipoIdentificacion tipoIdentificacion,
+            com.zyozmen.products.domain.model.IdentificationType tipoIdentificacion,
             String numeroIdentificacion);
 
     Optional<User> findByUsername(String username);

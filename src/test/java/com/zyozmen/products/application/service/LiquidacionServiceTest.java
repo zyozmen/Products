@@ -2,7 +2,7 @@ package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.model.Lote;
-import com.zyozmen.products.domain.model.Proveedor;
+import com.zyozmen.products.domain.model.Provider;
 import com.zyozmen.products.domain.port.in.LiquidacionUseCase.EvaluacionLiquidacion;
 import com.zyozmen.products.domain.port.in.LiquidacionUseCase.EventoLiquidacionCommand;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
@@ -36,12 +36,12 @@ class LiquidacionServiceTest {
     @InjectMocks
     private LiquidacionService service;
 
-    private Proveedor proveedor;
+    private Provider proveedor;
     private Lote lote;
 
     @BeforeEach
     void setUp() {
-        proveedor = Proveedor.builder().id("p1").saldoPendiente(bd("200000")).build();
+        proveedor = Provider.builder().id("p1").saldoPendiente(bd("200000")).build();
         lote = Lote.builder().id("l1").proveedorId("p1").saldoPendienteLote(bd("200000")).build();
         when(proveedorRepository.findById("p1")).thenReturn(Optional.of(proveedor));
         when(loteRepository.findLoteById("l1")).thenReturn(Optional.of(lote));

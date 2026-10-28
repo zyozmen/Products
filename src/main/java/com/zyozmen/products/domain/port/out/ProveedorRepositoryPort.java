@@ -1,17 +1,17 @@
 package com.zyozmen.products.domain.port.out;
 
-import com.zyozmen.products.domain.model.Proveedor;
+import com.zyozmen.products.domain.model.Provider;
 
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface ProveedorRepositoryPort {
-    Proveedor save(Proveedor proveedor);
+    Provider save(Provider proveedor);
 
-    Optional<Proveedor> findById(String id);
+    Optional<Provider> findById(String id);
 
     boolean existsByNit(String nit);
 
-    Page<Proveedor> buscar(String texto, Pageable pageable);
+    Page<Provider> buscar(String texto, Pageable pageable);
 }

@@ -11,12 +11,12 @@ class FotografiaPresentacionTest {
     @Test
     void admiteFormatoDelServicioDeImagenesYNormalizaExtensionYBase64() {
         for (String extension : List.of("png", "jpg", "jpeg", "webp")) {
-            var image = FotografiaPresentacion.validar(new Imagen("foto." + extension,
+            var image = PresentationPicture.validar(new Image("foto." + extension,
                     extension.toUpperCase(), "AQID"));
-            assertThat(image).isEqualTo(new Imagen("foto." + extension, extension, "AQID"));
+            assertThat(image).isEqualTo(new Image("foto." + extension, extension, "AQID"));
         }
-        assertThat(FotografiaPresentacion.validar(null)).isNull();
-        assertThat(FotografiaPresentacion.validar(new Imagen("foto.png", "png", "AQ")).getFilepart())
+        assertThat(PresentationPicture.validar(null)).isNull();
+        assertThat(PresentationPicture.validar(new Image("foto.png", "png", "AQ")).getFilepart())
                 .isEqualTo("AQ==");
     }
 
@@ -24,33 +24,33 @@ class FotografiaPresentacionTest {
     void aceptaExactamente200KiBYRechazaUnByteMasAntesDePersistir() {
         String limite = Base64.getEncoder().encodeToString(new byte[204800]);
         String excesiva = Base64.getEncoder().encodeToString(new byte[204801]);
-        assertThat(FotografiaPresentacion.validar(new Imagen("foto.png", "png", limite)).getFilepart())
+        assertThat(PresentationPicture.validar(new Image("foto.png", "png", limite)).getFilepart())
                 .isEqualTo(limite);
-        assertThatThrownBy(() -> FotografiaPresentacion.validar(new Imagen("foto.png", "png", excesiva)))
+        assertThatThrownBy(() -> PresentationPicture.validar(new Image("foto.png", "png", excesiva)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("200 KiB");
         String mayor = Base64.getEncoder().encodeToString(new byte[204804]);
-        assertThatThrownBy(() -> FotografiaPresentacion.validar(new Imagen("foto.png", "png", mayor)))
+        assertThatThrownBy(() -> PresentationPicture.validar(new Image("foto.png", "png", mayor)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("200 KiB");
     }
 
     @Test
     void rechazaUrlDataUrlContenidoVacioYBase64Invalido() {
         for (String contenido : List.of("", "https://example.com/image.png", "data:image/png;base64,AQID", "%%%")) {
-            assertThatThrownBy(() -> FotografiaPresentacion.validar(new Imagen("foto.png", "png", contenido)))
+            assertThatThrownBy(() -> PresentationPicture.validar(new Image("foto.png", "png", contenido)))
                     .isInstanceOf(IllegalArgumentException.class);
         }
-        assertThatThrownBy(() -> FotografiaPresentacion.validar(new Imagen("foto.png", "png", null)))
+        assertThatThrownBy(() -> PresentationPicture.validar(new Image("foto.png", "png", null)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rechazaMetadataInvalidaYNoReinterpretaFormatos() {
-        for (Imagen imagen : List.of(new Imagen(null, "png", "AQID"),
-                new Imagen(" ", "png", "AQID"), new Imagen("foto.png", null, "AQID"),
-                new Imagen("foto.svg", "svg", "AQID"), new Imagen("foto.jpg", "png", "AQID"),
-                new Imagen("foto", "png", "AQID"),
-                new Imagen("a".repeat(256) + ".png", "png", "AQID"))) {
-            assertThatThrownBy(() -> FotografiaPresentacion.validar(imagen)).isInstanceOf(IllegalArgumentException.class);
+        for (Image imagen : List.of(new Image(null, "png", "AQID"),
+                new Image(" ", "png", "AQID"), new Image("foto.png", null, "AQID"),
+                new Image("foto.svg", "svg", "AQID"), new Image("foto.jpg", "png", "AQID"),
+                new Image("foto", "png", "AQID"),
+                new Image("a".repeat(256) + ".png", "png", "AQID"))) {
+            assertThatThrownBy(() -> PresentationPicture.validar(imagen)).isInstanceOf(IllegalArgumentException.class);
         }
     }
 }

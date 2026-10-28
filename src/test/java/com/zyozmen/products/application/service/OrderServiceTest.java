@@ -9,7 +9,7 @@ import com.zyozmen.products.domain.model.OrderDelivery;
 import com.zyozmen.products.domain.model.OrderItem;
 import com.zyozmen.products.domain.model.OrderStatus;
 import com.zyozmen.products.domain.model.OrderStatusChange;
-import com.zyozmen.products.domain.model.TrazabilidadPresentacion;
+import com.zyozmen.products.domain.model.PresentationTrace;
 import com.zyozmen.products.domain.port.in.MarketplaceUseCase;
 import com.zyozmen.products.domain.port.in.OrderUseCase;
 import com.zyozmen.products.domain.port.out.OrderRepositoryPort;
@@ -379,7 +379,7 @@ class OrderServiceTest {
 
     private MarketplaceUseCase.PresentacionVenta activeProduct() {
         return new MarketplaceUseCase.PresentacionVenta("Tangerine", new BigDecimal("15000.00"),
-                new TrazabilidadPresentacion("proveedor", "lote", "contenedor", "cepa", "presentacion",
+                new PresentationTrace("proveedor", "lote", "contenedor", "cepa", "presentacion",
                         BigDecimal.TEN, "GRAMOS", new BigDecimal("1000"), new BigDecimal("10000")));
     }
 

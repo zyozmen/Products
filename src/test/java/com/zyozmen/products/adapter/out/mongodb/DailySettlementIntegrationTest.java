@@ -3,14 +3,36 @@ package com.zyozmen.products.adapter.out.mongodb;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import com.zyozmen.products.adapter.in.web.AdminOrdersController;
 import com.zyozmen.products.adapter.in.web.DailySettlementController;
-import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementAccumulatorDocument;
+import com.zyozmen.products.adapter.in.web.OrdersController;
+import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementSettingsDocument;
-import com.zyozmen.products.adapter.out.mongodb.document.ProveedorDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductMarketplaceDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProviderDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.UserDocument;
+import com.zyozmen.products.adapter.out.mongodb.mapper.CategoryMongoMapper;
+import com.zyozmen.products.adapter.out.mongodb.mapper.OrderMongoMapper;
+import com.zyozmen.products.adapter.out.mongodb.mapper.ProviderMongoMapper;
+import com.zyozmen.products.adapter.out.mongodb.mapper.UserMongoMapper;
+import com.zyozmen.products.adapter.out.mongodb.repository.LoteMongoRepository;
+import com.zyozmen.products.adapter.out.mongodb.repository.ProviderMongoRepository;
 import com.zyozmen.products.adapter.out.mongodb.repository.RevokedTokenMongoRepository;
+import com.zyozmen.products.adapter.out.mongodb.repository.TransaccionProveedorMongoRepository;
+import com.zyozmen.products.adapter.out.mongodb.sequence.SequenceGeneratorService;
 import com.zyozmen.products.application.service.DailySettlementService;
+import com.zyozmen.products.application.service.InventarioOrdenService;
+import com.zyozmen.products.application.service.MarketplaceService;
+import com.zyozmen.products.application.service.OrderService;
+import com.zyozmen.products.application.service.OrderSettlementService;
+import com.zyozmen.products.application.service.ProductService;
 import com.zyozmen.products.config.SecurityConfig;
+import com.zyozmen.products.domain.model.Container;
+import com.zyozmen.products.domain.model.InventoryPresentation;
+import com.zyozmen.products.domain.model.Lote;
+import com.zyozmen.products.domain.model.LotePaymentState;
 import com.zyozmen.products.exception.GlobalExceptionHandler;
+import com.zyozmen.products.exception.OrderExceptionHandler;
 import com.zyozmen.products.security.JwtAuthenticationFilter;
 import com.zyozmen.products.security.JwtService;
 import org.bson.Document;
@@ -76,8 +98,8 @@ class DailySettlementIntegrationTest {
 
     @BeforeEach
     void resetOwnDatabase() {
-        template.remove(new Query(), DailySettlementAccumulatorDocument.class);
-        template.remove(new Query(), ProveedorDocument.class);
+        template.remove(new Query(), ProviderAccumulatorsDocument.class);
+        template.remove(new Query(), ProviderDocument.class);
         template.remove(new Query(), DailySettlementSettingsDocument.class);
         for (String collection : List.of("orders", "lotes", "productos_marketplace", "cepas", "provider_daily_movements", "Users")) {
             template.getCollection(collection).deleteMany(new Document());
@@ -104,8 +126,8 @@ class DailySettlementIntegrationTest {
         assertThat(body.get("size").asInt()).isEqualTo(20);
         assertThat(body.get("totalElements").asLong()).isZero();
         assertThat(body.get("totalPages").asInt()).isZero();
-        assertThat(template.count(new Query(), DailySettlementAccumulatorDocument.class)).isZero();
-        assertThat(template.count(new Query(), ProveedorDocument.class)).isZero();
+        assertThat(template.count(new Query(), ProviderAccumulatorsDocument.class)).isZero();
+        assertThat(template.count(new Query(), ProviderDocument.class)).isZero();
     }
 
     @Test
@@ -209,7 +231,7 @@ class DailySettlementIntegrationTest {
         assertThat(body.get("activationPending").asBoolean()).isFalse();
         assertThat(body.get("activatedAt").asText()).isEqualTo(activatedAt.toString());
         assertThat(template.count(new Query(), DailySettlementSettingsDocument.class)).isEqualTo(1);
-        var indexes = template.indexOps(DailySettlementAccumulatorDocument.class).getIndexInfo();
+        var indexes = template.indexOps(ProviderAccumulatorsDocument.class).getIndexInfo();
         assertThat(indexes).anySatisfy(index -> {
             assertThat(index.isUnique()).isTrue();
             assertThat(index.getIndexFields()).extracting(field -> field.getKey())
@@ -260,7 +282,7 @@ class DailySettlementIntegrationTest {
         assertThat(movement.get("amount")).isEqualTo(new Decimal128(new BigDecimal("30000.00")));
         assertThat(movement.get("providerId")).isEqualTo(new ObjectId(PROVIDER_A));
         assertThat(template.getCollection("productos_marketplace").find().first().getInteger("stockDisponible")).isEqualTo(7);
-        assertThat(template.findById(PROVIDER_A, ProveedorDocument.class).getFinanciero().getSaldoPendiente())
+        assertThat(template.findById(PROVIDER_A, ProviderDocument.class).getFinanciero().getSaldoPendiente())
                 .isEqualByComparingTo("50000");
     }
 
@@ -308,7 +330,7 @@ class DailySettlementIntegrationTest {
     @Test
     void pqrPorHttpReconoceAlCrearYCancelarConservaBrutoSinIngresoComercial() {
         seedSale();
-        template.insert(com.zyozmen.products.adapter.out.mongodb.document.UserMongoDocument.builder()
+        template.insert(UserDocument.builder()
                 .username("hu04-http-order").role("CLIENTE").state("ACTIVO").build());
         var created = write("/api/admin/orders/pqr", HttpMethod.POST, """
                 {"username":"hu04-http-order","items":[
@@ -345,37 +367,35 @@ class DailySettlementIntegrationTest {
         assertThat(template.getCollection("provider_daily_movements").countDocuments()).isEqualTo(2);
         assertThat(template.getCollection("productos_marketplace").find().first().getInteger("stockDisponible"))
                 .isEqualTo(10);
-        assertThat(template.findById(PROVIDER_A, ProveedorDocument.class).getFinanciero().getSaldoPendiente())
+        assertThat(template.findById(PROVIDER_A, ProviderDocument.class).getFinanciero().getSaldoPendiente())
                 .isEqualByComparingTo("50000");
     }
 
     private void seedSale() {
         provider(PROVIDER_A, "Proveedor venta real", "50000");
         var repository = new MongoRepositoryFactory(template);
-        var lots = new ProveedorMongoAdapter(repository.getRepository(
-                com.zyozmen.products.adapter.out.mongodb.repository.ProveedorMongoRepository.class),
-                repository.getRepository(com.zyozmen.products.adapter.out.mongodb.repository.LoteMongoRepository.class),
-                repository.getRepository(com.zyozmen.products.adapter.out.mongodb.repository.TransaccionProveedorMongoRepository.class),
-                new com.zyozmen.products.adapter.out.mongodb.mapper.ProveedorMongoMapper());
-        var p = new com.zyozmen.products.domain.model.PresentacionInventario("650000000000000000000401",
+        var lots = new ProviderMongoAdapter(repository.getRepository(
+                ProviderMongoRepository.class),
+                repository.getRepository(LoteMongoRepository.class),
+                repository.getRepository(TransaccionProveedorMongoRepository.class),
+                new ProviderMongoMapper());
+        var p = new InventoryPresentation("650000000000000000000401",
                 "TAN10", "10g", BigDecimal.TEN, 10, 10, new BigDecimal("10000"),
                 new BigDecimal("15000"), true, false, null);
-        lots.save(com.zyozmen.products.domain.model.Lote.builder().id("650000000000000000000201")
+        lots.save(Lote.builder().id("650000000000000000000201")
                 .proveedorId(PROVIDER_A).costoTotalLote(new BigDecimal("100000")).montoPagadoLote(BigDecimal.ZERO)
                 .saldoPendienteLote(new BigDecimal("50000")).estado("PROCESADO")
-                .estadoPago(com.zyozmen.products.domain.model.EstadoPagoLote.PAGO_PARCIAL)
-                .contenedores(List.of(com.zyozmen.products.domain.model.Contenedor.builder()
+                .estadoPago(LotePaymentState.PAGO_PARCIAL)
+                .contenedores(List.of(Container.builder()
                         .id("650000000000000000000301").cepaId("cepa-http").tipoCepa("Tangerine")
                         .unidadBase("GRAMOS").capacidadUnidadesBase(new BigDecimal("200"))
                         .cantidadDisponible(new BigDecimal("100")).costoBasePorUnidad(new BigDecimal("1000"))
                         .presentaciones(List.of(p)).build())).build());
-        template.insert(new com.zyozmen.products.adapter.out.mongodb.document.CepaDocument(
-                "cepa-http", "Tangerine", "tangerine", null, null, null, null, List.of()));
-        template.insert(new com.zyozmen.products.adapter.out.mongodb.document.ProductoMarketplaceDocument(
+        template.insert(new ProductMarketplaceDocument(
                 null, p.presentacionId(), "650000000000000000000201", "Proveedor", "Tangerine", "Tangerine",
                 p.sku(), p.precioVenta(), 10, null, "ACTIVO", "cepa-http", p.nombre(), p.contenidoUnidad(), "GRAMOS"));
-        new com.zyozmen.products.adapter.out.mongodb.sequence.SequenceGeneratorService(template)
-                .nextSequence(com.zyozmen.products.adapter.out.mongodb.sequence.SequenceGeneratorService.ORDER_SEQUENCE);
+        new SequenceGeneratorService(template)
+                .nextSequence(SequenceGeneratorService.ORDER_SEQUENCE);
     }
 
     private ResponseEntity<JsonNode> write(String url, HttpMethod method, String body, String role) {
@@ -392,13 +412,13 @@ class DailySettlementIntegrationTest {
     }
 
     private void provider(String id, String name, String balance) {
-        template.insert(ProveedorDocument.builder().id(id).nombre(name).nit(id).financiero(
-                ProveedorDocument.FinancieroDocument.builder().totalDeuda(new BigDecimal(balance))
+        template.insert(ProviderDocument.builder().id(id).nombre(name).nit(id).financiero(
+                ProviderDocument.FinancieroDocument.builder().totalDeuda(new BigDecimal(balance))
                         .totalPagado(BigDecimal.ZERO).saldoPendiente(new BigDecimal(balance)).build()).build());
     }
 
     private void accumulator(String provider, LocalDate date, String sales, String pqr, String reversed, String paid) {
-        template.insert(new DailySettlementAccumulatorDocument(null, provider, date.toString(), 2, 1,
+        template.insert(new ProviderAccumulatorsDocument(null, provider, date.toString(), 2, 1,
                 new BigDecimal(sales), new BigDecimal(pqr), new BigDecimal(reversed), new BigDecimal(paid)));
     }
 
@@ -411,22 +431,22 @@ class DailySettlementIntegrationTest {
     @Import({DailySettlementController.class, DailySettlementService.class, DailySettlementMongoAdapter.class,
             DailySettlementIndexInitializer.class, SecurityConfig.class, JwtAuthenticationFilter.class,
             JwtService.class, GlobalExceptionHandler.class, RevokedTokenMongoAdapter.class,
-            com.zyozmen.products.exception.OrderExceptionHandler.class,
-            com.zyozmen.products.adapter.in.web.OrdersController.class,
-            com.zyozmen.products.adapter.in.web.AdminOrdersController.class,
-            com.zyozmen.products.application.service.OrderService.class,
-            com.zyozmen.products.application.service.OrderSettlementService.class,
-            com.zyozmen.products.application.service.InventarioOrdenService.class,
-            com.zyozmen.products.application.service.MarketplaceService.class,
-            com.zyozmen.products.application.service.CepaService.class,
-            OrderMongoAdapter.class, ProveedorMongoAdapter.class, UserMongoAdapter.class,
-            MarketplaceMongoAdapter.class, MarketplaceCatalogoQuery.class, CepaMongoAdapter.class,
+            OrderExceptionHandler.class,
+            OrdersController.class,
+            AdminOrdersController.class,
+            OrderService.class,
+            OrderSettlementService.class,
+            InventarioOrdenService.class,
+            MarketplaceService.class,
+            ProductService.class,
+            OrderMongoAdapter.class, ProviderMongoAdapter.class, UserMongoAdapter.class,
+            MarketplaceMongoAdapter.class, MarketplaceCatalogoQuery.class, ProductMongoAdapter.class,
             CategoryMongoAdapter.class,
-            com.zyozmen.products.adapter.out.mongodb.sequence.SequenceGeneratorService.class,
-            com.zyozmen.products.adapter.out.mongodb.mapper.OrderMongoMapper.class,
-            com.zyozmen.products.adapter.out.mongodb.mapper.ProveedorMongoMapper.class,
-            com.zyozmen.products.adapter.out.mongodb.mapper.UserMongoMapper.class,
-            com.zyozmen.products.adapter.out.mongodb.mapper.CategoryMongoMapper.class})
+            SequenceGeneratorService.class,
+            OrderMongoMapper.class,
+            ProviderMongoMapper.class,
+            UserMongoMapper.class,
+            CategoryMongoMapper.class})
     static class TestApplication {
         @Bean(destroyMethod = "close")
         MongoClient client() {

@@ -1,6 +1,6 @@
 package com.zyozmen.products.domain.port.out;
 
-import com.zyozmen.products.domain.model.ProductoMarketplace;
+import com.zyozmen.products.domain.model.ProductMarketplace;
 import com.zyozmen.products.domain.model.MarketplaceCatalogFilter;
 import java.util.List;
 import java.util.Optional;
@@ -13,11 +13,11 @@ public interface MarketplaceRepositoryPort {
 
     boolean existsByPresentacionId(String presentacionId);
 
-    void insert(ProductoMarketplace producto);
+    void insert(ProductMarketplace producto);
 
-    Optional<ProductoMarketplace> findByPresentacionId(String presentacionId);
+    Optional<ProductMarketplace> findByPresentacionId(String presentacionId);
 
-    List<ProductoMarketplace> findDisponiblesByCepaId(String cepaId);
+    List<ProductMarketplace> findDisponiblesByCepaId(String cepaId);
 
     Page<ProductoCatalogo> buscarCatalogo(String buscar, Pageable pageable);
     Page<ProductoCatalogo> buscarCatalogo(MarketplaceCatalogFilter filtro, Pageable pageable);
