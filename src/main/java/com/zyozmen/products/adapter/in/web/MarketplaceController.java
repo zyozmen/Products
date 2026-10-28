@@ -22,7 +22,7 @@ public class MarketplaceController {
                                  int page, int size, long totalElements, int totalPages) { }
 
     @GetMapping("/api/marketplace/presentaciones")
-    @Operation(summary = "Catalogo paginado por cepas con presentaciones activas y disponibles")
+    @Operation(summary = "Catalogo paginado por productos con presentaciones activas y disponibles")
     public PaginaCatalogo listar(@RequestParam(required = false) String buscar,
                                  @RequestParam(defaultValue = "0") int page,
                                  @RequestParam(defaultValue = "20") int size,
@@ -34,10 +34,10 @@ public class MarketplaceController {
                 resultado.getTotalElements(), resultado.getTotalPages());
     }
 
-    @GetMapping("/api/marketplace/cepas/{cepaId}/presentaciones/{presentacionId}")
+    @GetMapping("/api/marketplace/products/{productId}/presentaciones/{presentacionId}")
     @Operation(summary = "Consultar una cepa con sus presentaciones activas de distintos lotes")
     public MarketplaceUseCase.DetalleProducto obtenerDetalle(
-            @PathVariable String cepaId, @PathVariable String presentacionId) {
-        return marketplace.obtenerDetalle(cepaId, presentacionId);
+            @PathVariable String productId, @PathVariable String presentacionId) {
+        return marketplace.obtenerDetalle(productId, presentacionId);
     }
 }
