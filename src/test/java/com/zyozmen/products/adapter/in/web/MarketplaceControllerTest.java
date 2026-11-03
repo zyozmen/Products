@@ -76,7 +76,7 @@ class MarketplaceControllerTest {
                         new MarketplaceUseCase.PresentacionDetalle("presentacion", "TAN10", "10g",
                                 BigDecimal.TEN, "GRAMOS", new BigDecimal("15000"), 5, null))));
 
-        mvc.perform(get("/api/marketplace/cepas/cepa/presentaciones/presentacion"))
+        mvc.perform(get("/api/marketplace/products/cepa/presentaciones/presentacion"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nombre").value("Tangerine"))
                 .andExpect(jsonPath("$.presentaciones[0].contenidoUnidad").value(10))
@@ -89,7 +89,7 @@ class MarketplaceControllerTest {
     void cepaIncorrectaResponde404() throws Exception {
         when(marketplace.obtenerDetalle("otra", "presentacion"))
                 .thenThrow(new ResourceNotFoundException("La presentacion no pertenece a la cepa indicada"));
-        mvc.perform(get("/api/marketplace/cepas/otra/presentaciones/presentacion"))
+        mvc.perform(get("/api/marketplace/products/otra/presentaciones/presentacion"))
                 .andExpect(status().isNotFound());
     }
 
@@ -97,7 +97,7 @@ class MarketplaceControllerTest {
     void idMalFormadoResponde400() throws Exception {
         when(marketplace.obtenerDetalle("cepa", "invalido"))
                 .thenThrow(new IllegalArgumentException("El ID de presentacion debe ser un ObjectId valido"));
-        mvc.perform(get("/api/marketplace/cepas/cepa/presentaciones/invalido"))
+        mvc.perform(get("/api/marketplace/products/cepa/presentaciones/invalido"))
                 .andExpect(status().isBadRequest());
     }
 }

@@ -4,11 +4,14 @@ import com.zyozmen.products.domain.exception.InvalidCredentialsException;
 import com.zyozmen.products.domain.exception.MainAdminProtectedException;
 import com.zyozmen.products.domain.exception.ResourceNotFoundException;
 import com.zyozmen.products.domain.exception.ServiceUnavailableException;
+import com.zyozmen.products.domain.exception.SessionExpiredException;
 import com.zyozmen.products.domain.exception.UnderageRegistrationException;
 import com.zyozmen.products.domain.exception.UserAlreadyExistsException;
 import com.zyozmen.products.domain.exception.UserInactiveException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
@@ -106,6 +109,40 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().getError()).isEqualTo("Internal Server Error");
         assertThat(response.getBody().getMessage()).isEqualTo("Unexpected error");
         assertThat(response.getBody().getPath()).isEqualTo("/api/productos");
+    }
+
+    @Test
+    void duplicateKeysReturnConflictWithRequestPath() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/products");
+
+        var response = handler.handleDuplicateKeyException(new DuplicateKeyException("duplicate"), request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getMessage()).contains("valor unico");
+        assertThat(response.getBody().getPath()).isEqualTo("/api/products");
+    }
+
+    @Test
+    void expiredSessionReturnsUnauthorizedSessionPayload() {
+        var response = handler.handleSessionExpiredException(new SessionExpiredException("Inactivity limit reached"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody().code()).isEqualTo(SessionExpiredException.CODE);
+        assertThat(response.getBody().message()).isEqualTo("Inactivity limit reached");
+    }
+
+    @Test
+    void optimisticLockingFailureReturnsConflict() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/api/orders/7");
+
+        var response = handler.handleOptimisticLockingException(
+                new OptimisticLockingFailureException("stale"), request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getMessage()).contains("modificado por otra solicitud");
+        assertThat(response.getBody().getPath()).isEqualTo("/api/orders/7");
     }
 
     @Test

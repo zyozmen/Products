@@ -22,15 +22,12 @@ public class ImageUploadService {
         if (target == null) {
             throw new IllegalArgumentException("El destino de las imagenes es obligatorio");
         }
-        if (target == Target.CATEGORY || target == Target.PRODUCT) {
-            Image image = convert(main);
-            if (image == null) {
-                throw new IllegalArgumentException("La foto principal es obligatoria para "
-                        + (target == Target.PRODUCT ? "productos" : "categorias"));
-            }
-            return Images.builder().fotoPrincipal(image).build();
+        Image image = convert(main);
+        if (image == null) {
+            throw new IllegalArgumentException("La foto principal es obligatoria para "
+                    + (target == Target.PRODUCT ? "productos" : "categorias"));
         }
-        return Images.builder().fotoPrincipal(convert(main)).build();
+        return Images.builder().fotoPrincipal(image).build();
     }
 
     private Image convert(MultipartFile file) {

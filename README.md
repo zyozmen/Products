@@ -257,7 +257,7 @@ Content-Type: application/json
 
 ### Catalogo y detalle de marketplace por cepa (HU-05/T1 ampliada)
 
-`GET /api/marketplace/cepas/{cepaId}/presentaciones/{presentacionId}` es público
+`GET /api/marketplace/products/{productId}/presentaciones/{presentacionId}` es público
 y devuelve el nombre del producto (tipo/cepa), la presentación seleccionada y
 las presentaciones activas con stock positivo de esa misma cepa, incluso de distintos lotes,
 contenedores y proveedores. Cada opción conserva su propio ID, SKU, contenido,

@@ -97,6 +97,28 @@ class ProveedorControllerTest {
     }
 
     @Test
+    void creaProveedorYRegistraPago() throws Exception {
+        var proveedor = Provider.builder().id("p1").nombre("Distribuidora")
+                .nit("900123456").estado(ProviderState.ACTIVO).build();
+        when(useCase.crear(any())).thenReturn(proveedor);
+        when(useCase.registrarPago(any())).thenReturn(proveedor);
+
+        mvc.perform(post("/api/proveedores").contentType(MediaType.APPLICATION_JSON).content("""
+                {"nombre":"Distribuidora","nit":"900123456"}
+                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nombre").value("Distribuidora"));
+        mvc.perform(post("/api/proveedores/p1/pagos").contentType(MediaType.APPLICATION_JSON).content("""
+                {"monto":100.00}
+                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value("p1"));
+
+        verify(useCase).crear(any());
+        verify(useCase).registrarPago(any());
+    }
+
+    @Test
     void recibeContenedoresSinCodigoDeClienteYExponeInventario() throws Exception {
         when(useCase.recibirLote(any())).thenReturn(lote());
 

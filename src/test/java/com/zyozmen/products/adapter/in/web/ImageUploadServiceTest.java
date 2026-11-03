@@ -63,4 +63,43 @@ class ImageUploadServiceTest {
         assertThatThrownBy(() -> service.prepare(CATEGORY, oversized))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("2 MB");
     }
+
+    @Test
+    void rejectsMissingTargetAndMissingMainImage() {
+        assertThatThrownBy(() -> service.prepare(null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("destino");
+        assertThatThrownBy(() -> service.prepare(PRODUCT, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("productos");
+        assertThatThrownBy(() -> service.prepare(CATEGORY,
+                new MockMultipartFile("fotoPrincipal", "empty.png", "image/png", new byte[0])))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("categorias");
+    }
+
+    @Test
+    void rejectsUnreadableOrEmptyImageContent() throws IOException {
+        MultipartFile unreadable = mock(MultipartFile.class);
+        when(unreadable.isEmpty()).thenReturn(false);
+        when(unreadable.getSize()).thenReturn(1L);
+        when(unreadable.getOriginalFilename()).thenReturn("photo.png");
+        when(unreadable.getContentType()).thenReturn("image/png");
+        when(unreadable.getBytes()).thenThrow(new IOException("read failed"));
+
+        assertThatThrownBy(() -> service.prepare(PRODUCT, unreadable))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No se pudo leer")
+                .hasCauseInstanceOf(IOException.class);
+
+        MultipartFile emptyContent = mock(MultipartFile.class);
+        when(emptyContent.isEmpty()).thenReturn(false);
+        when(emptyContent.getSize()).thenReturn(1L);
+        when(emptyContent.getOriginalFilename()).thenReturn("photo.png");
+        when(emptyContent.getContentType()).thenReturn("image/png");
+        when(emptyContent.getBytes()).thenReturn(new byte[0]);
+        assertThatThrownBy(() -> service.prepare(PRODUCT, emptyContent))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("contener datos");
+    }
 }
