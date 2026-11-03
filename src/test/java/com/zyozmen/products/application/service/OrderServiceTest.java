@@ -66,7 +66,6 @@ class OrderServiceTest {
         assertThat(created.getStatus()).isEqualTo(OrderStatus.CREADA);
         assertThat(created.getTotal()).isEqualByComparingTo("0");
         assertThat(created.getSubtotal()).isEqualByComparingTo("0");
-        assertThat(created.getTaxAmount()).isEqualByComparingTo("0");
         assertThat(created.getItems().get(0).getUnitPrice()).isEqualByComparingTo("0");
         assertThat(created.getItems().get(0).getName()).isEqualTo("Tangerine");
         assertThat(created.getItems().get(0).getTrazabilidad().costoPresentacion())
@@ -157,11 +156,11 @@ class OrderServiceTest {
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Order delivered = orderService.changeStatus(101L, OrderStatus.ENTREGADA, "admin",
-                new OrderUseCase.StatusChangeDetails(null, new BigDecimal("30000.00"),
-                        new BigDecimal("4800.00"), null));
+                new OrderUseCase.StatusChangeDetails(null, new BigDecimal("20000.00"),
+                        new BigDecimal("10000.00"), null));
 
-        assertThat(delivered.getCashAmount()).isEqualByComparingTo("30000");
-        assertThat(delivered.getCardAmount()).isEqualByComparingTo("4800");
+        assertThat(delivered.getCashAmount()).isEqualByComparingTo("20000");
+        assertThat(delivered.getCardAmount()).isEqualByComparingTo("10000");
         assertThat(delivered.getDeliveredAt()).isNotNull();
         verify(settlements).recognizeOrderMovement(delivered);
         verifyNoInteractions(inventario);
@@ -200,10 +199,10 @@ class OrderServiceTest {
         assertThat(report.to()).isEqualTo(LocalDate.of(2026, 10, 12));
         assertThat(report.totalOrders()).isEqualTo(5);
         assertThat(report.paid().count()).isEqualTo(1);
-        assertThat(report.paid().total()).isEqualByComparingTo("34800");
+        assertThat(report.paid().total()).isEqualByComparingTo("30000");
         assertThat(report.paid().cash()).isEqualByComparingTo("20000");
         assertThat(report.paid().card()).isEqualByComparingTo("10000");
-        assertThat(report.paid().undetailed()).isEqualByComparingTo("4800");
+        assertThat(report.paid().undetailed()).isEqualByComparingTo("0");
         assertThat(report.cancelled().count()).isEqualTo(1);
         assertThat(report.toPack().count()).isEqualTo(1);
         assertThat(report.toDeliver().count()).isEqualTo(1);
@@ -239,13 +238,12 @@ class OrderServiceTest {
                         new BigDecimal("15000.00"), new BigDecimal("30000.00"))),
                 new OrderUseCase.OrderDeliveryRequest("Juan", "Calle 1", "", "3001234567"),
                 new OrderUseCase.OrderAmountsRequest(
-                        new BigDecimal("30000.00"), new BigDecimal("4800.00"), new BigDecimal("34800.00")));
+                        new BigDecimal("30000.00"), new BigDecimal("30000.00")));
 
         assertThat(created.getUsername()).isEqualTo("juan");
         assertThat(created.getStatus()).isEqualTo(OrderStatus.CREADA);
         assertThat(created.getSubtotal()).isEqualByComparingTo("30000.00");
-        assertThat(created.getTaxAmount()).isEqualByComparingTo("4800.00");
-        assertThat(created.getTotal()).isEqualByComparingTo("34800.00");
+        assertThat(created.getTotal()).isEqualByComparingTo("30000.00");
         assertThat(created.getItems()).containsExactly(OrderItem.builder()
                 .productId("presentacion").name("Tangerine").quantity(2)
                 .unitPrice(new BigDecimal("15000.00")).lineTotal(new BigDecimal("30000.00"))
@@ -254,6 +252,20 @@ class OrderServiceTest {
         assertThat(created.getCreatedAt()).isNotNull();
         verify(orderRepository).save(created);
         verifyNoInteractions(inventario);
+    }
+
+    @Test
+    void createRejectsTotalThatDoesNotMatchSubtotal() {
+        when(marketplace.resolverPresentacion("presentacion")).thenReturn(activeProduct());
+
+        assertThatThrownBy(() -> orderService.create("juan",
+                List.of(new OrderUseCase.OrderItemRequest("presentacion", 2,
+                        new BigDecimal("15000.00"), new BigDecimal("30000.00"))),
+                delivery(), new OrderUseCase.OrderAmountsRequest(
+                        new BigDecimal("30000.00"), new BigDecimal("34800.00"))))
+                .hasMessageContaining("total");
+
+        verifyNoInteractions(orderRepository);
     }
 
     @Test
@@ -397,7 +409,7 @@ class OrderServiceTest {
                 List.of(new OrderUseCase.OrderItemRequest("presentacion", 2,
                         new BigDecimal("14000.00"), new BigDecimal("28000.00"))),
                 delivery(), new OrderUseCase.OrderAmountsRequest(
-                        new BigDecimal("28000.00"), new BigDecimal("4480.00"), new BigDecimal("32480.00")));
+                        new BigDecimal("28000.00"), new BigDecimal("28000.00")));
     }
 
     private Order createWithMissingProduct() {
@@ -405,13 +417,13 @@ class OrderServiceTest {
                 List.of(new OrderUseCase.OrderItemRequest("presentacion", 1,
                         new BigDecimal("15000.00"), new BigDecimal("15000.00"))),
                 delivery(), new OrderUseCase.OrderAmountsRequest(
-                        new BigDecimal("15000.00"), new BigDecimal("2400.00"), new BigDecimal("17400.00")));
+                        new BigDecimal("15000.00"), new BigDecimal("15000.00")));
     }
 
     private Order order(String username, OrderStatus status) {
         return Order.builder().id(101L).username(username).status(status)
-                .subtotal(new BigDecimal("30000.00")).taxAmount(new BigDecimal("4800.00"))
-                .total(new BigDecimal("34800.00")).delivery(deliveryDomain())
+                .subtotal(new BigDecimal("30000.00"))
+                .total(new BigDecimal("30000.00")).delivery(deliveryDomain())
                 .items(List.of()).statusHistory(List.of()).build();
     }
 }

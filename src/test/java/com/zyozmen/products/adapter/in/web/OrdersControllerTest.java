@@ -38,10 +38,10 @@ class OrdersControllerTest {
         var request = new OrderCreateRequestDTO(
                 List.of(new OrderCreateRequestDTO.ItemRequest("p1", "Product", 2, BigDecimal.TEN, BigDecimal.valueOf(20))),
                 new OrderCreateRequestDTO.DeliveryRequest("Juan", "Street 1", "Apt 2", "123"),
-                BigDecimal.valueOf(20), BigDecimal.ONE, BigDecimal.valueOf(21));
+                BigDecimal.valueOf(20), BigDecimal.valueOf(21));
         var items = List.of(new OrderUseCase.OrderItemRequest("p1", 2, BigDecimal.TEN, BigDecimal.valueOf(20)));
         var delivery = new OrderUseCase.OrderDeliveryRequest("Juan", "Street 1", "Apt 2", "123");
-        var amounts = new OrderUseCase.OrderAmountsRequest(BigDecimal.valueOf(20), BigDecimal.ONE, BigDecimal.valueOf(21));
+        var amounts = new OrderUseCase.OrderAmountsRequest(BigDecimal.valueOf(20), BigDecimal.valueOf(21));
         Order order = order();
         when(orderUseCase.create("juan", items, delivery, amounts)).thenReturn(order);
 
@@ -56,10 +56,10 @@ class OrdersControllerTest {
         var request = new OrderCreateRequestDTO(
                 List.of(new OrderCreateRequestDTO.ItemRequest("p1", null, 1, BigDecimal.TEN, BigDecimal.TEN)),
                 new OrderCreateRequestDTO.DeliveryRequest(null, null, null, null),
-                BigDecimal.TEN, BigDecimal.ZERO, BigDecimal.TEN);
+                BigDecimal.TEN, BigDecimal.TEN);
         var items = List.of(new OrderUseCase.OrderItemRequest("p1", 1, BigDecimal.TEN, BigDecimal.TEN));
         var delivery = new OrderUseCase.OrderDeliveryRequest("", "", "", "");
-        var amounts = new OrderUseCase.OrderAmountsRequest(BigDecimal.TEN, BigDecimal.ZERO, BigDecimal.TEN);
+        var amounts = new OrderUseCase.OrderAmountsRequest(BigDecimal.TEN, BigDecimal.TEN);
         when(orderUseCase.create("juan", items, delivery, amounts)).thenReturn(order());
 
         assertThat(controller.create(authentication, request).getStatusCode()).isEqualTo(HttpStatus.CREATED);

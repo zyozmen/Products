@@ -15,7 +15,6 @@ public record OrderCreateRequestDTO(
         List<@NotNull @Valid ItemRequest> items,
         @NotNull(message = "Los datos de entrega son obligatorios") @Valid DeliveryRequest delivery,
         @NotNull @DecimalMin(value = "0.0", message = "El subtotal no puede ser negativo") BigDecimal subtotal,
-        @NotNull @DecimalMin(value = "0.0", message = "El impuesto no puede ser negativo") BigDecimal taxAmount,
         @NotNull @DecimalMin(value = "0.0", message = "El total no puede ser negativo") BigDecimal total) {
 
     public record ItemRequest(

@@ -41,8 +41,6 @@ public class OrderDocument {
     private String notes;
     @Field("subtotal")
     private BigDecimal subtotal;
-    @Field("tax_amount")
-    private BigDecimal taxAmount;
     @Field("total")
     private BigDecimal total;
     @Field("delivery")

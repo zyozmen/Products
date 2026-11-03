@@ -26,7 +26,6 @@ public record OrderResponseDTO(
         List<ItemResponse> items,
         DeliveryResponse delivery,
         BigDecimal subtotal,
-        BigDecimal taxAmount,
         BigDecimal total) {
 
     public static OrderResponseDTO from(Order order) {
@@ -35,7 +34,7 @@ public record OrderResponseDTO(
                 order.getNotes(), order.getCreatedAt(), order.getUpdatedAt(), order.getPaidAt(),
                 order.getPackedAt(), order.getDeliveredAt(), order.getCancelledAt(),
                 order.getItems().stream().map(OrderResponseDTO::toItem).toList(),
-                toDelivery(order.getDelivery()), order.getSubtotal(), order.getTaxAmount(), order.getTotal());
+                toDelivery(order.getDelivery()), order.getSubtotal(), order.getTotal());
     }
 
     private static ItemResponse toItem(OrderItem item) {

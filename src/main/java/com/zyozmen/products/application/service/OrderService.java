@@ -36,7 +36,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OrderService implements OrderUseCase {
 
-    private static final BigDecimal TAX_RATE = new BigDecimal("0.16");
     private static final BigDecimal ZERO = new BigDecimal("0.00");
     private static final BigDecimal PAYMENT_TOLERANCE = new BigDecimal("0.01");
     private static final String ORDER_NOT_FOUND = "Orden no encontrada";
@@ -85,10 +84,8 @@ public class OrderService implements OrderUseCase {
         }
 
         subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal taxAmount = subtotal.multiply(TAX_RATE).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal total = subtotal.add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal total = subtotal;
         requireSameAmount(requestedAmounts.subtotal(), subtotal, "El subtotal enviado no coincide");
-        requireSameAmount(requestedAmounts.taxAmount(), taxAmount, "El impuesto enviado no coincide");
         requireSameAmount(requestedAmounts.total(), total, "El total enviado no coincide");
 
         Instant now = Instant.now();
@@ -96,7 +93,6 @@ public class OrderService implements OrderUseCase {
                 .username(username)
                 .status(OrderStatus.CREADA)
                 .subtotal(subtotal)
-                .taxAmount(taxAmount)
                 .total(total)
                 .delivery(OrderDelivery.builder()
                         .recipientName(delivery.recipientName())
@@ -153,7 +149,6 @@ public class OrderService implements OrderUseCase {
                 .inventoryDeducted(true)
                 .notes(notes)
                 .subtotal(ZERO)
-                .taxAmount(ZERO)
                 .total(ZERO)
                 .delivery(OrderDelivery.builder()
                         .recipientName(safeDelivery.recipientName())

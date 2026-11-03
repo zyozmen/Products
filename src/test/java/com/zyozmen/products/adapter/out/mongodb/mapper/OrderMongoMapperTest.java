@@ -74,6 +74,6 @@ class OrderMongoMapperTest {
     private Order order(OrderItem item) {
         return Order.builder().id(1L).username("cliente").status(OrderStatus.CREADA)
                 .delivery(OrderDelivery.builder().build()).items(List.of(item)).statusHistory(List.of())
-                .subtotal(BigDecimal.TEN).taxAmount(BigDecimal.ZERO).total(BigDecimal.TEN).build();
+                .subtotal(BigDecimal.TEN).total(BigDecimal.TEN).build();
     }
 }

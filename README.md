@@ -19,7 +19,7 @@ Microservicio REST para la gestión de catálogo de productos, usuarios, órdene
 - **Catálogo:** consulta, creación, actualización y eliminación de productos, categorías, productos destacados y carga de imágenes.
 - **Usuarios:** registro público (cuenta en estado `PENDIENTE` hasta aprobación), perfil propio y administración de estados (`ACTIVO`, `INACTIVO`, `PENDIENTE`) exclusiva del rol `ADMIN`.
 - **Autenticación y sesión:** login con JWT, renovación de token, cierre de sesión con revocación en servidor y control de inactividad parametrizable.
-- **Órdenes:** creación con validación de precios e IVA en backend, consulta por usuario, gestión administrativa con auditoría de estados, PQR y reportes.
+- **Órdenes:** creación con validación de precios en backend (sin impuestos), consulta por usuario, gestión administrativa con auditoría de estados, PQR y reportes.
 - **Proveedores y saldos (HU-01):** alta de proveedores, recepción de lotes con cálculo de costo y abono inicial opcional, abonos posteriores, saldos transaccionales y evaluación de la liquidación diaria con tope de pago.
 - **Recepción (HU-02):** lotes con contenedores por tipo/cepa, inventario en unidades base, código interno automático e historial de abonos con imputación FIFO.
 - **Empaquetado (HU-03):** presentaciones con capacidad validada, costo calculado, confirmación de margen negativo y publicación transaccional en `productos_marketplace`.
@@ -226,7 +226,7 @@ El backend no redimensiona, recomprime ni mejora las imágenes: almacena los byt
 ### Órdenes
 - El propietario de la orden se toma del token; el cliente no puede indicar el `username`.
 - Desde HU-05/T1, `productId` en ventas y PQR es el **ID de la presentación de marketplace**, no el ID numérico del catálogo anterior. El catálogo anterior sigue disponible en sus rutas; no se consulta para crear nuevas órdenes. Las órdenes ya guardadas siguen siendo consultables.
-- `POST /api/orders` valida que la presentación esté activa y tenga procedencia en un lote, recalcula precios vigentes e IVA (16 %) y responde `422` si los valores enviados no coinciden. Un ID mal formado responde `400`; una presentación inexistente o inactiva, `404`.
+- `POST /api/orders` valida que la presentación esté activa y tenga procedencia en un lote, recalcula precios vigentes y responde `422` si los valores enviados no coinciden. Las ventas no cobran impuesto, por lo que no existe `taxAmount` en el contrato y `total = subtotal`. Un ID mal formado responde `400`; una presentación inexistente o inactiva, `404`.
 - Cada ítem nuevo guarda `trazabilidad` interna: proveedor, lote, contenedor, cepa, presentación, contenido, unidad base, costo base y costo por presentación. Los datos se resuelven en el servidor; no se aceptan costos del cliente. El costo congelado no cambia al actualizar el catálogo y no se expone en `OrderResponseDTO`.
 - Las PQR también requieren `productId` válido y resuelven nombre y costo desde el servidor. `name` es opcional y no se usa como fuente; sus precios e importes comerciales son cero.
 - Una orden de otro usuario responde `404`.
@@ -251,8 +251,7 @@ Content-Type: application/json
     "contactPhone": "3001234567"
   },
   "subtotal": 30000,
-  "taxAmount": 4800,
-  "total": 34800
+  "total": 30000
 }
 ```
 

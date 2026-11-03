@@ -40,7 +40,7 @@ public class OrdersController {
                 valueOrEmpty(request.delivery().addressComplement()),
                 valueOrEmpty(request.delivery().contactPhone()));
         OrderUseCase.OrderAmountsRequest amounts = new OrderUseCase.OrderAmountsRequest(
-                request.subtotal(), request.taxAmount(), request.total());
+                request.subtotal(), request.total());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(OrderResponseDTO.from(orderUseCase.create(authentication.getName(), items, delivery, amounts)));
     }

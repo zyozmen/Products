@@ -31,7 +31,7 @@ public interface OrderUseCase {
     record PqrItemRequest(String productId, String name, int quantity) { }
     record OrderDeliveryRequest(String recipientName, String address, String addressComplement,
                                 String contactPhone) { }
-    record OrderAmountsRequest(BigDecimal subtotal, BigDecimal taxAmount, BigDecimal total) { }
+    record OrderAmountsRequest(BigDecimal subtotal, BigDecimal total) { }
 
     record StatusChangeDetails(Boolean cashOnDelivery, BigDecimal cashAmount, BigDecimal cardAmount,
                                String reason) {

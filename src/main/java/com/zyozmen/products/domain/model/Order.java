@@ -24,7 +24,6 @@ public class Order {
     private BigDecimal cardAmount;
     private String notes;
     private BigDecimal subtotal;
-    private BigDecimal taxAmount;
     private BigDecimal total;
     private OrderDelivery delivery;
     private List<OrderItem> items;

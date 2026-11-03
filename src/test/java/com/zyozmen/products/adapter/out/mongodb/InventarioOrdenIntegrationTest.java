@@ -470,7 +470,7 @@ class InventarioOrdenIntegrationTest {
         var order = pqr(2, 3);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CREADA);
         assertThat(order.getSubtotal()).isEqualByComparingTo("0");
-        assertThat(order.getTaxAmount()).isEqualByComparingTo("0");
+        assertThat(order.getTotal()).isEqualByComparingTo("0");
         assertThat(order.getTotal()).isEqualByComparingTo("0");
         assertThat(order.getItems()).allSatisfy(i -> {
             assertThat(i.getUnitPrice()).isEqualByComparingTo("0");
@@ -731,7 +731,7 @@ class InventarioOrdenIntegrationTest {
     private Order orden(List<OrderItem> items) {
         return Order.builder().username("cliente").status(OrderStatus.CREADA).items(items).createdAt(java.time.Instant.now())
                 .statusHistory(List.of()).delivery(OrderDelivery.builder().build())
-                .total(BigDecimal.TEN).subtotal(BigDecimal.TEN).taxAmount(BigDecimal.ZERO).build();
+                .total(BigDecimal.TEN).subtotal(BigDecimal.TEN).build();
     }
 
     private Order pqr(int... quantities) {
