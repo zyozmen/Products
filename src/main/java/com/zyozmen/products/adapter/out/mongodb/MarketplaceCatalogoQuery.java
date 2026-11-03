@@ -33,7 +33,15 @@ import java.util.stream.Collectors;
 public class MarketplaceCatalogoQuery {
     private static final Pattern MEDIDA = Pattern.compile(
             "^(\\d{1,15}(?:[.,]\\d{1,3})?)\\s*(g|gr|gramo|gramos|ml|mililitro|mililitros|unidad|unidades)$");
+    // Se derivan del mapeo de los documentos para no desincronizarse si se renombran las colecciones.
+    static final String MARKETPLACE_COLLECTION = collectionOf(ProductMarketplaceDocument.class);
+    static final String PRODUCTS_COLLECTION = collectionOf(ProductDocument.class);
     private final MongoTemplate template;
+
+    private static String collectionOf(Class<?> type) {
+        var mapping = type.getAnnotation(org.springframework.data.mongodb.core.mapping.Document.class);
+        return mapping.collection().isEmpty() ? mapping.value() : mapping.collection();
+    }
 
     public Page<ProductoCatalogo> buscar(String buscar, Pageable pageable) {
         return buscar(new MarketplaceCatalogFilter(buscar, null, null, null), pageable);
@@ -43,7 +51,7 @@ public class MarketplaceCatalogoQuery {
         var operaciones = pipeline(filtro, pageable).stream()
                 .<AggregationOperation>map(stage -> context -> stage).toList();
         var result = template.aggregate(Aggregation.newAggregation(operaciones),
-                "productos_marketplace", Document.class).getUniqueMappedResult();
+                MARKETPLACE_COLLECTION, Document.class).getUniqueMappedResult();
         if (result == null) {
             throw new IllegalStateException("La consulta de catalogo no devolvio el resultado esperado");
         }
@@ -101,7 +109,7 @@ public class MarketplaceCatalogoQuery {
         stages.add(new Document("$group", new Document("_id", "$cepaId")
                 .append("precioDesde", new Document("$min", "$precioVenta"))
                 .append("presentaciones", new Document("$push", presentacion))));
-        stages.add(new Document("$lookup", new Document("from", "cepas")
+        stages.add(new Document("$lookup", new Document("from", PRODUCTS_COLLECTION)
                 .append("localField", "_id").append("foreignField", "_id")
                 .append("pipeline", List.of(new Document("$project",
                         new Document("nombre", 1).append("nombreNormalizado", 1).append("categoryIds", 1)))).append("as", "cepa")));

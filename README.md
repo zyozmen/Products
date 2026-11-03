@@ -55,7 +55,7 @@ El código sigue una arquitectura hexagonal bajo `com.zyozmen.products`:
 La API es stateless y autentica con tokens JWT enviados en el encabezado `Authorization: Bearer <token>`.
 
 - **Emisión:** el token se firma con HMAC y se emite con una vigencia de **1 hora** (`exp`). Incluye los claims `sub` (usuario), `role`, `iat` y `jti` (identificador único para revocación).
-- **Autorización:** los roles son `ADMIN` y `CLIENTE`. Las rutas `/api/admin/**` y las escrituras de `/api/productos/**` y todo `/api/proveedores/**`, `/api/lotes/**` y `/api/liquidaciones/**` requieren `ADMIN`; `/api/orders/**` y `/api/users/**` requieren autenticación.
+- **Autorización:** los roles son `ADMIN` y `CLIENTE`. Las rutas `/api/admin/**`, `/api/products/**`, las escrituras de `/api/productos/**` y todo `/api/proveedores/**`, `/api/lotes/**` y `/api/liquidaciones/**` requieren `ADMIN`; `/api/orders/**` y `/api/users/**` requieren autenticación.
 - **Revocación:** al cerrar sesión o renovar, el `jti` se registra en la colección `revoked_tokens`. Un índice TTL elimina cada registro cuando el token habría expirado, por lo que la lista no crece indefinidamente.
 - **Inactividad:** el límite es parametrizable (`app.session.inactivity-timeout-minutes`, 60 minutos por defecto). Como el servidor no mantiene estado por sesión, el límite se aplica en la renovación: un token que no se renueva dentro de ese lapso ya no puede refrescarse. El cliente debe llamar a `/refresh` mientras haya actividad del usuario.
 - **Respuesta de sesión vencida:** cualquier token expirado, revocado o inactivo se rechaza con `401` y el cuerpo:
@@ -163,6 +163,7 @@ La especificación completa y actualizada está en Swagger UI. Resumen de rutas:
 | Autenticación | `/api/v1/auth` | Público |
 | Productos (lectura) | `/api/productos` y `/api/v1/products` (`GET`, `/{id}`, `/featured`, `/categories`) | Público |
 | Productos (escritura) | `/api/productos` y `/api/v1/products` (`POST`, `PUT`, `DELETE`, `/{id}/images`) | `ADMIN` |
+| Administración de productos de cultivo (antes cepas) | `/api/products` (`GET`, `POST`, `PUT /{id}`) | `ADMIN` |
 | Categorías (lectura) | `/api/v1/categories` (`GET`, `/{id}`, `/{id}/image`) | Público |
 | Categorías (escritura) | `/api/v1/categories` (`POST`, `PUT /{id}`) | `ADMIN` |
 | Carga unificada de imágenes | `POST /api/v1/images/{id}?target=PRODUCT\|CATEGORY` | `ADMIN` |
@@ -264,31 +265,30 @@ contenedores y proveedores. Cada opción conserva su propio ID, SKU, contenido,
 unidad base, precio, stock y fotografía; presentaciones de distintos lotes no
 se fusionan ni comparten existencias. No devuelve costos ni saldos internos.
 
-Las cepas se administran antes de recibir lotes y se almacenan en `cepas`.
-Su ID es un UUID persistido: renombrarlas no cambia sus referencias. El nombre
+Los productos de cultivo (antes llamados cepas) se administran antes de recibir
+lotes y se almacenan internamente en `cepas`. Su ID es un UUID persistido:
+renombrarlos no cambia sus referencias. El nombre
 normalizado (sin espacios extremos, espacios internos colapsados y minusculas)
 tiene indice unico. El detalle usa el nombre actual de la entidad, no la copia
 historica del contenedor o de marketplace. Las respuestas administrativas de
-lotes exponen `cepaId` en cada contenedor.
+lotes conservan el campo interno `cepaId` en cada contenedor.
 
 **Administracion (ADMIN):**
-- `POST /api/cepas` con `{"nombre":"Tangerine","categoryIds":[7,8]}` devuelve `201`.
+- `POST /api/products` con `{"nombre":"Tangerine","categoryIds":[7,8]}` devuelve `201`.
   `categoryIds` es opcional: hasta 100 IDs numericos positivos de categorias existentes.
-  Se guardan como referencias en la cepa y son compartidas por todas sus presentaciones.
-- `GET /api/cepas?page=0&size=20` devuelve un arreglo y `X-Total-Count`;
-  `GET /api/cepas/{id}` devuelve la entidad, incluida su version.
-- `PUT /api/cepas/{id}` con `{"nombre":"Nuevo nombre","version":0}` renombra
+  Se guardan como referencias en el producto y son compartidas por todas sus presentaciones.
+- `GET /api/products?page=0&size=20` devuelve un arreglo y `X-Total-Count`;
+  `GET /api/products/{id}` devuelve el producto, incluida su version.
+- `PUT /api/products/{id}` con `{"nombre":"Nuevo nombre","version":0}` renombra
   conservando el ID y la fotografia. Version desactualizada y nombre duplicado
-  normalizado: `409`; cepa inexistente: `404`. No se elimina una cepa referenciada.
+  normalizado: `409`; producto inexistente: `404`. No se elimina un producto referenciado.
   Puede incluir `categoryIds` para reemplazar las categorias; `[]` las elimina y
   omitirlo conserva las anteriores. IDs invalidos o categorias inexistentes: `400`.
-  Las respuestas administrativas incluyen `categoryIds`; documentos anteriores
+  Las respuestas incluyen `categoryIds`; documentos anteriores
   sin ese campo se leen como `[]`. Renombrar o cargar fotos conserva la asignacion.
-- `POST /api/v1/images/{cepaId}?target=CEPA` acepta multipart `fotoPrincipal`.
+- `POST /api/v1/images/{productId}?target=PRODUCT` acepta multipart `fotoPrincipal`.
   Reutiliza el servicio de imagenes: PNG, JPG/JPEG o WebP hasta 2 MiB, con MIME
-  correspondiente. Almacena Base64 en la entidad cepa e ignora secundarias.
-  PRODUCT y CATEGORY conservan su contrato numerico anterior. Las rutas
-  antiguas de imagenes de producto rechazan CEPA para evitar sobrescribir productos.
+  correspondiente. Almacena Base64 en el producto e ignora secundarias.
 
 **Listado publico:** `GET /api/marketplace/presentaciones?buscar=10gr&page=0&size=20`
 

@@ -181,7 +181,7 @@ class MarketplaceCatalogoIntegrationTest {
     }
 
     private void presentacion(String cepaId, String nombre, int contenido, int precio, int stock, String estado) {
-        template.getCollection("productos_marketplace").insertOne(new Document("presentacionId", new ObjectId())
+        template.getCollection("ProductsMarketplace").insertOne(new Document("presentacionId", new ObjectId())
                 .append("loteId", new ObjectId()).append("cepaId", cepaId).append("sku", UUID.randomUUID().toString())
                 .append("presentacionNombre", nombre).append("contenidoUnidad", new Decimal128(BigDecimal.valueOf(contenido)))
                 .append("unidadBase", "GRAMOS").append("precioVenta", new Decimal128(BigDecimal.valueOf(precio)))

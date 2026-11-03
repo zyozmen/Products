@@ -37,7 +37,7 @@ class MarketplaceCatalogoQueryTest {
                 BigDecimal.valueOf(8000), List.of(option));
         when(template.getConverter()).thenReturn(converter);
         when(converter.read(eq(ProductoCatalogo.class), any(Document.class))).thenReturn(catalogEntry);
-        when(template.aggregate(any(Aggregation.class), eq("productos_marketplace"), eq(Document.class)))
+        when(template.aggregate(any(Aggregation.class), eq("ProductsMarketplace"), eq(Document.class)))
                 .thenReturn(new AggregationResults<>(List.of(new Document("total",
                         List.of(new Document("count", 1))).append("content", List.of(new Document("cepaId", "strain-1")))),
                         new Document()));
@@ -63,13 +63,13 @@ class MarketplaceCatalogoQueryTest {
     void returnsEmptyPageAndRejectsMissingAggregationResult() {
         MongoTemplate template = mock(MongoTemplate.class);
         MarketplaceCatalogoQuery query = new MarketplaceCatalogoQuery(template);
-        when(template.aggregate(any(Aggregation.class), eq("productos_marketplace"), eq(Document.class)))
+        when(template.aggregate(any(Aggregation.class), eq("ProductsMarketplace"), eq(Document.class)))
                 .thenReturn(new AggregationResults<>(List.of(new Document("total", List.of())
                         .append("content", List.of())), new Document()));
 
         assertThat(query.buscar("tangerine", PageRequest.of(0, 5))).isEmpty();
 
-        when(template.aggregate(any(Aggregation.class), eq("productos_marketplace"), eq(Document.class)))
+        when(template.aggregate(any(Aggregation.class), eq("ProductsMarketplace"), eq(Document.class)))
                 .thenReturn(new AggregationResults<>(List.of(), new Document()));
         assertThatThrownBy(() -> query.buscar("tangerine", PageRequest.of(0, 5)))
                 .isInstanceOf(IllegalStateException.class);
@@ -86,7 +86,7 @@ class MarketplaceCatalogoQueryTest {
                 BigDecimal.valueOf(8000), List.of(option));
         when(template.getConverter()).thenReturn(converter);
         when(converter.read(eq(ProductoCatalogo.class), any(Document.class))).thenReturn(catalogEntry);
-        when(template.aggregate(any(Aggregation.class), eq("productos_marketplace"), eq(Document.class)))
+        when(template.aggregate(any(Aggregation.class), eq("ProductsMarketplace"), eq(Document.class)))
                 .thenReturn(new AggregationResults<>(List.of(new Document("total", List.of())
                         .append("content", List.of(new Document("cepaId", "strain-1")))), new Document()));
         when(template.find(any(), eq(ProductDocument.class))).thenReturn(List.of());
@@ -112,6 +112,8 @@ class MarketplaceCatalogoQueryTest {
         assertThat(stages.get(1)).containsKey("$sort");
         assertThat(stages.get(2)).containsKey("$group");
         assertThat(stages.get(3)).containsKey("$lookup");
+        assertThat(stages.get(3).get("$lookup", Document.class).getString("from")).isEqualTo("Products");
+        assertThat(MarketplaceCatalogoQuery.MARKETPLACE_COLLECTION).isEqualTo("ProductsMarketplace");
         assertThat(stages.get(4)).containsKey("$unwind");
         var facet = stages.getLast().get("$facet", Document.class);
         assertThat(facet.getList("content", Document.class).getFirst().getLong("$skip")).isEqualTo(20);
