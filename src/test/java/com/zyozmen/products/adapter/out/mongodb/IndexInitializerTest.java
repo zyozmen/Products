@@ -8,6 +8,8 @@ import com.zyozmen.products.adapter.out.mongodb.document.ProductMarketplaceDocum
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.RevokedTokenDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.TransaccionProveedorDocument;
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.IndexDefinition;
@@ -42,13 +44,33 @@ class IndexInitializerTest {
         MongoTemplate template = mock(MongoTemplate.class);
         IndexOperations accumulators = mock(IndexOperations.class);
         IndexOperations movements = mock(IndexOperations.class);
+        IndexOperations payments = mock(IndexOperations.class);
         when(template.indexOps(ProviderAccumulatorsDocument.class)).thenReturn(accumulators);
         when(template.indexOps(ProviderDailyMovementsDocument.class)).thenReturn(movements);
+        when(template.indexOps(TransaccionProveedorDocument.class)).thenReturn(payments);
 
         new DailySettlementIndexInitializer(template).run(null);
 
-        verify(accumulators, times(2)).ensureIndex(any(IndexDefinition.class));
-        verify(movements).ensureIndex(any(IndexDefinition.class));
+        var accumulatorIndexes = org.mockito.ArgumentCaptor.forClass(IndexDefinition.class);
+        verify(accumulators, times(2)).ensureIndex(accumulatorIndexes.capture());
+        assertThat(accumulatorIndexes.getAllValues()).extracting(IndexDefinition::getIndexKeys)
+                .containsExactly(new Document("providerId", 1).append("date", 1),
+                        new Document("date", 1).append("providerId", 1));
+        assertThat(accumulatorIndexes.getAllValues().getFirst().getIndexOptions())
+                .containsEntry("unique", true);
+
+        var movementIndexes = org.mockito.ArgumentCaptor.forClass(IndexDefinition.class);
+        verify(movements, times(2)).ensureIndex(movementIndexes.capture());
+        assertThat(movementIndexes.getAllValues()).extracting(IndexDefinition::getIndexKeys)
+                .containsExactly(new Document("orderId", 1).append("itemIndex", 1).append("movementType", 1),
+                        new Document("providerId", 1).append("date", 1).append("timestamp", 1).append("_id", 1));
+        assertThat(movementIndexes.getAllValues().getFirst().getIndexOptions())
+                .containsEntry("unique", true);
+
+        var paymentIndex = org.mockito.ArgumentCaptor.forClass(IndexDefinition.class);
+        verify(payments).ensureIndex(paymentIndex.capture());
+        assertThat(paymentIndex.getValue().getIndexKeys()).isEqualTo(
+                new Document("proveedorId", 1).append("fechaLiquidacion", 1).append("correlationId", 1));
         verify(template).upsert(any(), any(), eq(DailySettlementSettingsDocument.class));
         verify(template).updateFirst(any(), any(), eq(DailySettlementSettingsDocument.class));
     }
