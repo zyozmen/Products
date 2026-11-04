@@ -416,7 +416,7 @@ al pasar a PAGADA**, con la misma transaccion de inventario/orden, y bloquea
 cancelaciones de ventas ya pagadas. **T3 reconoce contra entrega al pasar a
 ENTREGADA**, usando la fecha de entrega. **T4 reconoce PQR al crearlas y revierte
 su costo al cancelarlas en la jornada original**, conservando la auditoria.
-Los pagos vinculados quedan pendientes para T5.
+**T5 registra pagos vinculados a una jornada y T6 publica el detalle auditable.**
 No se cambian deuda, reporte comercial ni contratos de abonos.
 
 ```http
@@ -646,6 +646,30 @@ ya que dos creaciones validas representan dos ordenes distintas.
   fallo revierte todo.
 - Cancelar una PQR no modifica el pago vinculado: el exceso aparece en
   `overpaidAmount` del resumen de la jornada (`GET /api/v1/settlements/daily-summary`).
+
+#### Detalle auditable (HU-04/T6)
+
+```http
+GET /api/v1/settlements/daily-detail?date=2026-10-23&providerId=6500000000000000000000ab&page=0&size=20
+Authorization: ****** ADMIN>
+```
+
+- `date` y `providerId` son obligatorios; `page` inicia en cero y `size` admite
+  de 1 a 100. La respuesta incluye `content`, `page`, `size`, `totalElements` y
+  `totalPages`. El conteo y la paginacion se ejecutan en MongoDB.
+- El orden es por marca de tiempo ascendente y luego identificador ascendente.
+- Cada reconocimiento o reversion incluye orden e item, lote, contenedor,
+  presentacion, cantidad, snapshot de costo unitario e importe cuando aplican.
+  `date` es la jornada afectada; `timestamp` es el instante real del evento.
+- Las reversiones son movimientos independientes con `movementType:
+  "PQR_REVERSAL"`, `originalMovementId`, `date` de la jornada original y
+  `timestamp` de cancelacion.
+- Un pago vinculado se devuelve una sola vez por `correlationId`, aunque se
+  distribuya entre lotes. Incluye `paymentType`, `amount` y `allocations` con
+  los identificadores de transaccion, lote e importes imputados. No tiene
+  cantidad ni costos unitarios.
+- Los errores de fecha, proveedor o paginacion invalidos devuelven `400`. El
+  endpoint requiere ADMIN; no se exponen costos en endpoints publicos.
 
 Pruebas de integracion HTTP reales (servidor en puerto aleatorio, JWT real y
 MongoDB real, sin mocks de servicios/repositorios):

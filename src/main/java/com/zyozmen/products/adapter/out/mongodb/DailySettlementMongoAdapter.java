@@ -4,11 +4,16 @@ import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDoc
 import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementSettingsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.TransaccionProveedorDocument;
 import com.zyozmen.products.domain.model.DailySettlementAccumulator;
+import com.zyozmen.products.domain.model.DailySettlementDetail;
 import com.zyozmen.products.domain.model.DailySettlementMovement;
 import com.zyozmen.products.domain.exception.OrderConflictException;
 import com.zyozmen.products.domain.port.out.DailySettlementRepositoryPort;
 import lombok.RequiredArgsConstructor;
+import org.bson.Document;
+import org.bson.types.Decimal128;
+import org.bson.types.ObjectId;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +28,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.Optional;
 import java.util.List;
 import java.util.Comparator;
@@ -64,6 +71,136 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
                     provider.getFinanciero().getSaldoPendiente());
         }).toList();
         return new PageImpl<>(content, pageable, total);
+    }
+
+    @Override
+    public Page<DailySettlementDetail> findDetail(LocalDate date, String providerId, Pageable pageable) {
+        var providerObjectId = new ObjectId(providerId);
+        var movementMatch = new Document("$match", new Document("providerId", providerObjectId)
+                .append("date", date.toString()));
+        var movementProjection = new Document("$project", new Document("_id", 0)
+                .append("id", new Document("$toString", "$_id"))
+                .append("movementType", 1)
+                .append("providerId", new Document("$toString", "$providerId"))
+                .append("orderId", 1)
+                .append("itemIndex", 1)
+                .append("lotId", new Document("$toString", "$lotId"))
+                .append("containerId", new Document("$toString", "$containerId"))
+                .append("strainId", 1)
+                .append("presentationId", new Document("$toString", "$presentationId"))
+                .append("quantity", 1)
+                .append("contentPerUnit", 1)
+                .append("baseUnit", 1)
+                .append("baseUnitCost", 1)
+                .append("unitCost", 1)
+                .append("amount", 1)
+                .append("timestamp", 1)
+                .append("date", 1)
+                .append("originalMovementId", new Document("$toString", "$originalMovementId"))
+                .append("correlationId", new Document("$literal", null))
+                .append("paymentType", new Document("$literal", null))
+                .append("observations", new Document("$literal", null))
+                .append("allocations", new Document("$literal", List.of())));
+        var paymentPipeline = List.of(
+                new Document("$match", new Document("proveedorId", providerObjectId)
+                        .append("fechaLiquidacion", date.toString())
+                        .append("correlationId", new Document("$type", "string"))),
+                new Document("$sort", new Document("_id", 1)),
+                new Document("$group", new Document("_id", "$correlationId")
+                        .append("providerId", new Document("$first", "$proveedorId"))
+                        .append("date", new Document("$first", "$fechaLiquidacion"))
+                        .append("timestamp", new Document("$min", "$fecha"))
+                        .append("paymentType", new Document("$first", "$tipo"))
+                        .append("amount", new Document("$sum", "$monto"))
+                        .append("observations", new Document("$first", "$observaciones"))
+                        .append("allocations", new Document("$push", new Document(
+                                "transactionId", new Document("$toString", "$_id"))
+                                .append("lotId", new Document("$toString", "$loteId"))
+                                .append("amount", "$monto")))),
+                new Document("$project", new Document("_id", 0)
+                        .append("id", new Document("$concat", List.of("payment:", "$_id")))
+                        .append("movementType", new Document("$literal", "PAYMENT"))
+                        .append("providerId", new Document("$toString", "$providerId"))
+                        .append("date", 1)
+                        .append("timestamp", 1)
+                        .append("amount", 1)
+                        .append("correlationId", "$_id")
+                        .append("paymentType", 1)
+                        .append("observations", 1)
+                        .append("allocations", 1)));
+        var union = new Document("$unionWith", new Document("coll",
+                template.getCollectionName(TransaccionProveedorDocument.class))
+                .append("pipeline", paymentPipeline));
+        var facet = new Document("$facet", new Document("content", List.of(
+                new Document("$skip", pageable.getOffset()),
+                new Document("$limit", pageable.getPageSize())))
+                .append("metadata", List.of(new Document("$count", "totalElements"))));
+        var pipeline = List.of(movementMatch, movementProjection, union,
+                new Document("$sort", new Document("timestamp", 1).append("id", 1)), facet);
+        var result = template.getCollection(template.getCollectionName(ProviderDailyMovementsDocument.class))
+                .aggregate(pipeline, Document.class).first();
+        if (result == null) {
+            return new PageImpl<>(List.of(), pageable, 0);
+        }
+        var entries = result.getList("content", Document.class, List.of()).stream()
+                .map(this::toDetail).toList();
+        var metadata = result.getList("metadata", Document.class, List.of());
+        long total = metadata.isEmpty() ? 0 : metadata.getFirst().get("totalElements", Number.class).longValue();
+        return new PageImpl<>(entries, pageable, total);
+    }
+
+    private DailySettlementDetail toDetail(Document source) {
+        var allocations = new ArrayList<DailySettlementDetail.PaymentAllocation>();
+        for (Document allocation : source.getList("allocations", Document.class, List.of())) {
+            allocations.add(new DailySettlementDetail.PaymentAllocation(
+                    allocation.getString("transactionId"), allocation.getString("lotId"),
+                    decimal(allocation.get("amount"))));
+        }
+        return new DailySettlementDetail(source.getString("id"), source.getString("movementType"),
+                source.getString("providerId"), longValue(source.get("orderId")),
+                integerValue(source.get("itemIndex")), source.getString("lotId"),
+                source.getString("containerId"), source.getString("strainId"),
+                source.getString("presentationId"), integerValue(source.get("quantity")),
+                decimal(source.get("contentPerUnit")), source.getString("baseUnit"),
+                decimal(source.get("baseUnitCost")), decimal(source.get("unitCost")),
+                decimal(source.get("amount")), instant(source.get("timestamp")),
+                LocalDate.parse(source.getString("date")), source.getString("originalMovementId"),
+                source.getString("correlationId"), source.getString("paymentType"),
+                source.getString("observations"), allocations);
+    }
+
+    private BigDecimal decimal(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Decimal128 decimal128) {
+            return decimal128.bigDecimalValue();
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (value instanceof Number number) {
+            return new BigDecimal(number.toString());
+        }
+        throw new IllegalStateException("El detalle de liquidacion contiene un importe invalido");
+    }
+
+    private Long longValue(Object value) {
+        return value instanceof Number number ? number.longValue() : null;
+    }
+
+    private Integer integerValue(Object value) {
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    private Instant instant(Object value) {
+        if (value instanceof Date timestamp) {
+            return timestamp.toInstant();
+        }
+        if (value instanceof Instant timestamp) {
+            return timestamp;
+        }
+        throw new IllegalStateException("El detalle de liquidacion contiene una marca de tiempo invalida");
     }
 
     @Override

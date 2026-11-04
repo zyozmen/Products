@@ -8,6 +8,8 @@ import com.zyozmen.products.adapter.in.web.DailySettlementController;
 import com.zyozmen.products.adapter.in.web.OrdersController;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementSettingsDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.TransaccionProveedorDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProductMarketplaceDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.UserDocument;
@@ -74,6 +76,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
@@ -90,6 +93,7 @@ class DailySettlementIntegrationTest {
     private static final String PROVIDER_A = "6500000000000000000000ab";
     private static final String PROVIDER_B = "6500000000000000000000ac";
     private static final String URL = "/api/v1/settlements/daily-summary";
+    private static final String DETAIL_URL = "/api/v1/settlements/daily-detail";
     private static final LocalDate DAY = LocalDate.of(2026, 10, 23);
     @Autowired private MongoTemplate template;
     @Autowired private TestRestTemplate http;
@@ -104,6 +108,10 @@ class DailySettlementIntegrationTest {
         for (String collection : List.of("orders", "lotes", "productos_marketplace", "cepas", "provider_daily_movements", "Users")) {
             template.getCollection(collection).deleteMany(new Document());
         }
+        template.getCollection(template.getCollectionName(ProviderDailyMovementsDocument.class))
+                .deleteMany(new Document());
+        template.getCollection(template.getCollectionName(TransaccionProveedorDocument.class))
+                .deleteMany(new Document());
         initializer.run(null);
     }
 
@@ -176,6 +184,45 @@ class DailySettlementIntegrationTest {
                 .find(new Document("providerId", new ObjectId(PROVIDER_A)).append("date", DAY.toString())).first();
         assertThat(stored.get("salesRecognizedAmount")).isEqualTo(new Decimal128(new BigDecimal("10000.25")));
         assertThat(stored.get("date")).isEqualTo(DAY.toString());
+    }
+
+    @Test
+    void detalleRealPaginaMovimientosYAgrupaPagosRepartidosConOrdenEstable() {
+        var movementCollection = template.getCollection(
+                template.getCollectionName(ProviderDailyMovementsDocument.class));
+        var timestamp = Instant.parse("2026-10-23T12:00:00Z");
+        movementCollection.insertOne(detailMovement("SALE", timestamp, null, "10.00"));
+        movementCollection.insertOne(detailMovement("PQR_REVERSAL",
+                timestamp.plusSeconds(7200), new ObjectId(), "5.00"));
+
+        var transactionCollection = template.getCollection(
+                template.getCollectionName(TransaccionProveedorDocument.class));
+        String correlationId = UUID.randomUUID().toString();
+        transactionCollection.insertMany(List.of(
+                linkedPayment(correlationId, "650000000000000000000201", "12.00",
+                        timestamp.plusSeconds(3600)),
+                linkedPayment(correlationId, "650000000000000000000202", "8.00",
+                        timestamp.plusSeconds(3600))));
+
+        String query = "?date=" + DAY + "&providerId=" + PROVIDER_A + "&size=1";
+        var first = get(DETAIL_URL + query, "ADMIN").getBody();
+        assertThat(first.get("totalElements").asLong()).isEqualTo(3);
+        assertThat(first.get("totalPages").asInt()).isEqualTo(3);
+        assertThat(first.get("content").get(0).get("movementType").asText()).isEqualTo("SALE");
+
+        var payment = get(DETAIL_URL + query + "&page=1", "ADMIN").getBody().get("content").get(0);
+        assertThat(payment.get("movementType").asText()).isEqualTo("PAYMENT");
+        assertThat(payment.get("paymentType").asText()).isEqualTo("ABONO");
+        assertThat(payment.get("amount").decimalValue()).isEqualByComparingTo("20.00");
+        assertThat(payment.get("unitCost").isNull()).isTrue();
+        assertThat(payment.get("allocations")).hasSize(2);
+        assertThat(payment.get("timestamp").asText()).isEqualTo(timestamp.plusSeconds(3600).toString());
+
+        var reversal = get(DETAIL_URL + query + "&page=2", "ADMIN").getBody().get("content").get(0);
+        assertThat(reversal.get("movementType").asText()).isEqualTo("PQR_REVERSAL");
+        assertThat(reversal.get("date").asText()).isEqualTo(DAY.toString());
+        assertThat(reversal.get("timestamp").asText()).isEqualTo(timestamp.plusSeconds(7200).toString());
+        assertThat(get(DETAIL_URL + query, "CLIENTE").getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
@@ -396,6 +443,39 @@ class DailySettlementIntegrationTest {
                 p.sku(), p.precioVenta(), 10, null, "ACTIVO", "cepa-http", p.nombre(), p.contenidoUnidad(), "GRAMOS"));
         new SequenceGeneratorService(template)
                 .nextSequence(SequenceGeneratorService.ORDER_SEQUENCE);
+    }
+
+    private Document detailMovement(String type, Instant timestamp, ObjectId originalMovementId, String amount) {
+        return new Document("_id", new ObjectId())
+                .append("orderId", 42L)
+                .append("itemIndex", 0)
+                .append("movementType", type)
+                .append("providerId", new ObjectId(PROVIDER_A))
+                .append("lotId", new ObjectId("650000000000000000000201"))
+                .append("containerId", new ObjectId("650000000000000000000301"))
+                .append("strainId", "strain-1")
+                .append("presentationId", new ObjectId("650000000000000000000401"))
+                .append("quantity", 2)
+                .append("contentPerUnit", new Decimal128(BigDecimal.TEN))
+                .append("baseUnit", "GRAMOS")
+                .append("baseUnitCost", new Decimal128(BigDecimal.ONE))
+                .append("unitCost", new Decimal128(new BigDecimal("5.00")))
+                .append("amount", new Decimal128(new BigDecimal(amount)))
+                .append("timestamp", Date.from(timestamp))
+                .append("date", DAY.toString())
+                .append("originalMovementId", originalMovementId);
+    }
+
+    private Document linkedPayment(String correlationId, String lotId, String amount, Instant timestamp) {
+        return new Document("_id", new ObjectId())
+                .append("proveedorId", new ObjectId(PROVIDER_A))
+                .append("loteId", new ObjectId(lotId))
+                .append("tipo", "ABONO")
+                .append("monto", new Decimal128(new BigDecimal(amount)))
+                .append("fecha", Date.from(timestamp))
+                .append("correlationId", correlationId)
+                .append("fechaLiquidacion", DAY.toString())
+                .append("observaciones", "Pago vinculado de prueba");
     }
 
     private ResponseEntity<JsonNode> write(String url, HttpMethod method, String body, String role) {

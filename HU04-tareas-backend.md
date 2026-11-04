@@ -266,7 +266,7 @@ aun debe verificarse con `HU04_TEST_MONGO_URI`. Pendiente: suite completa.
 ### Trabajo backend
 
 - Publicar una consulta ADMIN paginada de detalle por proveedor y fecha, acordada
-  con F6; propuesta: `GET /api/v1/settlements/daily-detail`.
+  con F6: `GET /api/v1/settlements/daily-detail`.
 - Devolver reconocimientos, reversiones y pagos con sus referencias, cantidades,
   costos aplicables y marcas de tiempo. No asignar costo unitario a un pago.
 - Para reversiones distinguir fecha de registro y jornada afectada.
@@ -282,6 +282,24 @@ aun debe verificarse con `HU04_TEST_MONGO_URI`. Pendiente: suite completa.
 - Busquedas, cambios de fecha/proveedor y paginas conservan resultados correctos.
 - El costo de cada presentacion se distingue incluso con costos diferentes.
 - El historico indica que el sugerido usa saldo global actual, no historico.
+
+### Estado backend T6
+
+Implementado `GET /api/v1/settlements/daily-detail` para ADMIN, con fecha y
+proveedor obligatorios, filtros, conteo y paginacion en MongoDB y orden estable
+por marca de tiempo e identificador. Combina reconocimientos/reversiones con
+pagos agrupados por `correlationId`, incluyendo sus asignaciones a lotes sin
+atribuirles costo unitario. El detalle conserva la jornada original de cada
+reversion y su instante real de registro. El resumen ya consultaba y paginaba
+sus resultados en MongoDB con conteo y orden estable.
+Contrato documentado en [README](README.md#detalle-auditable-hu-04t6).
+El responsable confirmo que F6 fue cerrada y autorizo avanzar a T6.
+
+Validacion: 20 pruebas enfocadas de servicio, controlador y adaptador aprobadas.
+La prueba HTTP de detalle con MongoDB real esta disponible en
+`DailySettlementIntegrationTest`, pero se omite si no se configura
+`HU04_TEST_MONGO_URI`; queda pendiente ejecutarla contra la instancia aislada
+para verificar la agregacion `$unionWith` y la paginacion reales.
 
 ## T7 - Validacion integral, concurrencia y regresion
 

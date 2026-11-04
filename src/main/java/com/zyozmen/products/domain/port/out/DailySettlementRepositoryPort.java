@@ -1,6 +1,7 @@
 package com.zyozmen.products.domain.port.out;
 
 import com.zyozmen.products.domain.model.DailySettlementAccumulator;
+import com.zyozmen.products.domain.model.DailySettlementDetail;
 import com.zyozmen.products.domain.model.DailySettlementMovement;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +14,8 @@ import java.util.List;
 
 public interface DailySettlementRepositoryPort {
     Page<ProviderAccumulator> findByDate(LocalDate date, String providerId, Pageable pageable);
+
+    Page<DailySettlementDetail> findDetail(LocalDate date, String providerId, Pageable pageable);
 
     Optional<Instant> activationAt();
 

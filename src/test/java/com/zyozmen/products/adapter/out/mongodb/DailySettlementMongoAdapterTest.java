@@ -1,12 +1,18 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
 import com.mongodb.client.result.UpdateResult;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.AggregateIterable;
 import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementSettingsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.TransaccionProveedorDocument;
 import com.zyozmen.products.domain.exception.OrderConflictException;
+import com.zyozmen.products.domain.model.DailySettlementDetail;
 import com.zyozmen.products.domain.model.DailySettlementMovement;
+import org.bson.Document;
+import org.bson.types.Decimal128;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.PageRequest;
@@ -16,6 +22,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -63,6 +70,54 @@ class DailySettlementMongoAdapterTest {
         when(template.find(any(Query.class), eq(ProviderDocument.class))).thenReturn(List.of());
         assertThatThrownBy(() -> adapter.findByDate(date, null, page))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void mapsPaginatedDetailIncludingGroupedPaymentAllocations() {
+        @SuppressWarnings("unchecked")
+        MongoCollection<Document> collection = mock(MongoCollection.class);
+        @SuppressWarnings("unchecked")
+        AggregateIterable<Document> aggregation = mock(AggregateIterable.class);
+        when(template.getCollectionName(ProviderDailyMovementsDocument.class))
+                .thenReturn("ProviderDailyMovements");
+        when(template.getCollectionName(TransaccionProveedorDocument.class))
+                .thenReturn("Provider_Transactions");
+        when(template.getCollection("ProviderDailyMovements")).thenReturn(collection);
+        when(collection.aggregate(anyList(), eq(Document.class))).thenReturn(aggregation);
+        var payment = new Document("id", "payment:correlation-1")
+                .append("movementType", "PAYMENT")
+                .append("providerId", "6500000000000000000000ab")
+                .append("date", date.toString())
+                .append("timestamp", Date.from(timestamp))
+                .append("amount", new Decimal128(new BigDecimal("20.00")))
+                .append("correlationId", "correlation-1")
+                .append("paymentType", "ABONO")
+                .append("allocations", List.of(new Document("transactionId", "transaction-1")
+                        .append("lotId", "650000000000000000000201")
+                        .append("amount", new Decimal128(new BigDecimal("20.00")))));
+        when(aggregation.first()).thenReturn(new Document("content", List.of(payment))
+                .append("metadata", List.of(new Document("totalElements", 3L))));
+
+        var page = adapter.findDetail(date, "6500000000000000000000ab", PageRequest.of(1, 1));
+
+        assertThat(page.getTotalElements()).isEqualTo(3);
+        assertThat(page.getTotalPages()).isEqualTo(3);
+        DailySettlementDetail detail = page.getContent().getFirst();
+        assertThat(detail.movementType()).isEqualTo("PAYMENT");
+        assertThat(detail.amount()).isEqualByComparingTo("20.00");
+        assertThat(detail.unitCost()).isNull();
+        assertThat(detail.allocations()).containsExactly(new DailySettlementDetail.PaymentAllocation(
+                "transaction-1", "650000000000000000000201", new BigDecimal("20.00")));
+
+        @SuppressWarnings("unchecked")
+        var pipelineCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(collection).aggregate(pipelineCaptor.capture(), eq(Document.class));
+        var pipeline = (List<Document>) pipelineCaptor.getValue();
+        assertThat(pipeline.get(2)).containsKey("$unionWith");
+        assertThat((Document) pipeline.get(3).get("$sort"))
+                .containsEntry("timestamp", 1).containsEntry("id", 1);
+        assertThat((List<Document>) ((Document) pipeline.get(4).get("$facet")).get("content"))
+                .containsExactly(new Document("$skip", 1L), new Document("$limit", 1));
     }
 
     @Test

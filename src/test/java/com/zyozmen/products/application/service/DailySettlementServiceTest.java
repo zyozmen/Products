@@ -1,6 +1,7 @@
 package com.zyozmen.products.application.service;
 
 import com.zyozmen.products.domain.model.DailySettlementAccumulator;
+import com.zyozmen.products.domain.model.DailySettlementDetail;
 import com.zyozmen.products.domain.port.out.DailySettlementRepositoryPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Page;
@@ -59,6 +60,27 @@ class DailySettlementServiceTest {
         assertThat(result.activatedAt()).isEqualTo(activation);
         verify(repository).findByDate(eq(date), eq(PROVIDER), argThat(p ->
                 p.getPageNumber() == 3 && p.getPageSize() == 7));
+    }
+
+    @Test
+    void detalleRequiereFechaNormalizaProveedorYOrdenaPaginacionDeFormaEstable() {
+        var date = LocalDate.of(2026, 10, 23);
+        var detail = new DailySettlementDetail("movement-1", "SALE", PROVIDER, 42L, 0,
+                "650000000000000000000201", "650000000000000000000301", "strain",
+                "650000000000000000000401", 2, BigDecimal.TEN, "GRAMOS",
+                BigDecimal.ONE, BigDecimal.valueOf(5), BigDecimal.TEN,
+                Instant.parse("2026-10-23T12:00:00Z"), date, null, null, null, null, List.of());
+        when(repository.findDetail(eq(date), eq(PROVIDER), any())).thenReturn(new PageImpl<>(List.of(detail)));
+
+        var result = service.detail(date, PROVIDER.toUpperCase(), 1, 10);
+
+        assertThat(result.getContent()).containsExactly(detail);
+        verify(repository).findDetail(eq(date), eq(PROVIDER), argThat(page ->
+                page.getPageNumber() == 1 && page.getPageSize() == 10
+                        && page.getSort().getOrderFor("timestamp").isAscending()
+                        && page.getSort().getOrderFor("id").isAscending()));
+        assertThatThrownBy(() -> service.detail(null, PROVIDER, 0, 20))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("date es obligatorio");
     }
 
     @Test

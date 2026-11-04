@@ -1,6 +1,7 @@
 package com.zyozmen.products.adapter.in.web;
 
 import com.zyozmen.products.domain.port.in.DailySettlementUseCase;
+import com.zyozmen.products.domain.model.DailySettlementDetail;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -40,5 +41,29 @@ class DailySettlementControllerTest {
         assertThat(response.totalElements()).isEqualTo(11);
         assertThat(response.totalPages()).isEqualTo(2);
         verify(useCase).summary(date, "provider-1", 1, 10);
+    }
+
+    @Test
+    void mapsThePaginatedDailyDetail() {
+        DailySettlementUseCase useCase = mock(DailySettlementUseCase.class);
+        DailySettlementController controller = new DailySettlementController(useCase);
+        LocalDate date = LocalDate.of(2026, 11, 3);
+        var movement = new DailySettlementDetail("movement-1", "SALE", "6500000000000000000000ab",
+                42L, 0, "650000000000000000000201", "650000000000000000000301",
+                "strain-1", "650000000000000000000401", 2, BigDecimal.TEN, "GRAMOS",
+                BigDecimal.ONE, BigDecimal.valueOf(5), BigDecimal.TEN,
+                Instant.parse("2026-11-03T15:00:00Z"), date, null, null, null, null, List.of());
+        when(useCase.detail(date, "6500000000000000000000AB", 1, 10))
+                .thenReturn(new PageImpl<>(List.of(movement), PageRequest.of(1, 10), 11));
+
+        var response = controller.detail(date, "6500000000000000000000AB", 1, 10);
+
+        assertThat(response.providerId()).isEqualTo("6500000000000000000000ab");
+        assertThat(response.date()).isEqualTo(date);
+        assertThat(response.content()).containsExactly(movement);
+        assertThat(response.page()).isEqualTo(1);
+        assertThat(response.totalElements()).isEqualTo(11);
+        assertThat(response.totalPages()).isEqualTo(2);
+        verify(useCase).detail(date, "6500000000000000000000AB", 1, 10);
     }
 }
