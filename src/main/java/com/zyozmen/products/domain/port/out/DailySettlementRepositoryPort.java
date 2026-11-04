@@ -22,6 +22,9 @@ public interface DailySettlementRepositoryPort {
 
     void reversePqr(Long orderId, Instant cancelledAt);
 
+    /** Suma un pago vinculado al acumulado del proveedor en la jornada, creando el acumulado si no existe. */
+    void registrarPagoJornada(String providerId, LocalDate date, BigDecimal amount);
+
     record ProviderAccumulator(DailySettlementAccumulator accumulator, String providerName,
                                BigDecimal providerOutstandingBalance) { }
 }

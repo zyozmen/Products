@@ -29,5 +29,7 @@ public class TransaccionProveedorDocument {
     private String tipo;
     private BigDecimal monto;
     private Instant fecha;
+    private String correlationId;
+    private String fechaLiquidacion;
     private String observaciones;
 }

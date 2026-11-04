@@ -14,6 +14,7 @@ import com.zyozmen.products.domain.model.ProviderTransaction;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase;
 import com.zyozmen.products.domain.port.in.ProductUseCase;
 import com.zyozmen.products.domain.port.out.CodigoInventarioGeneratorPort;
+import com.zyozmen.products.domain.port.out.DailySettlementRepositoryPort;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
 import com.zyozmen.products.domain.port.out.TransaccionProveedorRepositoryPort;
@@ -27,10 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -44,6 +47,7 @@ public class ProveedorService implements ProveedorUseCase {
     private final TransaccionProveedorRepositoryPort transaccionRepository;
     private final CodigoInventarioGeneratorPort codigoInventarioGenerator;
     private final ProductUseCase cepas;
+    private final DailySettlementRepositoryPort dailySettlements;
 
     @Override
     @Transactional
@@ -211,6 +215,19 @@ public class ProveedorService implements ProveedorUseCase {
     @Override
     @Transactional
     public Provider registrarPago(RegistrarPagoCommand command) {
+        return ejecutarPago(command).proveedor();
+    }
+
+    @Override
+    @Transactional
+    public ResultadoPago registrarPagoVinculado(RegistrarPagoCommand command) {
+        if (command.fechaLiquidacion() == null) {
+            throw new BusinessRuleException("La fecha de liquidacion es obligatoria para un pago vinculado");
+        }
+        return ejecutarPago(command);
+    }
+
+    private ResultadoPago ejecutarPago(RegistrarPagoCommand command) {
         ProviderTransactionType tipo = command.tipo() == null ? ProviderTransactionType.ABONO : command.tipo();
         if (tipo == ProviderTransactionType.DEUDA_LOTE || tipo == ProviderTransactionType.ABONO_INICIAL) {
             throw new BusinessRuleException("El tipo " + tipo + " no es vÃ¡lido para un pago posterior");
@@ -224,6 +241,8 @@ public class ProveedorService implements ProveedorUseCase {
         }
 
         Instant now = Instant.now();
+        String correlationId = command.fechaLiquidacion() == null ? null : UUID.randomUUID().toString();
+        List<AsignacionLote> asignaciones = new ArrayList<>();
         if (command.loteId() != null) {
             Lote lote = loteRepository.findLoteById(command.loteId())
                     .filter(value -> proveedor.getId().equals(value.getProveedorId()))
@@ -231,7 +250,8 @@ public class ProveedorService implements ProveedorUseCase {
             if (monto.compareTo(lote.getSaldoPendienteLote()) > 0) {
                 throw new BusinessRuleException("El pago no puede superar el saldo pendiente del lote");
             }
-            aplicarPagoALote(lote, monto, tipo, command.observaciones(), now);
+            aplicarPagoALote(lote, monto, command, tipo, correlationId, now);
+            asignaciones.add(new AsignacionLote(lote.getId(), monto));
         } else {
             List<Lote> pendientes = loteRepository.findPendientesByProveedorId(proveedor.getId());
             BigDecimal saldoDisponible = pendientes.stream().map(Lote::getSaldoPendienteLote)
@@ -245,25 +265,41 @@ public class ProveedorService implements ProveedorUseCase {
                     break;
                 }
                 BigDecimal aplicado = restante.min(lote.getSaldoPendienteLote());
-                aplicarPagoALote(lote, aplicado, tipo, command.observaciones(), now);
+                aplicarPagoALote(lote, aplicado, command, tipo, correlationId, now);
+                asignaciones.add(new AsignacionLote(lote.getId(), aplicado));
                 restante = restante.subtract(aplicado);
             }
         }
 
         proveedor.setTotalPagado(proveedor.getTotalPagado().add(monto));
         actualizarSaldo(proveedor, now);
-        return proveedorRepository.save(proveedor);
+        Provider guardado = proveedorRepository.save(proveedor);
+        if (command.fechaLiquidacion() != null) {
+            // El monto se suma una sola vez al acumulado, aunque se distribuya entre varios lotes.
+            dailySettlements.registrarPagoJornada(proveedor.getId(), command.fechaLiquidacion(), monto);
+        }
+        return new ResultadoPago(guardado, correlationId, command.fechaLiquidacion(), monto, List.copyOf(asignaciones));
     }
 
-    private void aplicarPagoALote(Lote lote, BigDecimal monto, ProviderTransactionType tipo, String observaciones,
-                                  Instant now) {
+    private void aplicarPagoALote(Lote lote, BigDecimal monto, RegistrarPagoCommand command,
+                                  ProviderTransactionType tipo, String correlationId, Instant now) {
         lote.setMontoPagadoLote(lote.getMontoPagadoLote().add(monto));
         lote.setSaldoPendienteLote(lote.getCostoTotalLote().subtract(lote.getMontoPagadoLote()).max(ZERO));
         lote.setEstadoPago(estadoPago(lote.getMontoPagadoLote(), lote.getSaldoPendienteLote()));
         lote.setUpdatedAt(now);
         loteRepository.save(lote);
-        registrarTransaccion(lote.getProveedorId(), lote.getId(), tipo, monto, observaciones, now);
+        transaccionRepository.insert(ProviderTransaction.builder()
+                .proveedorId(lote.getProveedorId())
+                .loteId(lote.getId())
+                .tipo(tipo)
+                .monto(monto)
+                .fecha(now)
+                .observaciones(command.observaciones())
+                .correlationId(correlationId)
+                .fechaLiquidacion(command.fechaLiquidacion())
+                .build());
     }
+
 
     private void registrarTransaccion(String proveedorId, String loteId, ProviderTransactionType tipo,
                                       BigDecimal monto, String observaciones, Instant fecha) {

@@ -1,12 +1,14 @@
 package com.zyozmen.products.adapter.in.web.dto;
 
 import com.zyozmen.products.domain.model.ProviderTransactionType;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public record PagoProveedorRequestDTO(
         @NotNull(message = "El monto es obligatorio")
@@ -15,5 +17,6 @@ public record PagoProveedorRequestDTO(
         BigDecimal monto,
         String loteId,
         ProviderTransactionType tipo,
-        @Size(max = 500, message = "Las observaciones son demasiado largas") String observaciones) {
+        @Size(max = 500, message = "Las observaciones son demasiado largas") String observaciones,
+        @JsonFormat(pattern = "yyyy-MM-dd") LocalDate fechaLiquidacion) {
 }

@@ -128,6 +128,18 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public void registrarPagoJornada(String providerId, LocalDate date, BigDecimal amount) {
+        var filter = Query.query(Criteria.where("providerId").is(providerId).and("date").is(date.toString()));
+        template.upsert(filter, new Update().inc("linkedPaymentsAmount", amount)
+                .setOnInsert("totalSalesCount", 0L)
+                .setOnInsert("totalPqrCount", 0L)
+                .setOnInsert("salesRecognizedAmount", BigDecimal.ZERO)
+                .setOnInsert("pqrRecognizedAmount", BigDecimal.ZERO)
+                .setOnInsert("reversedAmount", BigDecimal.ZERO), ProviderAccumulatorsDocument.class);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public void reversePqr(Long orderId, Instant cancelledAt) {
         var originals = template.find(Query.query(Criteria.where("orderId").is(orderId)
                         .and("movementType").is("PQR")), ProviderDailyMovementsDocument.class);

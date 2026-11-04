@@ -8,6 +8,7 @@ import com.zyozmen.products.domain.model.Lote;
 import com.zyozmen.products.domain.model.Provider;
 import com.zyozmen.products.domain.model.Product;
 import com.zyozmen.products.domain.port.in.ProductUseCase;
+import com.zyozmen.products.domain.port.in.ProveedorUseCase;
 import com.zyozmen.products.domain.model.ProviderTransactionType;
 import com.zyozmen.products.domain.model.ProviderTransaction;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.CrearProveedorCommand;
@@ -15,6 +16,7 @@ import com.zyozmen.products.domain.port.in.ProveedorUseCase.ContenedorCommand;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.RecibirLoteCommand;
 import com.zyozmen.products.domain.port.in.ProveedorUseCase.RegistrarPagoCommand;
 import com.zyozmen.products.domain.port.out.CodigoInventarioGeneratorPort;
+import com.zyozmen.products.domain.port.out.DailySettlementRepositoryPort;
 import com.zyozmen.products.domain.port.out.LoteRepositoryPort;
 import com.zyozmen.products.domain.port.out.ProveedorRepositoryPort;
 import com.zyozmen.products.domain.port.out.TransaccionProveedorRepositoryPort;
@@ -30,6 +32,7 @@ import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -60,6 +63,7 @@ class ProveedorServiceTest {
     @Mock
     private CodigoInventarioGeneratorPort codigoInventarioGenerator;
     @Mock private ProductUseCase cepas;
+    @Mock private DailySettlementRepositoryPort dailySettlements;
     @InjectMocks
     private ProveedorService service;
 
@@ -247,6 +251,60 @@ class ProveedorServiceTest {
                 .containsExactly("l1", "l2");
         assertThat(movimientos.getAllValues()).extracting(ProviderTransaction::getMonto)
                 .containsExactly(bd("200000"), bd("50000"));
+    }
+
+    @Test
+    void pagoVinculadoDistribuidoEntreLotesSumaUnaVezAlaJornada() {
+        proveedorConDeuda("500000.00", "0.00");
+        Lote antiguo = loteConSaldo("l1", "200000.00", "0.00", "2026-10-01T00:00:00Z");
+        Lote reciente = loteConSaldo("l2", "300000.00", "0.00", "2026-10-02T00:00:00Z");
+        when(loteRepository.findPendientesByProveedorId(PROVEEDOR_ID)).thenReturn(List.of(antiguo, reciente));
+        LocalDate jornada = LocalDate.of(2026, 10, 17);
+
+        var resultado = service.registrarPagoVinculado(new RegistrarPagoCommand(
+                PROVEEDOR_ID, null, bd("250000"), ProviderTransactionType.ABONO, null, jornada));
+
+        assertThat(resultado.correlationId()).isNotBlank();
+        assertThat(resultado.fechaLiquidacion()).isEqualTo(jornada);
+        assertThat(resultado.monto()).isEqualTo(bd("250000"));
+        assertThat(resultado.asignaciones()).extracting(ProveedorUseCase.AsignacionLote::loteId)
+                .containsExactly("l1", "l2");
+        assertThat(resultado.asignaciones()).extracting(ProveedorUseCase.AsignacionLote::monto)
+                .containsExactly(bd("200000"), bd("50000"));
+        ArgumentCaptor<ProviderTransaction> movimientos = ArgumentCaptor.forClass(ProviderTransaction.class);
+        verify(transaccionRepository, org.mockito.Mockito.times(2)).insert(movimientos.capture());
+        assertThat(movimientos.getAllValues()).allSatisfy(m -> {
+            assertThat(m.getCorrelationId()).isEqualTo(resultado.correlationId());
+            assertThat(m.getFechaLiquidacion()).isEqualTo(jornada);
+        });
+        verify(dailySettlements, org.mockito.Mockito.times(1))
+                .registrarPagoJornada(PROVEEDOR_ID, jornada, bd("250000"));
+    }
+
+    @Test
+    void pagoSinFechaNoSeVinculaAJornada() {
+        proveedorConDeuda("300000.00", "0.00");
+        when(loteRepository.findPendientesByProveedorId(PROVEEDOR_ID))
+                .thenReturn(List.of(loteConSaldo("l1", "300000.00", "0.00", "2026-10-01T00:00:00Z")));
+
+        service.registrarPago(new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("100000"), null, null));
+
+        ArgumentCaptor<ProviderTransaction> movimientos = ArgumentCaptor.forClass(ProviderTransaction.class);
+        verify(transaccionRepository).insert(movimientos.capture());
+        assertThat(movimientos.getValue().getCorrelationId()).isNull();
+        assertThat(movimientos.getValue().getFechaLiquidacion()).isNull();
+        verify(dailySettlements, never()).registrarPagoJornada(any(), any(), any());
+    }
+
+    @Test
+    void pagoVinculadoRechazaSinFechaYNoRegistraJornadaSiFallaElSaldo() {
+        proveedorConDeuda("100000.00", "0.00");
+
+        assertThrows(BusinessRuleException.class, () -> service.registrarPagoVinculado(
+                new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("10"), null, null)));
+        assertThrows(BusinessRuleException.class, () -> service.registrarPagoVinculado(
+                new RegistrarPagoCommand(PROVEEDOR_ID, null, bd("100000.01"), null, null, LocalDate.of(2026, 10, 17))));
+        verify(dailySettlements, never()).registrarPagoJornada(any(), any(), any());
     }
 
     @Test

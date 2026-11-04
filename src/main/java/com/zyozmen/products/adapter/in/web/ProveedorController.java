@@ -4,6 +4,7 @@ import com.zyozmen.products.adapter.in.web.dto.LoteCreateRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.AbonoProveedorResponseDTO;
 import com.zyozmen.products.adapter.in.web.dto.LoteResponseDTO;
 import com.zyozmen.products.adapter.in.web.dto.PagoProveedorRequestDTO;
+import com.zyozmen.products.adapter.in.web.dto.PagoProveedorResponseDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProveedorCreateRequestDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProveedorResponseDTO;
 import com.zyozmen.products.adapter.in.web.dto.ProveedorDetalleResponseDTO;
@@ -103,11 +104,18 @@ public class ProveedorController {
     }
 
     @PostMapping("/api/proveedores/{id}/pagos")
-    @Operation(summary = "Registrar un abono posterior al proveedor (a un lote o a los lotes pendientes)")
-    public ResponseEntity<ProveedorResponseDTO> registrarPago(
+    @Operation(summary = "Registrar un abono posterior al proveedor (a un lote o a los lotes pendientes); "
+            + "con fechaLiquidacion queda vinculado a esa jornada")
+    public ResponseEntity<?> registrarPago(
             @PathVariable String id, @Valid @RequestBody PagoProveedorRequestDTO request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(ProveedorResponseDTO.from(
-                proveedorUseCase.registrarPago(new ProveedorUseCase.RegistrarPagoCommand(
-                        id, request.loteId(), request.monto(), request.tipo(), request.observaciones()))));
+        var command = new ProveedorUseCase.RegistrarPagoCommand(
+                id, request.loteId(), request.monto(), request.tipo(), request.observaciones(),
+                request.fechaLiquidacion());
+        if (request.fechaLiquidacion() == null) {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ProveedorResponseDTO.from(proveedorUseCase.registrarPago(command)));
+        }
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(PagoProveedorResponseDTO.from(proveedorUseCase.registrarPagoVinculado(command)));
     }
 }

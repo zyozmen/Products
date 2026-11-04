@@ -599,8 +599,8 @@ contrato JSON para esta etapa.
   `pqrRecognizedAmount` ni borrar movimientos o la fila de la jornada.
   `accumulatedAmount`, pendiente y sugerido se recalculan con la reversion.
   No se modifican pagos existentes: un exceso se muestra en `overpaidAmount`,
-  sin deshacer transferencias. El registro de pagos vinculados se implementara
-  en T5; su conservacion ya se verifica con datos persistidos de prueba.
+  sin deshacer transferencias. Los pagos vinculados a una jornada (T5) tampoco se
+    deshacen al cancelar una PQR.
 - Una PQR historica sin movimiento original, incluida una creada entre T2 y T4,
   no genera reversion financiera ni importes negativos. Mantiene su restitucion
   de inventario existente; no hay importacion retroactiva.
@@ -622,6 +622,30 @@ ni eliminar filas localmente. El detalle paginado de auditoria queda para T6;
 no se exponen costos internos en las respuestas de ordenes al cliente.
 No reenviar automaticamente el POST ante timeout: verificar si la PQR se creo,
 ya que dos creaciones validas representan dos ordenes distintas.
+
+#### Pagos vinculados a una jornada (HU-04/T5)
+
+- `POST /api/proveedores/{id}/pagos` acepta `fechaLiquidacion` opcional con
+  formato `yyyy-MM-dd`. No se infiere de la fecha de registro del abono. Formato
+  invalido devuelve `400`. Sin el campo, la respuesta sigue siendo el proveedor
+  actualizado (`ProveedorResponseDTO`), sin cambios.
+- Con `fechaLiquidacion` responde `201` con:
+
+```json
+{"proveedor":{"id":"ID_PROVEEDOR"},"correlationId":"UUID","fechaLiquidacion":"2026-10-17","monto":250000.00,"asignaciones":[{"loteId":"ID_LOTE","monto":250000.00}]}
+```
+
+- `correlationId` identifica el pago completo; cada transaccion de lote lo
+  conserva. `asignaciones` lista el monto imputado a cada lote (FIFO si no se
+  indica `loteId`).
+- El total del pago se suma una sola vez a `linkedPaymentsAmount` de la jornada,
+  aunque se reparta entre varios lotes. Si la jornada no tenia fila, se crea.
+- Mismos limites que los pagos generales: no supera el saldo del proveedor ni del
+  lote. Puede ser parcial o superior al sugerido.
+- Deuda, transacciones y vinculo diario se guardan en la misma transaccion; un
+  fallo revierte todo.
+- Cancelar una PQR no modifica el pago vinculado: el exceso aparece en
+  `overpaidAmount` del resumen de la jornada (`GET /api/v1/settlements/daily-summary`).
 
 Pruebas de integracion HTTP reales (servidor en puerto aleatorio, JWT real y
 MongoDB real, sin mocks de servicios/repositorios):
@@ -660,8 +684,7 @@ La especificación de integración para el frontend está en [docs/proveedores-a
 - **Trazabilidad:** el servidor genera `codigoLote` con formato `LOT-YYYYMMDD-<UUID hexadecimal>` y fecha UTC, protegido por índice único, además de `fechaIngreso` e identificadores de contenedor. El cliente no envía código ni saldos calculados.
 - **Consultar lote** (`GET /api/lotes/{id}`): devuelve el lote, los contenedores y sus cantidades disponibles en unidades base. El catálogo de productos no tiene un campo de stock; este inventario se registra en los contenedores, sin convertirlo en unidades de presentación.
 - **Listar lotes por proveedor** (`GET /api/proveedores/{id}/lotes`): devuelve un arreglo paginado con la misma estructura de `GET /api/lotes/{id}` y encabezado `X-Total-Count` (total de lotes coincidentes, no contenedores ni presentaciones). Requiere `ADMIN`. Parámetros: `page` desde `0` (predeterminado `0`), `size` entre `1` y `200` (predeterminado `20`), `buscar` opcional y `sort` predeterminado `fechaIngreso,desc`. Admite ordenar por `fechaIngreso`, `codigoLote`, `costoTotalLote` o `saldoPendienteLote`, con dirección `asc` o `desc`; desempata por ID en la misma dirección. Se permite un solo criterio de orden. Parámetros inválidos devuelven `400`; proveedor inexistente, `404`; sin coincidencias o página fuera de rango, `200` con `[]` y el total real.
-- **Registrar pago** (`POST /api/proveedores/{id}/pagos`): abono a un lote (`loteId`) o, si se omite, a los lotes pendientes del más antiguo al más reciente. Tipos permitidos: `ABONO` (por defecto), `PAGO_CORTESIA`, `AJUSTE_PQR`. No puede superar el saldo del proveedor ni del lote.
-- **FIFO:** si el abono sin lote supera el saldo del más antiguo, lo salda y distribuye el excedente entre los siguientes; genera un movimiento por cada monto aplicado a cada lote. Se ordena por `fechaIngreso` ascendente, con desempate por identificador.
+- **Registrar pago** (`POST /api/proveedores/{id}/pagos`): abono a un lote (`loteId`) o, si se omite, a los lotes pendientes del más antiguo al más reciente. Tipos permitidos: `ABONO` (por defecto), `PAGO_CORTESIA`, `AJUSTE_PQR`. No puede superar el saldo del proveedor ni del lote. Opcionalmente acepta `fechaLiquidacion` (`yyyy-MM-dd`) para vincularlo a una jornada (ver HU-04/T5). si el abono sin lote supera el saldo del más antiguo, lo salda y distribuye el excedente entre los siguientes; genera un movimiento por cada monto aplicado a cada lote. Se ordena por `fechaIngreso` ascendente, con desempate por identificador.
 - **Consultar abonos** (`GET /api/proveedores/{id}/abonos?page=0&size=20`): arreglo JSON plano de movimientos paginados, del más reciente al más antiguo (desempate por identificador descendente), con `id`, `fecha` UTC, `monto`, `proveedorId`, `loteId`, `tipo` y `observaciones`. Incluye abonos iniciales y posteriores, cortesías y ajustes; excluye `DEUDA_LOTE`. El encabezado `X-Total-Count` indica el total de movimientos del proveedor, no el tamaño de la página; ya está expuesto por CORS. `page` inicia en `0` (predeterminado `0`) y `size` admite `1` a `200` (predeterminado `20`); parámetros inválidos devuelven `400`. Devuelve `[]` cuando no hay abonos o la página está fuera de rango, conservando el total real, y `404` si no existe el proveedor. No hay endpoints de edición ni eliminación de movimientos. **Cambio de comportamiento:** sin parámetros ahora devuelve únicamente los primeros 20 movimientos, no el historial completo.
 - **Procesar evento** (`POST /api/liquidaciones/procesar-evento`): evalúa si una venta/PQR acumula a la liquidación diaria sin modificar saldos ni inventario. Si el lote o el proveedor no tienen saldo pendiente devuelve `acumulaLiquidacion=false` y `montoLiquidable=0.00` (tope de pago); en caso contrario limita el monto al menor saldo. `descontarStock` siempre es `true`: el descuento de inventario lo ejecuta quien invoca el servicio.
 

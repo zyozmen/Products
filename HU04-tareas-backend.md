@@ -241,6 +241,24 @@ sin confirmacion del responsable; no se agrego registro de pagos de jornada.
 - Cancelar una PQR ya pagada conserva el abono y muestra exceso.
 - Una recarga completa conserva los resultados.
 
+### Estado backend T5
+
+Implementado `fechaLiquidacion` opcional (`yyyy-MM-dd`) en
+`POST /api/proveedores/{id}/pagos`. Sin el campo, la respuesta no cambia. Con el
+campo, el pago se reparte entre lotes con un `correlationId` comun, se suma una
+sola vez a `linkedPaymentsAmount` de la jornada (la crea si no existe) y deuda,
+transacciones y vinculo diario se guardan en la misma transaccion. La jornada no
+se infiere de la fecha de registro. Cancelar una PQR no deshace pagos vinculados;
+el exceso se refleja en el resumen diario.
+Contrato para F5 en [README](README.md#pagos-vinculados-a-una-jornada-hu-04t5).
+F4 quedo finalizada por el responsable; se autoriza continuar con F5.
+
+Validacion: ProveedorServiceTest (41), ProveedorControllerTest (23),
+DailySettlementServiceTest (10), OrderSettlementServiceTest (16) y
+DailySettlementMongoAdapterTest (6) aprobadas. DailySettlementIntegrationTest
+(11) queda omitida sin MongoDB de pruebas, por lo que el upsert contra Mongo real
+aun debe verificarse con `HU04_TEST_MONGO_URI`. Pendiente: suite completa.
+
 ## T6 - Detalle auditable y filtros completos
 
 **Pareja:** F6. **Depende de:** T5-F5 cerrada.

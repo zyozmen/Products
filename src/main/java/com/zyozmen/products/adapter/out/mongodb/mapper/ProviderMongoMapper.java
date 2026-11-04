@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 
 @Component
 public class ProviderMongoMapper {
@@ -166,6 +167,8 @@ public class ProviderMongoMapper {
                 .monto(t.getMonto())
                 .fecha(t.getFecha())
                 .observaciones(t.getObservaciones())
+                .correlationId(t.getCorrelationId())
+                .fechaLiquidacion(t.getFechaLiquidacion() == null ? null : t.getFechaLiquidacion().toString())
                 .build();
     }
 
@@ -178,6 +181,8 @@ public class ProviderMongoMapper {
                 .monto(d.getMonto())
                 .fecha(d.getFecha())
                 .observaciones(d.getObservaciones())
+                .correlationId(d.getCorrelationId())
+                .fechaLiquidacion(d.getFechaLiquidacion() == null ? null : LocalDate.parse(d.getFechaLiquidacion()))
                 .build();
     }
 }

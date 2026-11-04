@@ -6,6 +6,7 @@ import com.zyozmen.products.domain.model.ProviderTransactionType;
 import com.zyozmen.products.domain.model.ProviderTransaction;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.domain.Page;
 
@@ -30,6 +31,9 @@ public interface ProveedorUseCase {
     /** Registra un abono posterior; si loteId es nulo se aplica a los lotes pendientes, del más antiguo al más reciente. */
     Provider registrarPago(RegistrarPagoCommand command);
 
+    /** Registra un abono vinculado a una jornada de liquidacion (fechaLiquidacion obligatoria). */
+    ResultadoPago registrarPagoVinculado(RegistrarPagoCommand command);
+
     record CrearProveedorCommand(String nombre, String nit, String telefono, String email) {
     }
 
@@ -50,6 +54,17 @@ public interface ProveedorUseCase {
     }
 
     record RegistrarPagoCommand(String proveedorId, String loteId, BigDecimal monto,
-                                ProviderTransactionType tipo, String observaciones) {
+                                ProviderTransactionType tipo, String observaciones, LocalDate fechaLiquidacion) {
+        public RegistrarPagoCommand(String proveedorId, String loteId, BigDecimal monto,
+                                    ProviderTransactionType tipo, String observaciones) {
+            this(proveedorId, loteId, monto, tipo, observaciones, null);
+        }
+    }
+
+    record AsignacionLote(String loteId, BigDecimal monto) {
+    }
+
+    record ResultadoPago(Provider proveedor, String correlationId, LocalDate fechaLiquidacion, BigDecimal monto,
+                         List<AsignacionLote> asignaciones) {
     }
 }

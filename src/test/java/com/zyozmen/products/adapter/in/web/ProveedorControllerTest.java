@@ -119,6 +119,34 @@ class ProveedorControllerTest {
     }
 
     @Test
+    void pagoConFechaLiquidacionDevuelveVinculoYAsignaciones() throws Exception {
+        var proveedor = Provider.builder().id("p1").nombre("Distribuidora")
+                .nit("900123456").estado(ProviderState.ACTIVO).build();
+        when(useCase.registrarPagoVinculado(any())).thenReturn(new ProveedorUseCase.ResultadoPago(proveedor,
+                "corr-1", java.time.LocalDate.of(2026, 10, 17), new BigDecimal("250000.00"),
+                List.of(new ProveedorUseCase.AsignacionLote("l1", new BigDecimal("250000.00")))));
+
+        mvc.perform(post("/api/proveedores/p1/pagos").contentType(MediaType.APPLICATION_JSON).content("""
+                {"monto":250000.00,"fechaLiquidacion":"2026-10-17"}
+                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.proveedor.id").value("p1"))
+                .andExpect(jsonPath("$.correlationId").value("corr-1"))
+                .andExpect(jsonPath("$.fechaLiquidacion").value("2026-10-17"))
+                .andExpect(jsonPath("$.asignaciones[0].loteId").value("l1"));
+        verify(useCase).registrarPagoVinculado(any());
+    }
+
+    @Test
+    void pagoRechazaFechaLiquidacionConFormatoInvalido() throws Exception {
+        mvc.perform(post("/api/proveedores/p1/pagos").contentType(MediaType.APPLICATION_JSON).content("""
+                {"monto":100.00,"fechaLiquidacion":"17/10/2026"}
+                """))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(useCase);
+    }
+
+    @Test
     void recibeContenedoresSinCodigoDeClienteYExponeInventario() throws Exception {
         when(useCase.recibirLote(any())).thenReturn(lote());
 
