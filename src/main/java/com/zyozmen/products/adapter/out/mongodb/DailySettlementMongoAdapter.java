@@ -1,6 +1,8 @@
 package com.zyozmen.products.adapter.out.mongodb;
 
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.LoteDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementSettingsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsDocument;
@@ -11,6 +13,7 @@ import com.zyozmen.products.domain.model.DailySettlementMovement;
 import com.zyozmen.products.domain.exception.OrderConflictException;
 import com.zyozmen.products.domain.port.out.DailySettlementRepositoryPort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
 import org.bson.types.Decimal128;
 import org.bson.types.ObjectId;
@@ -29,6 +32,8 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashSet;
 import java.util.Date;
 import java.util.Optional;
 import java.util.List;
@@ -40,6 +45,7 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class DailySettlementMongoAdapter implements DailySettlementRepositoryPort {
     private final MongoTemplate template;
 
@@ -142,19 +148,92 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
         if (result == null) {
             return new PageImpl<>(List.of(), pageable, 0);
         }
-        var entries = result.getList("content", Document.class, List.of()).stream()
-                .map(this::toDetail).toList();
+        var sources = result.getList("content", Document.class, List.of());
+        var lotIds = new HashSet<String>();
+        var productIds = new HashSet<String>();
+        for (var source : sources) {
+            if (source.getString("strainId") != null) {
+                productIds.add(source.getString("strainId"));
+            }
+            if (source.getString("lotId") != null) {
+                lotIds.add(source.getString("lotId"));
+            }
+            for (var allocation : source.getList("allocations", Document.class, List.of())) {
+                if (allocation.getString("lotId") != null) {
+                    lotIds.add(allocation.getString("lotId"));
+                }
+            }
+        }
+        Map<String, LoteDocument> lots = new java.util.HashMap<>();
+        if (!lotIds.isEmpty()) {
+            var lotsQuery = Query.query(Criteria.where("id").in(lotIds));
+            lotsQuery.fields().include("codigoLote").include("contenedores.contenedorId")
+                    .include("contenedores.codigoContenedor").include("contenedores.presentaciones");
+            lots = template.find(lotsQuery, LoteDocument.class).stream()
+                    .collect(Collectors.toMap(LoteDocument::getId, Function.identity()));
+        }
+        Map<String, ProductDocument> products = new java.util.HashMap<>();
+        if (!productIds.isEmpty()) {
+            var productsQuery = Query.query(Criteria.where("id").in(productIds));
+            productsQuery.fields().include("nombre");
+            products = template.find(productsQuery, ProductDocument.class).stream()
+                    .collect(Collectors.toMap(ProductDocument::id, Function.identity()));
+        }
+        String providerName = null;
+        if (!sources.isEmpty()) {
+            var providerQuery = Query.query(Criteria.where("id").is(providerId));
+            providerQuery.fields().include("nombre");
+            var providers = template.find(providerQuery, ProviderDocument.class);
+            if (!providers.isEmpty()) {
+                providerName = providers.getFirst().getNombre();
+            } else {
+                log.warn("No se encontro el proveedor {} al consultar el detalle diario", providerId);
+            }
+        }
+        var entries = new ArrayList<DailySettlementDetail>();
+        for (var source : sources) {
+            entries.add(toDetail(source, providerName, lots, products));
+        }
         var metadata = result.getList("metadata", Document.class, List.of());
         long total = metadata.isEmpty() ? 0 : metadata.getFirst().get("totalElements", Number.class).longValue();
         return new PageImpl<>(entries, pageable, total);
     }
 
-    private DailySettlementDetail toDetail(Document source) {
+    private DailySettlementDetail toDetail(Document source, String providerName, Map<String, LoteDocument> lots,
+                                           Map<String, ProductDocument> products) {
         var allocations = new ArrayList<DailySettlementDetail.PaymentAllocation>();
         for (Document allocation : source.getList("allocations", Document.class, List.of())) {
+            var lot = lots.get(allocation.getString("lotId"));
+            if (lot == null && allocation.getString("lotId") != null) {
+                log.warn("No se encontro el lote {} de una asignacion de pago", allocation.getString("lotId"));
+            }
             allocations.add(new DailySettlementDetail.PaymentAllocation(
                     allocation.getString("transactionId"), allocation.getString("lotId"),
-                    decimal(allocation.get("amount"))));
+                    decimal(allocation.get("amount")), lot == null ? null : lot.getCodigoLote()));
+        }
+        var lot = lots.get(source.getString("lotId"));
+        LoteDocument.ContenedorDocument container = null;
+        if (lot != null && lot.getContenedores() != null) {
+            container = lot.getContenedores().stream()
+                    .filter(c -> java.util.Objects.equals(c.getId(), source.getString("containerId")))
+                    .findFirst().orElse(null);
+        }
+        String presentationName = null;
+        if (container != null && container.getPresentaciones() != null) {
+            presentationName = container.getPresentaciones().stream()
+                    .filter(p -> java.util.Objects.equals(p.presentacionId(), source.getString("presentationId")))
+                    .map(LoteDocument.PresentacionInventarioDocument::nombre)
+                    .filter(java.util.Objects::nonNull).findFirst().orElse(null);
+        }
+        if ((source.getString("lotId") != null && lot == null)
+                || (source.getString("containerId") != null && container == null)
+                || (source.getString("presentationId") != null && presentationName == null)) {
+            log.warn("Referencias de inventario no disponibles para el movimiento diario {}", source.getString("id"));
+        }
+        var product = products.get(source.getString("strainId"));
+        if (source.getString("strainId") != null && product == null) {
+            log.warn("No se encontro el producto {} del movimiento diario {}",
+                    source.getString("strainId"), source.getString("id"));
         }
         return new DailySettlementDetail(source.getString("id"), source.getString("movementType"),
                 source.getString("providerId"), longValue(source.get("orderId")),
@@ -166,7 +245,10 @@ public class DailySettlementMongoAdapter implements DailySettlementRepositoryPor
                 decimal(source.get("amount")), instant(source.get("timestamp")),
                 LocalDate.parse(source.getString("date")), source.getString("originalMovementId"),
                 source.getString("correlationId"), source.getString("paymentType"),
-                source.getString("observations"), allocations);
+                source.getString("observations"), allocations, providerName,
+                lot == null ? null : lot.getCodigoLote(),
+                container == null ? null : container.getCodigoContenedor(), presentationName,
+                product == null ? null : product.nombre());
     }
 
     private BigDecimal decimal(Object value) {

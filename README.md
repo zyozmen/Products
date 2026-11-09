@@ -735,6 +735,17 @@ Authorization: ****** ADMIN>
 - Cada reconocimiento o reversion incluye orden e item, lote, contenedor,
   presentacion, cantidad, snapshot de costo unitario e importe cuando aplican.
   `date` es la jornada afectada; `timestamp` es el instante real del evento.
+- El detalle conserva `providerId`, `lotId`, `containerId` y `presentationId`
+  y agrega `providerName` (nombre del proveedor), `lotCode` (`codigoLote`),
+  `containerCode` (`codigoContenedor`, el contenedor no tiene nombre propio)
+  y `presentationName` (nombre de la presentacion dentro del contenedor).
+  Tambien incluye `productName`, el nombre del producto de la coleccion
+  `Products` identificado por `strainId`, que se conserva en la respuesta.
+  En pagos, o si el producto ya no existe, `productName` es `null`.
+  Se consultan los datos actuales por lotes de la pagina, sin modificar los
+  movimientos ni sus snapshots financieros. Si una referencia historica ya
+  no existe, el nombre/codigo correspondiente es `null`, se registra una
+  advertencia y el ID original se conserva.
 - Las reversiones son movimientos independientes con `movementType:
   "PQR_REVERSAL"`, `originalMovementId`, `date` de la jornada original y
   `timestamp` de cancelacion.
@@ -742,6 +753,10 @@ Authorization: ****** ADMIN>
   distribuya entre lotes. Incluye `paymentType`, `amount` y `allocations` con
   los identificadores de transaccion, lote e importes imputados. No tiene
   cantidad ni costos unitarios.
+- Cada elemento de `allocations` agrega tambien `lotCode`. En los pagos,
+  `providerName` identifica al proveedor; `lotCode`, `containerCode` y
+  `presentationName` del movimiento principal son `null` porque un pago
+  puede distribuirse entre varios lotes.
 - Los errores de fecha, proveedor o paginacion invalidos devuelven `400`. El
   endpoint requiere ADMIN; no se exponen costos en endpoints publicos.
 

@@ -52,7 +52,8 @@ class DailySettlementControllerTest {
                 42L, 0, "650000000000000000000201", "650000000000000000000301",
                 "strain-1", "650000000000000000000401", 2, BigDecimal.TEN, "GRAMOS",
                 BigDecimal.ONE, BigDecimal.valueOf(5), BigDecimal.TEN,
-                Instant.parse("2026-11-03T15:00:00Z"), date, null, null, null, null, List.of());
+                Instant.parse("2026-11-03T15:00:00Z"), date, null, null, null, null, List.of(),
+                "Proveedor", "LOT-1", "CONT-1", "Bolsa 5g", "Sativa");
         when(useCase.detail(date, "6500000000000000000000AB", 1, 10))
                 .thenReturn(new PageImpl<>(List.of(movement), PageRequest.of(1, 10), 11));
 
@@ -61,6 +62,7 @@ class DailySettlementControllerTest {
         assertThat(response.providerId()).isEqualTo("6500000000000000000000ab");
         assertThat(response.date()).isEqualTo(date);
         assertThat(response.content()).containsExactly(movement);
+        assertThat(response.content().getFirst().productName()).isEqualTo("Sativa");
         assertThat(response.page()).isEqualTo(1);
         assertThat(response.totalElements()).isEqualTo(11);
         assertThat(response.totalPages()).isEqualTo(2);

@@ -69,7 +69,8 @@ class DailySettlementServiceTest {
                 "650000000000000000000201", "650000000000000000000301", "strain",
                 "650000000000000000000401", 2, BigDecimal.TEN, "GRAMOS",
                 BigDecimal.ONE, BigDecimal.valueOf(5), BigDecimal.TEN,
-                Instant.parse("2026-10-23T12:00:00Z"), date, null, null, null, null, List.of());
+                Instant.parse("2026-10-23T12:00:00Z"), date, null, null, null, null, List.of(),
+                "Proveedor", "LOT-1", "CONT-1", "Bolsa 5g", "Sativa");
         when(repository.findDetail(eq(date), eq(PROVIDER), any())).thenReturn(new PageImpl<>(List.of(detail)));
 
         var result = service.detail(date, PROVIDER.toUpperCase(), 1, 10);

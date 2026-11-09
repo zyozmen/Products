@@ -7,6 +7,8 @@ import com.zyozmen.products.adapter.out.mongodb.document.DailySettlementSettings
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.LoteDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ProductDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.TransaccionProveedorDocument;
 import com.zyozmen.products.domain.exception.OrderConflictException;
 import com.zyozmen.products.domain.model.DailySettlementDetail;
@@ -42,6 +44,111 @@ class DailySettlementMongoAdapterTest {
     private final DailySettlementMongoAdapter adapter = new DailySettlementMongoAdapter(template);
     private final LocalDate date = LocalDate.of(2026, 11, 3);
     private final Instant timestamp = Instant.parse("2026-11-03T15:00:00Z");
+
+    @Test
+    void enrichesMovementsAndPaymentAllocationsWithNamesUsingBatchedQueries() throws Exception {
+        @SuppressWarnings("unchecked")
+        MongoCollection<Document> collection = mock(MongoCollection.class);
+        @SuppressWarnings("unchecked")
+        AggregateIterable<Document> aggregation = mock(AggregateIterable.class);
+        when(template.getCollectionName(ProviderDailyMovementsDocument.class)).thenReturn("movements");
+        when(template.getCollectionName(TransaccionProveedorDocument.class)).thenReturn("payments");
+        when(template.getCollection("movements")).thenReturn(collection);
+        when(collection.aggregate(anyList(), eq(Document.class))).thenReturn(aggregation);
+        String providerId = "6500000000000000000000ab";
+        String lotId = "650000000000000000000201";
+        String containerId = "650000000000000000000301";
+        String presentationId = "650000000000000000000401";
+        String productId = "650000000000000000000501";
+        var sale = new Document("id", "sale").append("movementType", "SALE")
+                .append("providerId", providerId).append("lotId", lotId).append("containerId", containerId)
+                .append("presentationId", presentationId).append("strainId", productId)
+                .append("date", date.toString())
+                .append("timestamp", Date.from(timestamp));
+        var payment = new Document("id", "payment:1").append("movementType", "PAYMENT")
+                .append("providerId", providerId).append("date", date.toString())
+                .append("timestamp", Date.from(timestamp))
+                .append("allocations", List.of(new Document("transactionId", "t1").append("lotId", lotId)
+                        .append("amount", new Decimal128(BigDecimal.TEN))));
+        when(aggregation.first()).thenReturn(new Document("content", List.of(sale, payment))
+                .append("metadata", List.of(new Document("totalElements", 2L))));
+        var presentation = new LoteDocument.PresentacionInventarioDocument(presentationId, "SKU", "Bolsa 5g",
+                BigDecimal.valueOf(5), 10, 5, BigDecimal.ONE, BigDecimal.TEN, true, false, null);
+        var container = LoteDocument.ContenedorDocument.builder().id(containerId).codigoContenedor("CONT-001")
+                .presentaciones(List.of(presentation)).build();
+        var context = new org.springframework.data.mongodb.core.mapping.MongoMappingContext();
+        var conversions = org.springframework.data.mongodb.core.convert.MongoCustomConversions.create(adapter -> { });
+        context.setSimpleTypeHolder(conversions.getSimpleTypeHolder());
+        context.afterPropertiesSet();
+        var converter = new org.springframework.data.mongodb.core.convert.MappingMongoConverter(
+                org.springframework.data.mongodb.core.convert.NoOpDbRefResolver.INSTANCE, context);
+        converter.setCustomConversions(conversions);
+        converter.afterPropertiesSet();
+        var storedPresentation = new Document("presentacionId", new org.bson.types.ObjectId(presentationId))
+                .append("sku", presentation.sku()).append("nombre", presentation.nombre())
+                .append("contenidoUnidad", "5").append("unidadesCreadas", 10).append("stockDisponible", 5)
+                .append("costoPresentacionCalculado", "1").append("precioVenta", "10")
+                .append("activoMarketplace", true).append("confirmacionMargenNegativo", false);
+        when(template.find(any(Query.class), eq(LoteDocument.class))).thenAnswer(invocation -> {
+            Query query = invocation.getArgument(0);
+            assertThat(query.getFieldsObject())
+                    .containsEntry("contenedores.presentaciones", 1)
+                    .doesNotContainKeys("contenedores.presentaciones.presentacionId",
+                            "contenedores.presentaciones.nombre");
+            var projectedLot = new Document("_id", new org.bson.types.ObjectId(lotId))
+                    .append("codigoLote", "LOT-001")
+                    .append("contenedores", List.of(
+                            new Document("contenedorId", new org.bson.types.ObjectId(container.getId()))
+                                    .append("codigoContenedor", container.getCodigoContenedor())
+                                    .append("presentaciones", List.of(storedPresentation))));
+            return List.of(converter.read(LoteDocument.class, projectedLot));
+        });
+        when(template.find(any(Query.class), eq(ProviderDocument.class))).thenReturn(List.of(
+                ProviderDocument.builder().id(providerId).nombre("Proveedor Verde").build()));
+        when(template.find(any(Query.class), eq(ProductDocument.class))).thenReturn(List.of(
+                new ProductDocument(productId, "Sativa", null, null, null, null, null)));
+
+        var page = adapter.findDetail(date, providerId, PageRequest.of(0, 20));
+
+        var detail = page.getContent().getFirst();
+        assertThat(detail.providerName()).isEqualTo("Proveedor Verde");
+        assertThat(detail.lotCode()).isEqualTo("LOT-001");
+        assertThat(detail.containerCode()).isEqualTo("CONT-001");
+        assertThat(detail.presentationName()).isEqualTo("Bolsa 5g");
+        assertThat(detail.productName()).isEqualTo("Sativa");
+        assertThat(detail.strainId()).isEqualTo(productId);
+        assertThat(detail.providerId()).isEqualTo(providerId);
+        assertThat(detail.lotId()).isEqualTo(lotId);
+        assertThat(detail.containerId()).isEqualTo(containerId);
+        assertThat(detail.presentationId()).isEqualTo(presentationId);
+        var paymentDetail = page.getContent().getLast();
+        assertThat(paymentDetail.providerName()).isEqualTo("Proveedor Verde");
+        assertThat(paymentDetail.lotCode()).isNull();
+        assertThat(paymentDetail.containerCode()).isNull();
+        assertThat(paymentDetail.presentationName()).isNull();
+        assertThat(paymentDetail.productName()).isNull();
+        assertThat(paymentDetail.allocations().getFirst().lotCode()).isEqualTo("LOT-001");
+        assertThat(paymentDetail.allocations().getFirst().lotId()).isEqualTo(lotId);
+        verify(template).find(any(Query.class), eq(LoteDocument.class));
+        verify(template).find(any(Query.class), eq(ProviderDocument.class));
+        var productQuery = org.mockito.ArgumentCaptor.forClass(Query.class);
+        verify(template).find(productQuery.capture(), eq(ProductDocument.class));
+        assertThat(productQuery.getValue().getQueryObject())
+                .isEqualTo(new Document("id", new Document("$in", java.util.Set.of(productId))));
+        assertThat(productQuery.getValue().getFieldsObject()).isEqualTo(new Document("nombre", 1));
+
+        when(template.find(any(Query.class), eq(LoteDocument.class))).thenReturn(List.of());
+        when(template.find(any(Query.class), eq(ProviderDocument.class))).thenReturn(List.of());
+        when(template.find(any(Query.class), eq(ProductDocument.class))).thenReturn(List.of());
+        var historical = adapter.findDetail(date, providerId, PageRequest.of(0, 20)).getContent().getFirst();
+        assertThat(historical.lotId()).isEqualTo(lotId);
+        assertThat(historical.providerName()).isNull();
+        assertThat(historical.lotCode()).isNull();
+        assertThat(historical.containerCode()).isNull();
+        assertThat(historical.presentationName()).isNull();
+        assertThat(historical.productName()).isNull();
+        assertThat(historical.strainId()).isEqualTo(productId);
+    }
 
     @Test
     void findsEmptyOrPopulatedProviderPagesAndRequiresProviderBalance() {
@@ -107,7 +214,7 @@ class DailySettlementMongoAdapterTest {
         assertThat(detail.amount()).isEqualByComparingTo("20.00");
         assertThat(detail.unitCost()).isNull();
         assertThat(detail.allocations()).containsExactly(new DailySettlementDetail.PaymentAllocation(
-                "transaction-1", "650000000000000000000201", new BigDecimal("20.00")));
+                "transaction-1", "650000000000000000000201", new BigDecimal("20.00"), null));
 
         @SuppressWarnings("unchecked")
         var pipelineCaptor = org.mockito.ArgumentCaptor.forClass(List.class);

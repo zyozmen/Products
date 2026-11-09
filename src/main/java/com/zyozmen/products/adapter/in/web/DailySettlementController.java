@@ -44,7 +44,9 @@ public class DailySettlementController {
     }
 
     @GetMapping("/api/v1/settlements/daily-detail")
-    @Operation(summary = "Consultar el detalle auditable paginado de un proveedor y jornada (ADMIN)")
+    @Operation(summary = "Consultar el detalle auditable paginado de un proveedor y jornada (ADMIN)",
+            description = "Conserva los IDs y agrega providerName, lotCode, containerCode, presentationName y productName "
+                    + "con datos actuales. allocations incluye lotCode. Referencias no disponibles devuelven null.")
     public DailyDetailResponse detail(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam String providerId,

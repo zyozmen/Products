@@ -11,11 +11,13 @@ public record DailySettlementDetail(
         Integer quantity, BigDecimal contentPerUnit, String baseUnit, BigDecimal baseUnitCost,
         BigDecimal unitCost, BigDecimal amount, Instant timestamp, LocalDate date,
         String originalMovementId, String correlationId, String paymentType, String observations,
-        List<PaymentAllocation> allocations) {
+        List<PaymentAllocation> allocations,
+        String providerName, String lotCode, String containerCode, String presentationName,
+        String productName) {
 
     public DailySettlementDetail {
         allocations = allocations == null ? List.of() : List.copyOf(allocations);
     }
 
-    public record PaymentAllocation(String transactionId, String lotId, BigDecimal amount) { }
+    public record PaymentAllocation(String transactionId, String lotId, BigDecimal amount, String lotCode) { }
 }
