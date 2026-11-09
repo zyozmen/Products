@@ -248,14 +248,9 @@ public class OrderService implements OrderUseCase {
     }
 
     private void applyDeliveryPayment(Order order, StatusChangeDetails details) {
-        if (order.isPqr()) {
-            order.setCashAmount(ZERO);
-            order.setCardAmount(ZERO);
-            return;
-        }
         // Una orden sin contra entrega se asume ya pagada: el detalle enviado se ignora.
         BigDecimal total = order.getTotal() == null ? ZERO : order.getTotal();
-        if (!order.isCashOnDelivery() || total.signum() <= 0) {
+        if (order.isPqr() || !order.isCashOnDelivery() || total.signum() <= 0) {
             order.setCashAmount(null);
             order.setCardAmount(null);
             return;

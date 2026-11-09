@@ -302,7 +302,18 @@ El backend no redimensiona, recomprime ni mejora las imágenes: almacena los byt
 - Desde HU-05/T1, `productId` en ventas y PQR es el **ID de la presentación de marketplace**, no el ID numérico del catálogo anterior. El catálogo anterior sigue disponible en sus rutas; no se consulta para crear nuevas órdenes. Las órdenes ya guardadas siguen siendo consultables.
 - `POST /api/orders` valida que la presentación esté activa y tenga procedencia en un lote, recalcula precios vigentes y responde `422` si los valores enviados no coinciden. Las ventas no cobran impuesto, por lo que no existe `taxAmount` en el contrato y `total = subtotal`. Un ID mal formado responde `400`; una presentación inexistente o inactiva, `404`.
 - Cada ítem nuevo guarda `trazabilidad` interna: proveedor, lote, contenedor, cepa, presentación, contenido, unidad base, costo base y costo por presentación. Los datos se resuelven en el servidor; no se aceptan costos del cliente. El costo congelado no cambia al actualizar el catálogo y no se expone en `OrderResponseDTO`.
+- Todas las respuestas de ordenes (creacion, consulta propia, administracion y PQR)
+  incluyen `items[].contenidoUnidad` y `items[].unidadBase`, tomados del snapshot
+  de la presentacion. Por ejemplo, `{"contenidoUnidad":40.5,"unidadBase":"GRAMOS"}`
+  indica 40.5 gramos por presentacion, no el total multiplicado por `quantity`.
+  En ordenes historicas sin trazabilidad ambos campos son `null`; no se infieren
+  del nombre ni del catalogo actual. Los costos internos siguen sin exponerse.
 - Las PQR también requieren `productId` válido y resuelven nombre y costo desde el servidor. `name` es opcional y no se usa como fuente; sus precios e importes comerciales son cero.
+- `cashAmount` y `cardAmount` solo aplican a ordenes normales contra entrega.
+  Las PQR y las ordenes sin contra entrega devuelven ambos campos en `null`,
+  incluso si una orden historica conserva montos guardados. Entregar una PQR
+  ignora los montos enviados y persiste ambos campos en `null`; no cambia su
+  flujo de estados ni sus totales.
 - Una orden de otro usuario responde `404`.
 - `GET /api/admin/orders` admite los filtros `status`, `from`, `to` (formato `YYYY-MM-DD`), `username`, `page` y `size`; con paginación devuelve una lista plana y el encabezado `X-Total-Count`.
 - Estados válidos: `CREADA`, `PAGADA`, `EMPACADA`, `ENTREGADA` y `CANCELADA`. Los cambios de estado se auditan y las transiciones no permitidas responden `409`.

@@ -29,8 +29,11 @@ public record OrderResponseDTO(
         BigDecimal total) {
 
     public static OrderResponseDTO from(Order order) {
+        boolean hasDeliveryPayment = order.isCashOnDelivery() && !order.isPqr();
         return new OrderResponseDTO(order.getId(), order.getUsername(), order.getStatus().name(),
-                order.isPqr(), order.isCashOnDelivery(), order.getCashAmount(), order.getCardAmount(),
+                order.isPqr(), order.isCashOnDelivery(),
+                hasDeliveryPayment ? order.getCashAmount() : null,
+                hasDeliveryPayment ? order.getCardAmount() : null,
                 order.getNotes(), order.getCreatedAt(), order.getUpdatedAt(), order.getPaidAt(),
                 order.getPackedAt(), order.getDeliveredAt(), order.getCancelledAt(),
                 order.getItems().stream().map(OrderResponseDTO::toItem).toList(),
@@ -38,8 +41,11 @@ public record OrderResponseDTO(
     }
 
     private static ItemResponse toItem(OrderItem item) {
+        var trace = item.getTrazabilidad();
         return new ItemResponse(item.getProductId(), item.getName(), item.getQuantity(),
-                item.getUnitPrice(), item.getLineTotal());
+                item.getUnitPrice(), item.getLineTotal(),
+                trace == null ? null : trace.contenidoUnidad(),
+                trace == null ? null : trace.unidadBase());
     }
 
     private static DeliveryResponse toDelivery(OrderDelivery delivery) {
@@ -48,7 +54,7 @@ public record OrderResponseDTO(
     }
 
     public record ItemResponse(String productId, String name, int quantity, BigDecimal unitPrice,
-                               BigDecimal lineTotal) { }
+                               BigDecimal lineTotal, BigDecimal contenidoUnidad, String unidadBase) { }
     public record DeliveryResponse(String recipientName, String address, String addressComplement,
                                    String contactPhone) { }
 }

@@ -149,6 +149,24 @@ class OrderServiceTest {
     }
 
     @Test
+    void deliveredPqrClearsPaymentAmountsAndIgnoresSubmittedPayment() {
+        Order pqr = order("juan", OrderStatus.EMPACADA);
+        pqr.setPqr(true);
+        pqr.setCashAmount(BigDecimal.ZERO);
+        pqr.setCardAmount(BigDecimal.ZERO);
+        when(orderRepository.findById(101L)).thenReturn(Optional.of(pqr));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Order delivered = orderService.changeStatus(101L, OrderStatus.ENTREGADA, "admin",
+                new OrderUseCase.StatusChangeDetails(null, BigDecimal.TEN, BigDecimal.ONE, null));
+
+        assertThat(delivered.getCashAmount()).isNull();
+        assertThat(delivered.getCardAmount()).isNull();
+        assertThat(delivered.getStatus()).isEqualTo(OrderStatus.ENTREGADA);
+        verifyNoInteractions(settlements);
+    }
+
+    @Test
     void deliveredAcceptsMatchingPaymentForCashOnDelivery() {
         Order withDetail = order("juan", OrderStatus.EMPACADA);
         withDetail.setCashOnDelivery(true);
