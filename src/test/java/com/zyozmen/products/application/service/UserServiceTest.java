@@ -31,6 +31,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -90,8 +91,25 @@ class UserServiceTest {
         assertThat(captor.getValue().getPassword()).isEqualTo("hashed-password");
         assertThat(captor.getValue().getRole()).isEqualTo(Role.CLIENTE);
         assertThat(captor.getValue().getState()).isEqualTo(UserState.PENDIENTE);
+        assertThat(captor.getValue().getCodigoReferido()).matches("[A-HJ-NP-Z2-9]{8}");
         assertThat(result.getRole()).isEqualTo(Role.CLIENTE);
         verify(userNotificationPort).sendWelcomeEmail(result);
+    }
+
+    @Test
+    void registrarShouldRetryWhenGeneratedReferralCodeAlreadyExists() {
+        User request = buildClienteRegistration();
+        when(userRepositoryPort.existsByUsername("juan123")).thenReturn(false);
+        when(userRepositoryPort.existsByTipoIdentificacionAndNumeroIdentificacion(
+                IdentificationType.CC, "1018234567")).thenReturn(false);
+        when(passwordEncoder.encode("raw-password")).thenReturn("hashed-password");
+        when(userRepositoryPort.existsByCodigoReferido(anyString())).thenReturn(true, false);
+        when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User result = userService.registrar(request);
+
+        assertThat(result.getCodigoReferido()).matches("[A-HJ-NP-Z2-9]{8}");
+        verify(userRepositoryPort, org.mockito.Mockito.times(2)).existsByCodigoReferido(anyString());
     }
 
     @Test
@@ -179,6 +197,19 @@ class UserServiceTest {
 
         assertThat(result.getToken()).isEqualTo("jwt-token");
         assertThat(result.getUser()).isEqualTo(storedUser);
+    }
+
+    @Test
+    void obtenerPorUsernameShouldAssignAndPersistReferralCodeForLegacyUser() {
+        User storedUser = User.builder().username("juan123").build();
+        when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
+        when(userRepositoryPort.existsByCodigoReferido(anyString())).thenReturn(false);
+        when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User result = userService.obtenerPorUsername("juan123");
+
+        assertThat(result.getCodigoReferido()).matches("[A-HJ-NP-Z2-9]{8}");
+        verify(userRepositoryPort).save(storedUser);
     }
 
     @Test
@@ -287,12 +318,18 @@ class UserServiceTest {
 
     @Test
     void obtenerPorUsernameShouldReturnUserWhenFound() {
-        User storedUser = User.builder().username("juan123").build();
+        User storedUser = User.builder()
+                .username("juan123")
+                .codigoReferido("ABCD2345")
+                .build();
         when(userRepositoryPort.findByUsername("juan123")).thenReturn(Optional.of(storedUser));
 
         User result = userService.obtenerPorUsername("juan123");
 
         assertThat(result).isEqualTo(storedUser);
+        assertThat(result.getCodigoReferido()).isEqualTo("ABCD2345");
+        verify(userRepositoryPort, never()).existsByCodigoReferido(anyString());
+        verify(userRepositoryPort, never()).save(any());
     }
 
     @Test

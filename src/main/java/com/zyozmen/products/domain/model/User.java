@@ -14,6 +14,7 @@ public class User {
 
     private String id;
     private String username;
+    private String codigoReferido;
     private String password;
     private String nombre;
     private String apellido;
@@ -32,6 +33,7 @@ public class User {
     private User(Builder builder) {
         this.id = builder.id;
         this.username = builder.username;
+        this.codigoReferido = builder.codigoReferido;
         this.password = builder.password;
         this.nombre = builder.nombre;
         this.apellido = builder.apellido;
@@ -63,6 +65,14 @@ public class User {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public String getCodigoReferido() {
+        return codigoReferido;
+    }
+
+    public void setCodigoReferido(String codigoReferido) {
+        this.codigoReferido = codigoReferido;
     }
 
     public String getPassword() {
@@ -160,6 +170,7 @@ public class User {
         User user = (User) o;
         return Objects.equals(id, user.id)
                 && Objects.equals(username, user.username)
+                && Objects.equals(codigoReferido, user.codigoReferido)
                 && Objects.equals(password, user.password)
                 && Objects.equals(nombre, user.nombre)
                 && Objects.equals(apellido, user.apellido)
@@ -175,7 +186,7 @@ public class User {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, username, password, nombre, apellido, direccion, telefono, email,
+        return Objects.hash(id, username, codigoReferido, password, nombre, apellido, direccion, telefono, email,
                 tipoIdentificacion, numeroIdentificacion, mayorDeEdad, state, role);
     }
 
@@ -184,6 +195,7 @@ public class User {
         return "User{" +
                 "id='" + id + '\'' +
                 ", username='" + username + '\'' +
+                ", codigoReferido='" + codigoReferido + '\'' +
                 ", nombre='" + nombre + '\'' +
                 ", apellido='" + apellido + '\'' +
                 ", direccion='" + direccion + '\'' +
@@ -201,6 +213,7 @@ public class User {
 
         private String id;
         private String username;
+        private String codigoReferido;
         private String password;
         private String nombre;
         private String apellido;
@@ -220,6 +233,11 @@ public class User {
 
         public Builder username(String username) {
             this.username = username;
+            return this;
+        }
+
+        public Builder codigoReferido(String codigoReferido) {
+            this.codigoReferido = codigoReferido;
             return this;
         }
 

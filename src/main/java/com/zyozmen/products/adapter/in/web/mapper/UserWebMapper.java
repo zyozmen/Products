@@ -40,6 +40,7 @@ public class UserWebMapper {
         }
         return UserResponseDTO.builder()
                 .username(user.getUsername())
+                .codigoReferido(user.getCodigoReferido())
                 .nombre(user.getNombre())
                 .apellido(user.getApellido())
                 .direccion(user.getDireccion())

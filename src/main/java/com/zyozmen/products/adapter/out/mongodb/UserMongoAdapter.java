@@ -33,6 +33,11 @@ public class UserMongoAdapter implements UserRepositoryPort {
     }
 
     @Override
+    public boolean existsByCodigoReferido(String codigoReferido) {
+        return mongoRepository.existsByCodigoReferido(codigoReferido);
+    }
+
+    @Override
     public Optional<User> findByEmail(String email) {
         return mongoRepository.findByEmail(email).map(mapper::toDomain);
     }

@@ -30,6 +30,10 @@ public class UserDocument {
     @Field("username")
     private String username;
 
+    @Indexed(name = "user_codigo_referido_unique", unique = true, sparse = true)
+    @Field("codigo_referido")
+    private String codigoReferido;
+
     @Field("password")
     private String password;
 

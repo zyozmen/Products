@@ -15,6 +15,8 @@ public interface UserRepositoryPort {
 
     boolean existsByEmail(String email);
 
+    boolean existsByCodigoReferido(String codigoReferido);
+
     boolean existsByTipoIdentificacionAndNumeroIdentificacion(
             com.zyozmen.products.domain.model.IdentificationType tipoIdentificacion,
             String numeroIdentificacion);

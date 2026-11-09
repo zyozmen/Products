@@ -16,6 +16,9 @@ public class UserResponseDTO {
     @Schema(description = "Nombre de usuario", example = "juan123")
     private String username;
 
+    @Schema(description = "Código de referido único del usuario", example = "ABCD2345")
+    private String codigoReferido;
+
     @Schema(description = "Nombre", example = "Juan")
     private String nombre;
 

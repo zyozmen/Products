@@ -43,13 +43,6 @@ public class ProductoResponseDTO {
 	@Schema(description = "Información de precio")
 	private PriceDTO price;
 
-	@Schema(description = "Métricas de ranking y reseñas")
-	private RankingDTO ranking;
-
-	@JsonProperty("recent_comments")
-	@Schema(description = "Comentarios más recientes del producto")
-	private List<RecentCommentDTO> recentComments;
-
 	@JsonProperty("created_at")
 	@Schema(description = "Fecha de creación del producto", example = "2025-11-01T00:00:00Z")
 	private Instant createdAt;

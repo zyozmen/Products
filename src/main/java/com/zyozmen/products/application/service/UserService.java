@@ -21,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.util.List;
 
 /**
@@ -32,6 +33,11 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class UserService implements UserUseCase {
+
+    private static final char[] CODIGO_REFERIDO_CARACTERES = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
+    private static final int CODIGO_REFERIDO_LONGITUD = 8;
+    private static final int MAX_INTENTOS_CODIGO_REFERIDO = 10;
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final UserRepositoryPort userRepositoryPort;
     private final PasswordEncoder passwordEncoder;
@@ -77,6 +83,7 @@ public class UserService implements UserUseCase {
         // Independiente de lo recibido en el payload, todo registro público queda forzado a rol cliente y pendiente de aprobación.
         user.setRole(Role.CLIENTE);
         user.setState(UserState.PENDIENTE);
+        user.setCodigoReferido(generarCodigoReferidoUnico());
 
         User saved = userRepositoryPort.save(user);
         userNotificationPort.sendWelcomeEmail(saved);
@@ -136,11 +143,16 @@ public class UserService implements UserUseCase {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public User obtenerPorUsername(String username) {
-        return userRepositoryPort.findByUsername(username)
+        User user = userRepositoryPort.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario no encontrado: " + username));
+        if (user.getCodigoReferido() == null || user.getCodigoReferido().isBlank()) {
+            user.setCodigoReferido(generarCodigoReferidoUnico());
+            return userRepositoryPort.save(user);
+        }
+        return user;
     }
 
     @Override
@@ -174,5 +186,20 @@ public class UserService implements UserUseCase {
         }
 
         return userRepositoryPort.save(user);
+    }
+
+    private String generarCodigoReferidoUnico() {
+        for (int intento = 0; intento < MAX_INTENTOS_CODIGO_REFERIDO; intento++) {
+            StringBuilder codigo = new StringBuilder(CODIGO_REFERIDO_LONGITUD);
+            for (int posicion = 0; posicion < CODIGO_REFERIDO_LONGITUD; posicion++) {
+                codigo.append(CODIGO_REFERIDO_CARACTERES[
+                        RANDOM.nextInt(CODIGO_REFERIDO_CARACTERES.length)]);
+            }
+            String candidato = codigo.toString();
+            if (!userRepositoryPort.existsByCodigoReferido(candidato)) {
+                return candidato;
+            }
+        }
+        throw new IllegalStateException("No fue posible generar un código de referido único");
     }
 }

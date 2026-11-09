@@ -4,6 +4,7 @@
 
 # Compiled class files
 *.class
+target/
 
 # Log files
 *.log
@@ -38,13 +39,8 @@ dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
-
-# Gradle
-.gradle/
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
+.copilotignore
+.github/
 
 # Spring Boot
 spring-shell.log
@@ -69,25 +65,6 @@ spring-shell.log
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
-
-# IDE - Eclipse
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
-
-# IDE - NetBeans
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
 
 # IDE - VS Code
 .vscode/

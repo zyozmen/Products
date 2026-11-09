@@ -46,6 +46,13 @@ class UserMongoAdapterTest {
     }
 
     @Test
+    void existsByCodigoReferidoShouldDelegateToRepository() {
+        when(mongoRepository.existsByCodigoReferido("ABCD2345")).thenReturn(true);
+
+        assertThat(adapter.existsByCodigoReferido("ABCD2345")).isTrue();
+    }
+
+    @Test
     void findByEmailShouldMapDocumentToDomain() {
         UserDocument document = UserDocument.builder().id("1").email("juan@example.com").build();
         User domainUser = User.builder().id("1").email("juan@example.com").build();

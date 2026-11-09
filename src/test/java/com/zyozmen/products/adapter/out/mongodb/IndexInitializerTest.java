@@ -9,6 +9,7 @@ import com.zyozmen.products.adapter.out.mongodb.document.ProviderAccumulatorsDoc
 import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.RevokedTokenDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.TransaccionProveedorDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.UserDocument;
 import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -95,5 +96,22 @@ class IndexInitializerTest {
         verify(products, times(2)).ensureIndex(any(IndexDefinition.class));
         verify(publications, times(3)).ensureIndex(any(IndexDefinition.class));
         verify(revocations).ensureIndex(any(IndexDefinition.class));
+    }
+
+    @Test
+    void createsUniqueSparseReferralCodeIndex() {
+        MongoTemplate template = mock(MongoTemplate.class);
+        IndexOperations indexes = mock(IndexOperations.class);
+        when(template.indexOps(UserDocument.class)).thenReturn(indexes);
+
+        new UserIndexInitializer(template).run(null);
+
+        var definition = org.mockito.ArgumentCaptor.forClass(IndexDefinition.class);
+        verify(indexes).ensureIndex(definition.capture());
+        assertThat(definition.getValue().getIndexKeys()).isEqualTo(new Document("codigo_referido", 1));
+        assertThat(definition.getValue().getIndexOptions())
+                .containsEntry("unique", true)
+                .containsEntry("sparse", true)
+                .containsEntry("name", "user_codigo_referido_unique");
     }
 }
