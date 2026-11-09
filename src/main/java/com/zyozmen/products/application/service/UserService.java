@@ -9,20 +9,27 @@ import com.zyozmen.products.domain.exception.UserInactiveException;
 import com.zyozmen.products.domain.exception.UserPendingApprovalException;
 import com.zyozmen.products.domain.model.AuthResult;
 import com.zyozmen.products.domain.model.Role;
+import com.zyozmen.products.domain.model.Referral;
+import com.zyozmen.products.domain.model.ReferralPage;
 import com.zyozmen.products.domain.model.User;
 import com.zyozmen.products.domain.model.UserState;
 import com.zyozmen.products.domain.port.in.UserUseCase;
 import com.zyozmen.products.domain.port.out.UserNotificationPort;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
+import com.zyozmen.products.domain.port.out.ReferralRepositoryPort;
 import com.zyozmen.products.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Implementación del caso de uso de usuarios (servicio de aplicación).
@@ -43,13 +50,17 @@ public class UserService implements UserUseCase {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final UserNotificationPort userNotificationPort;
+    private final ReferralRepositoryPort referralRepositoryPort;
 
     @Value("${app.admin.username:zyozmen}")
     private String mainAdminUsername;
 
     @Override
     @Transactional
-    public User registrar(User user) {
+    public User registrar(User user, String codigoReferido) {
+        if (codigoReferido == null || codigoReferido.isBlank()) {
+            throw new IllegalArgumentException("El codigo de referido es obligatorio");
+        }
         if (userRepositoryPort.existsByUsername(user.getUsername())) {
             throw new UserAlreadyExistsException("El nombre de usuario ya está registrado");
         }
@@ -79,6 +90,16 @@ public class UserService implements UserUseCase {
                     "Debe confirmar ser mayor de edad (18 años o más) para registrarse");
         }
 
+        User referente = userRepositoryPort.findByCodigoReferido(codigoReferido)
+                .orElseThrow(() -> new IllegalArgumentException("El codigo de referido no es valido"));
+        if (Objects.equals(user.getUsername(), referente.getUsername())
+                || (user.getEmail() != null && user.getEmail().equalsIgnoreCase(referente.getEmail()))
+                || (user.getTipoIdentificacion() != null && user.getNumeroIdentificacion() != null
+                    && user.getTipoIdentificacion() == referente.getTipoIdentificacion()
+                    && user.getNumeroIdentificacion().equals(referente.getNumeroIdentificacion()))) {
+            throw new IllegalArgumentException("No puede registrarse utilizando su propio codigo de referido");
+        }
+
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         // Independiente de lo recibido en el payload, todo registro público queda forzado a rol cliente y pendiente de aprobación.
         user.setRole(Role.CLIENTE);
@@ -86,8 +107,29 @@ public class UserService implements UserUseCase {
         user.setCodigoReferido(generarCodigoReferidoUnico());
 
         User saved = userRepositoryPort.save(user);
-        userNotificationPort.sendWelcomeEmail(saved);
+        referralRepositoryPort.insert(new Referral(referente.getId(), saved.getId(), Instant.now()));
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    userNotificationPort.sendWelcomeEmail(saved);
+                }
+            });
+        } else {
+            userNotificationPort.sendWelcomeEmail(saved);
+        }
         return saved;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReferralPage listarReferidos(String username, int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("page debe ser >= 0 y size debe estar entre 1 y 100");
+        }
+        User user = userRepositoryPort.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + username));
+        return referralRepositoryPort.findByReferenteId(user.getId(), page, size);
     }
 
     @Override

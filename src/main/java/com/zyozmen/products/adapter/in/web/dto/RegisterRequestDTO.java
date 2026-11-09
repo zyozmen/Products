@@ -17,6 +17,11 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Datos de entrada para el registro de un nuevo usuario")
 public class RegisterRequestDTO {
 
+    @NotBlank(message = "El codigo de referido es obligatorio")
+    @Schema(description = "Codigo de la persona que invita; no es el codigo propio del nuevo usuario",
+            example = "ABCD2345", requiredMode = Schema.RequiredMode.REQUIRED)
+    private String codigoReferido;
+
     @NotBlank(message = "El username es obligatorio")
     @Schema(description = "Nombre de usuario para iniciar sesión", example = "juan123")
     private String username;

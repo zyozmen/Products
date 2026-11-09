@@ -53,6 +53,15 @@ class UserMongoAdapterTest {
     }
 
     @Test
+    void findByCodigoReferidoMapsOwnerOrReturnsEmpty() {
+        UserDocument doc = UserDocument.builder().id("owner").codigoReferido("ABCD2345").build();
+        User owner = User.builder().id("owner").codigoReferido("ABCD2345").build();
+        when(mongoRepository.findByCodigoReferido("ABCD2345")).thenReturn(Optional.of(doc));
+        when(mapper.toDomain(doc)).thenReturn(owner);
+        assertThat(adapter.findByCodigoReferido("ABCD2345")).contains(owner);
+        assertThat(adapter.findByCodigoReferido("UNKNOWN2")).isEmpty();
+    }
+    @Test
     void findByEmailShouldMapDocumentToDomain() {
         UserDocument document = UserDocument.builder().id("1").email("juan@example.com").build();
         User domainUser = User.builder().id("1").email("juan@example.com").build();

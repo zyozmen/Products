@@ -44,6 +44,7 @@ class AuthControllerTest {
     @Test
     void registerShouldReturn201WithCreatedUser() {
         RegisterRequestDTO request = RegisterRequestDTO.builder()
+                .codigoReferido("ABCD2345")
                 .username("juan123")
                 .password("secret")
                 .nombre("Juan")
@@ -60,7 +61,7 @@ class AuthControllerTest {
         UserResponseDTO responseDTO = UserResponseDTO.builder().username("juan123").role("cliente").build();
 
         when(userWebMapper.toDomain(request)).thenReturn(domainRequest);
-        when(userUseCase.registrar(domainRequest)).thenReturn(savedUser);
+        when(userUseCase.registrar(domainRequest, "ABCD2345")).thenReturn(savedUser);
         when(userWebMapper.toResponseDTO(savedUser)).thenReturn(responseDTO);
 
         ResponseEntity<UserResponseDTO> response = authController.register(request);

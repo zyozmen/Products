@@ -17,6 +17,8 @@ public interface UserRepositoryPort {
 
     boolean existsByCodigoReferido(String codigoReferido);
 
+    Optional<User> findByCodigoReferido(String codigoReferido);
+
     boolean existsByTipoIdentificacionAndNumeroIdentificacion(
             com.zyozmen.products.domain.model.IdentificationType tipoIdentificacion,
             String numeroIdentificacion);

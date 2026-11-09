@@ -17,6 +17,8 @@ public interface UserMongoRepository extends MongoRepository<UserDocument, Strin
 
     boolean existsByCodigoReferido(String codigoReferido);
 
+    Optional<UserDocument> findByCodigoReferido(String codigoReferido);
+
     boolean existsByTipoIdentificacionAndNumeroIdentificacion(String tipoIdentificacion, String numeroIdentificacion);
 
     Optional<UserDocument> findByUsername(String username);

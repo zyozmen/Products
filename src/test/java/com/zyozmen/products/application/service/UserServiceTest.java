@@ -14,6 +14,8 @@ import com.zyozmen.products.domain.model.UserState;
 import com.zyozmen.products.domain.exception.UserPendingApprovalException;
 import com.zyozmen.products.domain.port.out.UserNotificationPort;
 import com.zyozmen.products.domain.port.out.UserRepositoryPort;
+import com.zyozmen.products.domain.port.out.ReferralRepositoryPort;
+import com.zyozmen.products.domain.model.ReferralPage;
 import com.zyozmen.products.security.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,9 @@ class UserServiceTest {
     @Mock
     private UserNotificationPort userNotificationPort;
 
+    @Mock
+    private ReferralRepositoryPort referralRepositoryPort;
+
     @InjectMocks
     private UserService userService;
 
@@ -82,8 +87,10 @@ class UserServiceTest {
                 IdentificationType.CC, "1018234567")).thenReturn(false);
         when(passwordEncoder.encode("raw-password")).thenReturn("hashed-password");
         when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepositoryPort.findByCodigoReferido("ABCD2345"))
+                .thenReturn(Optional.of(User.builder().id("referrer").username("inviter").build()));
 
-        User result = userService.registrar(request);
+        User result = userService.registrar(request, "ABCD2345");
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepositoryPort).save(captor.capture());
@@ -93,6 +100,7 @@ class UserServiceTest {
         assertThat(captor.getValue().getState()).isEqualTo(UserState.PENDIENTE);
         assertThat(captor.getValue().getCodigoReferido()).matches("[A-HJ-NP-Z2-9]{8}");
         assertThat(result.getRole()).isEqualTo(Role.CLIENTE);
+        verify(referralRepositoryPort).insert(any());
         verify(userNotificationPort).sendWelcomeEmail(result);
     }
 
@@ -105,8 +113,10 @@ class UserServiceTest {
         when(passwordEncoder.encode("raw-password")).thenReturn("hashed-password");
         when(userRepositoryPort.existsByCodigoReferido(anyString())).thenReturn(true, false);
         when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepositoryPort.findByCodigoReferido("ABCD2345"))
+                .thenReturn(Optional.of(User.builder().id("referrer").username("inviter").build()));
 
-        User result = userService.registrar(request);
+        User result = userService.registrar(request, "ABCD2345");
 
         assertThat(result.getCodigoReferido()).matches("[A-HJ-NP-Z2-9]{8}");
         verify(userRepositoryPort, org.mockito.Mockito.times(2)).existsByCodigoReferido(anyString());
@@ -117,11 +127,90 @@ class UserServiceTest {
         User request = buildClienteRegistration();
         when(userRepositoryPort.existsByUsername("juan123")).thenReturn(true);
 
-        assertThatThrownBy(() -> userService.registrar(request))
+        assertThatThrownBy(() -> userService.registrar(request, "ABCD2345"))
                 .isInstanceOf(UserAlreadyExistsException.class)
                 .hasMessageContaining("nombre de usuario ya está registrado");
 
         verify(userRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void registrarRequiresReferralCodeEvenWhenCalledOutsideHttp() {
+        for (String code : new String[]{null, "", "   "}) {
+            assertThatThrownBy(() -> userService.registrar(buildClienteRegistration(), code))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("obligatorio");
+        }
+        org.mockito.Mockito.verifyNoInteractions(userRepositoryPort, referralRepositoryPort);
+    }
+
+    @Test
+    void registrarRejectsUnknownReferralCodeWithoutSaving() {
+        assertThatThrownBy(() -> userService.registrar(buildClienteRegistration(), "UNKNOWN2"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("no es valido");
+        verify(userRepositoryPort, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(referralRepositoryPort, userNotificationPort);
+    }
+
+    @Test
+    void registrarRejectsReferrerWithSameUsernameEmailOrIdentification() {
+        var referrers = List.of(
+                User.builder().id("r").username("juan123").build(),
+                User.builder().id("r").email("JUAN@EXAMPLE.COM").build(),
+                User.builder().id("r").tipoIdentificacion(IdentificationType.CC)
+                        .numeroIdentificacion("1018234567").build());
+        for (User referrer : referrers) {
+            when(userRepositoryPort.findByCodigoReferido("ABCD2345")).thenReturn(Optional.of(referrer));
+            assertThatThrownBy(() -> userService.registrar(buildClienteRegistration(), "ABCD2345"))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("propio codigo");
+        }
+        verify(userRepositoryPort, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(referralRepositoryPort, userNotificationPort);
+    }
+
+    @Test
+    void sameReferrerCodeCanBeUsedByMultipleNewUsers() {
+        User referrer = User.builder().id("referrer").username("inviter").codigoReferido("ABCD2345").build();
+        when(userRepositoryPort.findByCodigoReferido("ABCD2345")).thenReturn(Optional.of(referrer));
+        when(userRepositoryPort.save(any())).thenAnswer(invocation -> {
+            User saved = invocation.getArgument(0);
+            saved.setId(saved.getUsername());
+            return saved;
+        });
+        User first = buildClienteRegistration();
+        User second = buildClienteRegistration();
+        second.setUsername("another");
+        second.setEmail("another@example.com");
+        second.setNumeroIdentificacion("999");
+
+        userService.registrar(first, "ABCD2345");
+        userService.registrar(second, "ABCD2345");
+
+        var links = ArgumentCaptor.forClass(com.zyozmen.products.domain.model.Referral.class);
+        verify(referralRepositoryPort, org.mockito.Mockito.times(2)).insert(links.capture());
+        assertThat(links.getAllValues()).extracting(com.zyozmen.products.domain.model.Referral::idReferente)
+                .containsExactly("referrer", "referrer");
+        assertThat(links.getAllValues()).extracting(com.zyozmen.products.domain.model.Referral::idReferido)
+                .containsExactly("juan123", "another");
+        assertThat(referrer.getCodigoReferido()).isEqualTo("ABCD2345");
+    }
+
+    @Test
+    void listarReferidosScopesQueryToAuthenticatedUserId() {
+        var expected = new ReferralPage(List.of(), 0, 20, 0);
+        when(userRepositoryPort.findByUsername("juan123"))
+                .thenReturn(Optional.of(User.builder().id("u1").username("juan123").build()));
+        when(referralRepositoryPort.findByReferenteId("u1", 0, 20)).thenReturn(expected);
+
+        assertThat(userService.listarReferidos("juan123", 0, 20)).isEqualTo(expected);
+    }
+
+    @Test
+    void listarReferidosRejectsInvalidPaginationBeforeQuerying() {
+        for (int[] pagination : new int[][]{{-1, 20}, {0, 0}, {0, 101}}) {
+            assertThatThrownBy(() -> userService.listarReferidos("juan123", pagination[0], pagination[1]))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        org.mockito.Mockito.verifyNoInteractions(userRepositoryPort, referralRepositoryPort);
     }
 
     @Test
@@ -130,7 +219,7 @@ class UserServiceTest {
         when(userRepositoryPort.existsByUsername("juan123")).thenReturn(false);
         when(userRepositoryPort.existsByEmail("juan@example.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> userService.registrar(request))
+        assertThatThrownBy(() -> userService.registrar(request, "ABCD2345"))
                 .isInstanceOf(UserAlreadyExistsException.class)
                 .hasMessageContaining("correo electrónico");
 
@@ -145,7 +234,7 @@ class UserServiceTest {
         when(userRepositoryPort.findByEmail("juan@example.com"))
                 .thenReturn(Optional.of(User.builder().state(UserState.INACTIVO).build()));
 
-        assertThatThrownBy(() -> userService.registrar(request))
+        assertThatThrownBy(() -> userService.registrar(request, "ABCD2345"))
                 .isInstanceOf(UserInactiveException.class)
                 .hasMessageContaining("cuenta inactiva");
 
@@ -159,7 +248,7 @@ class UserServiceTest {
         when(userRepositoryPort.existsByTipoIdentificacionAndNumeroIdentificacion(
                 IdentificationType.CC, "1018234567")).thenReturn(true);
 
-        assertThatThrownBy(() -> userService.registrar(request))
+        assertThatThrownBy(() -> userService.registrar(request, "ABCD2345"))
                 .isInstanceOf(UserAlreadyExistsException.class)
                 .hasMessageContaining("tipo y número de identificación");
 
@@ -174,7 +263,7 @@ class UserServiceTest {
         when(userRepositoryPort.existsByTipoIdentificacionAndNumeroIdentificacion(
                 IdentificationType.CC, "1018234567")).thenReturn(false);
 
-        assertThatThrownBy(() -> userService.registrar(request))
+        assertThatThrownBy(() -> userService.registrar(request, "ABCD2345"))
                 .isInstanceOf(UnderageRegistrationException.class);
 
         verify(userRepositoryPort, never()).save(any());

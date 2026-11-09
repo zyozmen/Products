@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Expone los endpoints públicos de registro e inicio de sesión.
  */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/api/v1/auth"})
 @RequiredArgsConstructor
 @Tag(name = "Autenticación", description = "Registro, inicio de sesión, renovación y cierre de sesión")
 public class AuthController {
@@ -47,9 +47,10 @@ public class AuthController {
 
     @Operation(summary = "Registrar un nuevo usuario")
     @ApiResponse(responseCode = "201", description = "Usuario registrado exitosamente")
+    @ApiResponse(responseCode = "400", description = "Codigo de referido obligatorio o no valido")
     @PostMapping("/register")
     public ResponseEntity<UserResponseDTO> register(@Valid @RequestBody RegisterRequestDTO request) {
-        User user = userUseCase.registrar(userWebMapper.toDomain(request));
+        User user = userUseCase.registrar(userWebMapper.toDomain(request), request.getCodigoReferido());
         return ResponseEntity.status(HttpStatus.CREATED).body(userWebMapper.toResponseDTO(user));
     }
 

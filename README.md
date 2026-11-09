@@ -17,7 +17,7 @@ Microservicio REST para la gestión de catálogo de productos, usuarios, órdene
 
 ## 1. Capacidades
 - **Catálogo:** consulta, creación, actualización y eliminación de productos, categorías, productos destacados y carga de imágenes.
-- **Usuarios:** registro público (cuenta en estado `PENDIENTE` hasta aprobación), perfil propio y administración de estados (`ACTIVO`, `INACTIVO`, `PENDIENTE`) exclusiva del rol `ADMIN`.
+- **Usuarios:** registro público con código de referido obligatorio (cuenta en estado `PENDIENTE` hasta aprobación), código propio y lista paginada de referidos, perfil propio y administración de estados (`ACTIVO`, `INACTIVO`, `PENDIENTE`) exclusiva del rol `ADMIN`.
 - **Autenticación y sesión:** login con JWT, renovación de token, cierre de sesión con revocación en servidor y control de inactividad parametrizable.
 - **Órdenes:** creación con validación de precios en backend (sin impuestos), consulta por usuario, gestión administrativa con auditoría de estados, PQR y reportes.
 - **Proveedores y saldos (HU-01):** alta de proveedores, recepción de lotes con cálculo de costo y abono inicial opcional, abonos posteriores, saldos transaccionales y evaluación de la liquidación diaria con tope de pago.
@@ -69,10 +69,84 @@ Disponibles en `/api/v1/auth` (también se mantiene el alias `/api/auth`).
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/api/v1/auth/register` | Registro público (requiere `email`). Siempre crea una cuenta con rol `CLIENTE` en estado `PENDIENTE` y envía un correo de bienvenida de forma asíncrona; un fallo de envío no afecta el registro. |
+| `POST` | `/api/v1/auth/register` | Registro público (requiere `email` y `codigoReferido` del referente). Crea una cuenta `CLIENTE` en estado `PENDIENTE` y su vínculo en una transacción; después del commit envía un correo de bienvenida asíncrono. |
 | `POST` | `/api/v1/auth/login` | Autentica por **correo electrónico** y contraseña; retorna el JWT y el perfil del usuario. |
 | `POST` | `/api/v1/auth/refresh` | Valida el token actual (firma, expiración, revocación, inactividad, usuario activo), lo revoca y emite uno nuevo de 1 hora. |
 | `POST` | `/api/v1/auth/logout` | Revoca el token. Es idempotente. Responde `204`; con `{"reason":"INACTIVITY"}` responde `401 SESSION_EXPIRED` tras revocar. |
+
+### Registro y consulta de referidos
+
+`POST /api/v1/auth/register` (alias `/api/auth/register`) exige el código
+existente del usuario que invita. Es un cambio de contrato: el frontend debe
+solicitarlo y enviarlo como `codigoReferido`, además de los datos habituales:
+
+```json
+{
+  "username": "nuevo_usuario",
+  "password": "<password>",
+  "nombre": "Nuevo",
+  "apellido": "Usuario",
+  "direccion": "Calle 1",
+  "telefono": "3001234567",
+  "email": "nuevo@example.com",
+  "tipoIdentificacion": "CC",
+  "numeroIdentificacion": "123456789",
+  "mayorDeEdad": true,
+  "codigoReferido": "ABCD2345"
+}
+```
+
+- Código ausente, nulo o en blanco: `400` (validación de entrada).
+- Código desconocido (búsqueda exacta, sensible a mayúsculas): `400`,
+  con `message: "El codigo de referido no es valido"`.
+- Se conservan las validaciones de duplicidad por username, correo y documento;
+  no se permite usar una identidad coincidente con la del referente.
+- La respuesta `201` contiene el `codigoReferido` **propio del nuevo usuario**,
+  generado automáticamente; no es el código enviado en la solicitud.
+- El código del referente es reutilizable. Cada cuenta nueva tiene un solo
+  referente; no existe una operación para cambiar o eliminar ese vínculo.
+- Los usuarios existentes conservan sus perfiles y no se vinculan retroactivamente.
+
+Consulta autenticada: `GET /api/v1/users/profile/referrals?page=0&size=20`.
+También se admite `GET /api/v1/users/me/referrals` con el mismo contrato.
+Enviar `Authorization: Bearer <token>`. La identidad se toma del JWT; no se
+acepta un identificador de otro referente. Sin autenticación se responde `401`.
+
+La página comienza en `0`; `size` debe estar entre `1` y `100` (por defecto `20`).
+Paginación inválida devuelve `400`. Se ordena por vinculación más reciente,
+con desempate por identificador descendente. Ejemplo:
+
+```json
+{
+  "content": [
+    {
+      "username": "nuevo_usuario",
+      "nombre": "Nuevo",
+      "apellido": "Usuario",
+      "createdAt": "2026-11-09T15:00:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+La proyección no incluye email, teléfono, dirección, documento, contraseña,
+JWT ni código propio del referido. Sin resultados: `content: []` y totales `0`.
+Una página fuera de rango tiene `content: []` y conserva el total de resultados.
+
+**Persistencia y despliegue:** la colección `Referidos` almacena `_id`,
+`IdReferente`, `idReferido` y `created_at` (fecha UTC). Un índice único en
+`idReferido` impide vínculos múltiples; el índice compuesto
+`(IdReferente ASC, created_at DESC, _id DESC)` soporta la consulta paginada.
+Ambos índices se crean al arrancar. La cuenta y el vínculo se escriben en la
+misma transacción MongoDB: cualquier error de vinculación revierte la cuenta.
+Se requiere **replica set o Atlas**, no un MongoDB standalone. El correo se
+programa solo después del commit. Para la invitación inicial debe existir
+un usuario con código propio; el administrador existente puede obtenerlo
+consultando su perfil autenticado (`GET /api/users/profile`).
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/login \

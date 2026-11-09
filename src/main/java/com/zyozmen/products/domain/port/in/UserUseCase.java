@@ -1,6 +1,7 @@
 package com.zyozmen.products.domain.port.in;
 
 import com.zyozmen.products.domain.model.AuthResult;
+import com.zyozmen.products.domain.model.ReferralPage;
 import com.zyozmen.products.domain.model.User;
 import com.zyozmen.products.domain.model.UserState;
 
@@ -15,8 +16,11 @@ public interface UserUseCase {
     /**
      * Registra un nuevo usuario. Fuerza role=cliente y state=PENDIENTE
      * (a la espera de aprobación de acceso), sin importar lo enviado.
+     * El codigo obligatorio pertenece al referente; el nuevo usuario recibe uno propio.
      */
-    User registrar(User user);
+    User registrar(User user, String codigoReferido);
+
+    ReferralPage listarReferidos(String username, int page, int size);
 
     /**
      * Autentica un usuario por correo electrónico y genera un token de sesión (JWT).

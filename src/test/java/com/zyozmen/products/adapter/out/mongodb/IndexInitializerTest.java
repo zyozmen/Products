@@ -10,6 +10,7 @@ import com.zyozmen.products.adapter.out.mongodb.document.ProviderDailyMovementsD
 import com.zyozmen.products.adapter.out.mongodb.document.RevokedTokenDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.TransaccionProveedorDocument;
 import com.zyozmen.products.adapter.out.mongodb.document.UserDocument;
+import com.zyozmen.products.adapter.out.mongodb.document.ReferralDocument;
 import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -25,6 +26,21 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class IndexInitializerTest {
+
+    @Test
+    void createsImmutableReferralAssociationAndPaginationIndexes() {
+        MongoTemplate template = mock(MongoTemplate.class);
+        IndexOperations indexes = mock(IndexOperations.class);
+        when(template.indexOps(ReferralDocument.class)).thenReturn(indexes);
+        new ReferralIndexInitializer(template).run(null);
+        var definitions = org.mockito.ArgumentCaptor.forClass(IndexDefinition.class);
+        verify(indexes, times(2)).ensureIndex(definitions.capture());
+        assertThat(definitions.getAllValues().getFirst().getIndexKeys())
+                .isEqualTo(new Document("idReferido", 1));
+        assertThat(definitions.getAllValues().getFirst().getIndexOptions()).containsEntry("unique", true);
+        assertThat(definitions.getAllValues().getLast().getIndexKeys())
+                .isEqualTo(new Document("IdReferente", 1).append("created_at", -1).append("_id", -1));
+    }
 
     @Test
     void createsOrderIndexesAndMigratesLegacyStatus() {

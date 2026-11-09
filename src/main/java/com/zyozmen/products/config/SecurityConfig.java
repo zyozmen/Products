@@ -77,7 +77,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/products/**", "/api/proveedores/**", "/api/lotes/**", "/api/v1/lotes/**", "/api/liquidaciones/**")
                         .hasRole("ADMIN")
                         .requestMatchers("/api/orders/**").authenticated()
-                        .requestMatchers("/api/users/**").authenticated()
+                        .requestMatchers("/api/users/**", "/api/v1/users/**").authenticated()
                         .anyRequest().permitAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
